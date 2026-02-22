@@ -94,7 +94,8 @@ async function main() {
     { name: "Fall", sortOrder: 3 },
   ];
   for (const s of defaultSemesters) {
-    await prisma.semester.upsert({
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await (prisma as any).semester.upsert({
       where: { name: s.name },
       create: { name: s.name, sortOrder: s.sortOrder },
       update: { sortOrder: s.sortOrder },
