@@ -39,6 +39,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     clearStoredAuth();
     setUser(null);
     setToken(null);
+    setIsLoading(false);
     router.replace("/signin");
   }, [router]);
 
