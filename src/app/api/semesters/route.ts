@@ -9,16 +9,16 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const departments = await prisma.department.findMany({
-      include: {
-        faculty: { select: { id: true, name: true, code: true } },
-      },
-      orderBy: { name: "asc" },
+    const activeOnly = req.nextUrl.searchParams.get("active") === "true";
+
+    const semesters = await prisma.semester.findMany({
+      where: activeOnly ? { isActive: true } : undefined,
+      orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
     });
 
-    return NextResponse.json(departments);
+    return NextResponse.json(semesters);
   } catch (e) {
-    console.error("Departments list error:", e);
+    console.error("Semesters list error:", e);
     return NextResponse.json(
       { error: "Something went wrong" },
       { status: 500 }
@@ -34,30 +34,23 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json();
-    const { name, code, description, facultyId, tuitionFee } = body;
-    const parsedFacultyId = Number(facultyId);
+    const { name, sortOrder } = body;
 
-    if (!name || !code || !Number.isInteger(parsedFacultyId)) {
+    if (!name || typeof name !== "string" || !name.trim()) {
       return NextResponse.json(
-        { error: "Name, code and facultyId are required" },
+        { error: "Name is required" },
         { status: 400 }
       );
     }
 
-    const department = await prisma.department.create({
+    const semester = await prisma.semester.create({
       data: {
         name: String(name).trim(),
-        code: String(code).trim().toUpperCase(),
-        description: description || null,
-        facultyId: parsedFacultyId,
-        tuitionFee: tuitionFee != null ? Number(tuitionFee) : null,
-      },
-      include: {
-        faculty: { select: { id: true, name: true, code: true } },
+        sortOrder: Number.isInteger(Number(sortOrder)) ? Number(sortOrder) : 0,
       },
     });
 
-    return NextResponse.json(department);
+    return NextResponse.json(semester);
   } catch (e: unknown) {
     if (
       typeof e === "object" &&
@@ -66,11 +59,11 @@ export async function POST(req: NextRequest) {
       (e as { code: string }).code === "P2002"
     ) {
       return NextResponse.json(
-        { error: "A department with this name or code already exists" },
+        { error: "A semester with this name already exists" },
         { status: 400 }
       );
     }
-    console.error("Create department error:", e);
+    console.error("Create semester error:", e);
     return NextResponse.json(
       { error: "Something went wrong" },
       { status: 500 }

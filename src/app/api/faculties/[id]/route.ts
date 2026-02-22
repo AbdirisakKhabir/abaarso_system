@@ -62,6 +62,7 @@ export async function PATCH(req: NextRequest, ctx: RouteContext) {
       data.code = String(body.code).trim().toUpperCase();
     if (body.description !== undefined)
       data.description = body.description || null;
+    if (body.program !== undefined) data.program = body.program || null;
     if (body.isActive !== undefined) data.isActive = Boolean(body.isActive);
 
     const faculty = await prisma.faculty.update({

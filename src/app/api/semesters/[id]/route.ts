@@ -17,23 +17,14 @@ export async function GET(req: NextRequest, ctx: RouteContext) {
       return NextResponse.json({ error: "Invalid ID" }, { status: 400 });
     }
 
-    const department = await prisma.department.findUnique({
-      where: { id },
-      include: {
-        faculty: { select: { id: true, name: true, code: true } },
-      },
-    });
-
-    if (!department) {
-      return NextResponse.json(
-        { error: "Department not found" },
-        { status: 404 }
-      );
+    const semester = await prisma.semester.findUnique({ where: { id } });
+    if (!semester) {
+      return NextResponse.json({ error: "Semester not found" }, { status: 404 });
     }
 
-    return NextResponse.json(department);
+    return NextResponse.json(semester);
   } catch (e) {
-    console.error("Get department error:", e);
+    console.error("Get semester error:", e);
     return NextResponse.json(
       { error: "Something went wrong" },
       { status: 500 }
@@ -58,32 +49,16 @@ export async function PATCH(req: NextRequest, ctx: RouteContext) {
     const data: Record<string, unknown> = {};
 
     if (body.name !== undefined) data.name = String(body.name).trim();
-    if (body.code !== undefined)
-      data.code = String(body.code).trim().toUpperCase();
-    if (body.description !== undefined)
-      data.description = body.description || null;
-    if (body.facultyId !== undefined) {
-      const fid = Number(body.facultyId);
-      if (!Number.isInteger(fid)) {
-        return NextResponse.json(
-          { error: "Invalid facultyId" },
-          { status: 400 }
-        );
-      }
-      data.facultyId = fid;
-    }
-    if (body.tuitionFee !== undefined) data.tuitionFee = body.tuitionFee != null ? Number(body.tuitionFee) : null;
+    if (body.sortOrder !== undefined)
+      data.sortOrder = Number.isInteger(Number(body.sortOrder)) ? Number(body.sortOrder) : 0;
     if (body.isActive !== undefined) data.isActive = Boolean(body.isActive);
 
-    const department = await prisma.department.update({
+    const semester = await prisma.semester.update({
       where: { id },
       data,
-      include: {
-        faculty: { select: { id: true, name: true, code: true } },
-      },
     });
 
-    return NextResponse.json(department);
+    return NextResponse.json(semester);
   } catch (e: unknown) {
     if (
       typeof e === "object" &&
@@ -92,11 +67,11 @@ export async function PATCH(req: NextRequest, ctx: RouteContext) {
       (e as { code: string }).code === "P2002"
     ) {
       return NextResponse.json(
-        { error: "A department with this name or code already exists" },
+        { error: "A semester with this name already exists" },
         { status: 400 }
       );
     }
-    console.error("Update department error:", e);
+    console.error("Update semester error:", e);
     return NextResponse.json(
       { error: "Something went wrong" },
       { status: 500 }
@@ -117,10 +92,31 @@ export async function DELETE(req: NextRequest, ctx: RouteContext) {
       return NextResponse.json({ error: "Invalid ID" }, { status: 400 });
     }
 
-    await prisma.department.delete({ where: { id } });
+    const semester = await prisma.semester.findUnique({ where: { id } });
+    if (!semester) {
+      return NextResponse.json({ error: "Semester not found" }, { status: 404 });
+    }
+
+    // Check if semester is in use (classes, tuition payments, exam records)
+    const [classCount, paymentCount, examCount] = await Promise.all([
+      prisma.class.count({ where: { semester: semester.name } }),
+      prisma.tuitionPayment.count({ where: { semester: semester.name } }),
+      prisma.examRecord.count({ where: { semester: semester.name } }),
+    ]);
+
+    if (classCount > 0 || paymentCount > 0 || examCount > 0) {
+      return NextResponse.json(
+        {
+          error: `Cannot delete. This semester is used by ${classCount} class(es), ${paymentCount} payment(s), and ${examCount} exam record(s). Deactivate it instead.`,
+        },
+        { status: 400 }
+      );
+    }
+
+    await prisma.semester.delete({ where: { id } });
     return NextResponse.json({ success: true });
   } catch (e) {
-    console.error("Delete department error:", e);
+    console.error("Delete semester error:", e);
     return NextResponse.json(
       { error: "Something went wrong" },
       { status: 500 }

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getAuthUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { calculateTotal, getGradeInfo } from "@/lib/grades";
+import { isValidSemester } from "@/lib/semesters";
 
 export async function GET(req: NextRequest) {
   try {
@@ -73,9 +74,8 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "studentId, courseId, semester, and year are required" }, { status: 400 });
     }
 
-    const validSemesters = ["Fall", "Spring", "Summer"];
-    if (!validSemesters.includes(semester)) {
-      return NextResponse.json({ error: "Semester must be Fall, Spring, or Summer" }, { status: 400 });
+    if (!(await isValidSemester(semester))) {
+      return NextResponse.json({ error: "Invalid semester. Use a semester from the Semesters settings." }, { status: 400 });
     }
 
     // Validate marks are within range

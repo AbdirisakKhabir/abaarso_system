@@ -12,18 +12,30 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import Badge from "@/components/ui/badge/Badge";
+import Link from "next/link";
 import { authFetch } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
-import { PencilIcon, PlusIcon, TrashBinIcon } from "@/icons";
+import { PencilIcon, PlusIcon, TrashBinIcon, UserCircleIcon } from "@/icons";
 
 type Department = { id: number; name: string; code: string };
+
+type ClassInfo = {
+  id: number;
+  name: string;
+  semester: string;
+  year: number;
+  course: { code: string };
+  departmentId?: number;
+};
 
 type StudentRow = {
   id: number;
   studentId: string;
   firstName: string;
   lastName: string;
-  email: string;
+  motherName: string | null;
+  parentPhone: string | null;
+  email: string | null;
   phone: string | null;
   dateOfBirth: string | null;
   gender: string | null;
@@ -32,6 +44,9 @@ type StudentRow = {
   imagePublicId: string | null;
   departmentId: number;
   department: Department;
+  classId: number | null;
+  class: ClassInfo | null;
+  program: string | null;
   admissionDate: string;
   status: string;
   createdAt: string;
@@ -50,6 +65,7 @@ export default function AdmissionPage() {
   const { hasPermission } = useAuth();
   const [students, setStudents] = useState<StudentRow[]>([]);
   const [departments, setDepartments] = useState<Department[]>([]);
+  const [classes, setClasses] = useState<ClassInfo[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [filterStatus, setFilterStatus] = useState<string>("all");
@@ -58,13 +74,17 @@ export default function AdmissionPage() {
   const [form, setForm] = useState({
     firstName: "",
     lastName: "",
+    motherName: "",
+    parentPhone: "",
     email: "",
     phone: "",
     dateOfBirth: "",
     gender: "",
     address: "",
     departmentId: "",
-    status: "Pending",
+    classId: "",
+    program: "",
+    status: "Admitted",
     imageUrl: "",
     imagePublicId: "",
   });
@@ -97,10 +117,27 @@ export default function AdmissionPage() {
     }
   }
 
+  async function loadClasses() {
+    const res = await authFetch("/api/classes");
+    if (res.ok) {
+      const data = await res.json();
+      setClasses(
+        data.map((c: { id: number; name: string; semester: string; year: number; course: { code: string; department?: { id: number } } }) => ({
+          id: c.id,
+          name: c.name,
+          semester: c.semester,
+          year: c.year,
+          course: { code: c.course?.code ?? "" },
+          departmentId: c.course?.department?.id ?? 0,
+        }))
+      );
+    }
+  }
+
   useEffect(() => {
     (async () => {
       setLoading(true);
-      await Promise.all([loadStudents(), loadDepartments()]);
+      await Promise.all([loadStudents(), loadDepartments(), loadClasses()]);
       setLoading(false);
     })();
   }, []);
@@ -111,13 +148,17 @@ export default function AdmissionPage() {
     setForm({
       firstName: "",
       lastName: "",
+      motherName: "",
+      parentPhone: "",
       email: "",
       phone: "",
       dateOfBirth: "",
       gender: "",
       address: "",
       departmentId: departments[0] ? String(departments[0].id) : "",
-      status: "Pending",
+      classId: "",
+      program: "",
+      status: "Admitted",
       imageUrl: "",
       imagePublicId: "",
     });
@@ -131,12 +172,16 @@ export default function AdmissionPage() {
     setForm({
       firstName: s.firstName,
       lastName: s.lastName,
-      email: s.email,
+      motherName: s.motherName ?? "",
+      parentPhone: s.parentPhone ?? "",
+      email: s.email ?? "",
       phone: s.phone ?? "",
       dateOfBirth: s.dateOfBirth ? s.dateOfBirth.split("T")[0] : "",
       gender: s.gender ?? "",
       address: s.address ?? "",
       departmentId: String(s.departmentId),
+      classId: s.classId ? String(s.classId) : "",
+      program: s.program ?? "",
       status: s.status,
       imageUrl: s.imageUrl ?? "",
       imagePublicId: s.imagePublicId ?? "",
@@ -194,12 +239,16 @@ export default function AdmissionPage() {
       const payload = {
         firstName: form.firstName,
         lastName: form.lastName,
-        email: form.email,
+        motherName: form.motherName || undefined,
+        parentPhone: form.parentPhone || undefined,
+        email: form.email || undefined,
         phone: form.phone || undefined,
         dateOfBirth: form.dateOfBirth || undefined,
         gender: form.gender || undefined,
         address: form.address || undefined,
         departmentId: Number(form.departmentId),
+        classId: form.classId || undefined,
+        program: form.program || undefined,
         status: form.status,
         imageUrl: form.imageUrl || undefined,
         imagePublicId: form.imagePublicId || undefined,
@@ -253,8 +302,9 @@ export default function AdmissionPage() {
       s.studentId.toLowerCase().includes(q) ||
       s.firstName.toLowerCase().includes(q) ||
       s.lastName.toLowerCase().includes(q) ||
-      s.email.toLowerCase().includes(q) ||
-      s.department.name.toLowerCase().includes(q)
+      (s.email?.toLowerCase().includes(q) ?? false) ||
+      s.department.name.toLowerCase().includes(q) ||
+      (s.motherName?.toLowerCase().includes(q) ?? false)
     );
   });
 
@@ -372,7 +422,10 @@ export default function AdmissionPage() {
                 <TableCell isHeader>Student</TableCell>
                 <TableCell isHeader>Student ID</TableCell>
                 <TableCell isHeader>Email</TableCell>
+                <TableCell isHeader>Mother / Parent</TableCell>
                 <TableCell isHeader>Department</TableCell>
+                <TableCell isHeader>Class</TableCell>
+                <TableCell isHeader>Program</TableCell>
                 <TableCell isHeader>Status</TableCell>
                 <TableCell isHeader>Admitted</TableCell>
                 <TableCell isHeader className="text-right">Actions</TableCell>
@@ -400,9 +453,12 @@ export default function AdmissionPage() {
                         </div>
                       )}
                       <div className="min-w-0">
-                        <p className="font-semibold text-gray-800 dark:text-white/90">
+                        <Link
+                          href={`/students/${encodeURIComponent(s.studentId)}`}
+                          className="font-semibold text-gray-800 hover:text-brand-600 hover:underline dark:text-white/90 dark:hover:text-brand-400"
+                        >
                           {s.firstName} {s.lastName}
-                        </p>
+                        </Link>
                         {s.gender && (
                           <p className="text-xs text-gray-400 dark:text-gray-500">
                             {s.gender}
@@ -412,14 +468,26 @@ export default function AdmissionPage() {
                     </div>
                   </TableCell>
                   <TableCell>
-                    <span className="font-mono text-xs font-semibold text-gray-600 dark:text-gray-300">
+                    <Link
+                      href={`/students/${encodeURIComponent(s.studentId)}`}
+                      className="font-mono text-xs font-semibold text-brand-600 hover:underline dark:text-brand-400"
+                    >
                       {s.studentId}
-                    </span>
+                    </Link>
                   </TableCell>
-                  <TableCell className="text-sm">{s.email}</TableCell>
+                  <TableCell className="text-sm">{s.email ?? "—"}</TableCell>
+                  <TableCell className="text-xs">
+                    {s.motherName && <span className="block">{s.motherName}</span>}
+                    {s.parentPhone && <span className="text-gray-400">{s.parentPhone}</span>}
+                    {!s.motherName && !s.parentPhone && "—"}
+                  </TableCell>
                   <TableCell>
                     <Badge color="info" size="sm">{s.department.name}</Badge>
                   </TableCell>
+                  <TableCell className="text-xs">
+                    {s.class ? `${s.class.course?.code} ${s.class.name}` : "—"}
+                  </TableCell>
+                  <TableCell className="text-xs">{s.program ?? "—"}</TableCell>
                   <TableCell>
                     <Badge color={STATUS_COLOR[s.status] || "light"} size="sm">
                       {s.status}
@@ -434,6 +502,14 @@ export default function AdmissionPage() {
                   </TableCell>
                   <TableCell className="text-right">
                     <div className="inline-flex items-center gap-1">
+                      <Link
+                        href={`/students/${encodeURIComponent(s.studentId)}`}
+                        className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-gray-400 transition-colors hover:bg-brand-50 hover:text-brand-500 dark:hover:bg-brand-500/10"
+                        aria-label="View Profile & ID Card"
+                        title="View Profile & ID Card"
+                      >
+                        <UserCircleIcon className="h-4 w-4" />
+                      </Link>
                       {canEdit && (
                         <button
                           type="button"
@@ -523,7 +599,7 @@ export default function AdmissionPage() {
                   </div>
                   <div>
                     <p className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                      Student Photo
+                      Student Photo <span className="text-gray-400">(optional)</span>
                     </p>
                     <p className="mt-0.5 text-xs text-gray-400 dark:text-gray-500">
                       Click to upload. JPEG, PNG, WebP (max 5MB)
@@ -561,18 +637,45 @@ export default function AdmissionPage() {
                   </div>
                 </div>
 
+                {/* Mother Name & Parent Phone */}
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">
+                      Mother Name
+                    </label>
+                    <input
+                      type="text"
+                      value={form.motherName}
+                      onChange={(e) => setForm((f) => ({ ...f, motherName: e.target.value }))}
+                      placeholder="Mother's full name"
+                      className="h-11 w-full rounded-lg border border-gray-200 bg-transparent px-4 py-2.5 text-sm text-gray-800 outline-none placeholder:text-gray-400 focus:border-brand-300 focus:ring-2 focus:ring-brand-500/20 dark:border-gray-700 dark:text-white dark:placeholder:text-gray-500 dark:focus:border-brand-500/40"
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">
+                      Parent Phone
+                    </label>
+                    <input
+                      type="tel"
+                      value={form.parentPhone}
+                      onChange={(e) => setForm((f) => ({ ...f, parentPhone: e.target.value }))}
+                      placeholder="+252 xxx xxx"
+                      className="h-11 w-full rounded-lg border border-gray-200 bg-transparent px-4 py-2.5 text-sm text-gray-800 outline-none placeholder:text-gray-400 focus:border-brand-300 focus:ring-2 focus:ring-brand-500/20 dark:border-gray-700 dark:text-white dark:placeholder:text-gray-500 dark:focus:border-brand-500/40"
+                    />
+                  </div>
+                </div>
+
                 {/* Email & Phone */}
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">
-                      Email <span className="text-error-500">*</span>
+                      Email
                     </label>
                     <input
                       type="email"
-                      required
                       value={form.email}
                       onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
-                      placeholder="student@email.com"
+                      placeholder="student@email.com (optional)"
                       className="h-11 w-full rounded-lg border border-gray-200 bg-transparent px-4 py-2.5 text-sm text-gray-800 outline-none placeholder:text-gray-400 focus:border-brand-300 focus:ring-2 focus:ring-brand-500/20 dark:border-gray-700 dark:text-white dark:placeholder:text-gray-500 dark:focus:border-brand-500/40"
                     />
                   </div>
@@ -633,24 +736,59 @@ export default function AdmissionPage() {
                   </div>
                 </div>
 
-                {/* Department */}
-                <div>
-                  <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">
-                    Department <span className="text-error-500">*</span>
-                  </label>
-                  <select
-                    required
-                    value={form.departmentId}
-                    onChange={(e) => setForm((f) => ({ ...f, departmentId: e.target.value }))}
-                    className="h-11 w-full appearance-none rounded-lg border border-gray-200 bg-transparent px-4 py-2.5 text-sm text-gray-800 outline-none focus:border-brand-300 focus:ring-2 focus:ring-brand-500/20 dark:border-gray-700 dark:text-white dark:focus:border-brand-500/40"
-                  >
-                    <option value="">Select a department</option>
-                    {departments.map((d) => (
-                      <option key={d.id} value={String(d.id)}>
-                        {d.name} ({d.code})
-                      </option>
-                    ))}
-                  </select>
+                {/* Department & Class & Program */}
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+                  <div>
+                    <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">
+                      Department <span className="text-error-500">*</span>
+                    </label>
+                    <select
+                      required
+                      value={form.departmentId}
+                      onChange={(e) => setForm((f) => ({ ...f, departmentId: e.target.value, classId: "" }))}
+                      className="h-11 w-full appearance-none rounded-lg border border-gray-200 bg-transparent px-4 py-2.5 text-sm text-gray-800 outline-none focus:border-brand-300 focus:ring-2 focus:ring-brand-500/20 dark:border-gray-700 dark:text-white dark:focus:border-brand-500/40"
+                    >
+                      <option value="">Select a department</option>
+                      {departments.map((d) => (
+                        <option key={d.id} value={String(d.id)}>
+                          {d.name} ({d.code})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">
+                      Class
+                    </label>
+                    <select
+                      value={form.classId}
+                      onChange={(e) => setForm((f) => ({ ...f, classId: e.target.value }))}
+                      className="h-11 w-full appearance-none rounded-lg border border-gray-200 bg-transparent px-4 py-2.5 text-sm text-gray-800 outline-none focus:border-brand-300 focus:ring-2 focus:ring-brand-500/20 dark:border-gray-700 dark:text-white dark:focus:border-brand-500/40"
+                    >
+                      <option value="">Select class (optional)</option>
+                      {classes
+                        .filter((c) => !form.departmentId || c.departmentId === Number(form.departmentId))
+                        .map((c) => (
+                          <option key={c.id} value={String(c.id)}>
+                            {c.course?.code} - {c.name} ({c.semester} {c.year})
+                          </option>
+                        ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">
+                      Program
+                    </label>
+                    <select
+                      value={form.program}
+                      onChange={(e) => setForm((f) => ({ ...f, program: e.target.value }))}
+                      className="h-11 w-full appearance-none rounded-lg border border-gray-200 bg-transparent px-4 py-2.5 text-sm text-gray-800 outline-none focus:border-brand-300 focus:ring-2 focus:ring-brand-500/20 dark:border-gray-700 dark:text-white dark:focus:border-brand-500/40"
+                    >
+                      <option value="">Select program</option>
+                      <option value="Bachelor">Bachelor Degree</option>
+                      <option value="Masters">Masters Degree</option>
+                    </select>
+                  </div>
                 </div>
 
                 {/* Address */}

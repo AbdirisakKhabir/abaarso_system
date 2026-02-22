@@ -1,5 +1,5 @@
 "use client";
-import React, { useEffect, useRef, useState, useCallback } from "react";
+import React, { useEffect, useRef, useState, useCallback, useMemo } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
@@ -9,6 +9,7 @@ import {
   BoxCubeIcon,
   CalenderIcon,
   ChevronDownIcon,
+  DollarLineIcon,
   GridIcon,
   HorizontaLDots,
   ListIcon,
@@ -16,6 +17,7 @@ import {
   PageIcon,
   PieChartIcon,
   TableIcon,
+  TimeIcon,
   UserCircleIcon,
 } from "../icons/index";
 
@@ -68,6 +70,12 @@ const academicsItems: NavItem[] = [
     permission: "courses.view",
   },
   {
+    icon: <TimeIcon />,
+    name: "Semesters",
+    path: "/semesters",
+    permission: "semesters.view",
+  },
+  {
     icon: <CalenderIcon />,
     name: "Classes",
     path: "/classes",
@@ -91,6 +99,12 @@ const academicsItems: NavItem[] = [
     path: "/examinations",
     permission: "examinations.view",
   },
+  {
+    icon: <DollarLineIcon />,
+    name: "Finance",
+    path: "/finance",
+    permission: "admission.view",
+  },
 ];
 
 const reportsItems: NavItem[] = [
@@ -111,6 +125,17 @@ const reportsItems: NavItem[] = [
     name: "Exam Report",
     path: "/reports/exam",
     permission: "reports.view",
+  },
+  {
+    icon: <DollarLineIcon />,
+    name: "Payment Reports",
+    path: "/reports/payment",
+    permission: "reports.view",
+    subItems: [
+      { name: "Student Transactions", path: "/reports/student-transactions", permission: "reports.view" },
+      { name: "Class Revenue", path: "/reports/class-revenue", permission: "reports.view" },
+      { name: "Unpaid Students", path: "/reports/unpaid-students", permission: "reports.view" },
+    ],
   },
 ];
 
@@ -161,10 +186,10 @@ const AppSidebar: React.FC = () => {
   const { hasPermission } = useAuth();
   const pathname = usePathname();
 
-  // Filtered menus
-  const academicsNav = filterByPermission(academicsItems, hasPermission);
-  const reportsNav = filterByPermission(reportsItems, hasPermission);
-  const activitiesNav = filterByPermission(activitiesItems, hasPermission);
+  // Filtered menus (memoized to prevent useEffect infinite loop)
+  const academicsNav = useMemo(() => filterByPermission(academicsItems, hasPermission), [hasPermission]);
+  const reportsNav = useMemo(() => filterByPermission(reportsItems, hasPermission), [hasPermission]);
+  const activitiesNav = useMemo(() => filterByPermission(activitiesItems, hasPermission), [hasPermission]);
 
   // State
   const [openSubmenu, setOpenSubmenu] = useState<{
@@ -188,6 +213,7 @@ const AppSidebar: React.FC = () => {
   // Effect: Auto-open submenu based on current path
   useEffect(() => {
     let submenuMatched = false;
+    let matchedState: { type: MenuCategory; index: number } | null = null;
     const categories: MenuCategory[] = ["academics", "reports", "activities"];
 
     categories.forEach((menuType) => {
@@ -198,8 +224,8 @@ const AppSidebar: React.FC = () => {
       items.forEach((nav, index) => {
         if (nav.subItems) {
           nav.subItems.forEach((subItem) => {
-            if (isActive(subItem.path)) {
-              setOpenSubmenu({ type: menuType, index });
+            if (subItem.path === pathname) {
+              matchedState = { type: menuType, index };
               submenuMatched = true;
             }
           });
@@ -207,10 +233,15 @@ const AppSidebar: React.FC = () => {
       });
     });
 
-    if (!submenuMatched) {
-      setOpenSubmenu(null);
-    }
-  }, [pathname, isActive, academicsNav, reportsNav, activitiesNav]);
+    setOpenSubmenu((prev) => {
+      if (submenuMatched && matchedState) {
+        if (prev?.type === matchedState.type && prev?.index === matchedState.index) return prev;
+        return matchedState;
+      }
+      if (!submenuMatched && prev === null) return prev;
+      return null;
+    });
+  }, [pathname, academicsNav, reportsNav, activitiesNav]);
 
   // Effect: Update height for transitions (measure after DOM update)
   useEffect(() => {
@@ -324,7 +355,7 @@ const AppSidebar: React.FC = () => {
 
   return (
     <aside
-      className={`fixed mt-16 flex flex-col lg:mt-0 top-0 px-5 left-0 bg-white dark:bg-gray-900 dark:border-gray-800 text-gray-900 h-screen transition-all duration-300 ease-in-out z-50 border-r border-gray-200 
+      className={`no-print fixed mt-16 flex flex-col lg:mt-0 top-0 px-5 left-0 bg-white dark:bg-gray-900 dark:border-gray-800 text-gray-900 h-screen transition-all duration-300 ease-in-out z-50 border-r border-gray-200 
         ${isExpanded || isMobileOpen || isHovered ? "w-[290px]" : "w-[90px]"}
         ${isMobileOpen ? "translate-x-0" : "-translate-x-full"}
         lg:translate-x-0`}

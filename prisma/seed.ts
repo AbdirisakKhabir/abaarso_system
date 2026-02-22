@@ -46,6 +46,12 @@ const DEFAULT_PERMISSIONS = [
   { name: "examinations.edit", description: "Edit examination records", module: "examinations" },
   { name: "examinations.delete", description: "Delete examination records", module: "examinations" },
   { name: "reports.view", description: "View reports", module: "reports" },
+  { name: "finance.view", description: "View finance", module: "finance" },
+  { name: "finance.create", description: "Record tuition payments", module: "finance" },
+  { name: "semesters.view", description: "View semesters", module: "semesters" },
+  { name: "semesters.create", description: "Create semesters", module: "semesters" },
+  { name: "semesters.edit", description: "Edit semesters", module: "semesters" },
+  { name: "semesters.delete", description: "Delete semesters", module: "semesters" },
 ];
 
 async function main() {
@@ -82,6 +88,20 @@ async function main() {
         permissionId: perm.id,
       },
       update: {},
+    });
+  }
+
+  // Create default semesters (Fall, Spring, Summer)
+  const defaultSemesters = [
+    { name: "Spring", sortOrder: 1 },
+    { name: "Summer", sortOrder: 2 },
+    { name: "Fall", sortOrder: 3 },
+  ];
+  for (const s of defaultSemesters) {
+    await prisma.semester.upsert({
+      where: { name: s.name },
+      create: { name: s.name, sortOrder: s.sortOrder },
+      update: { sortOrder: s.sortOrder },
     });
   }
 

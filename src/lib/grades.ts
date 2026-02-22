@@ -76,13 +76,15 @@ export interface GPASummary {
   semesters: SemesterGPA[];
 }
 
+/** Optional map of semester name -> sort order (from Semester table). If not provided, uses default. */
 export function calculateGPA(
   records: {
     semester: string;
     year: number;
     gradePoints: number | null;
     creditHours: number;
-  }[]
+  }[],
+  semOrderMap?: Record<string, number>
 ): GPASummary {
   // Group by semester+year
   const semMap = new Map<string, { semester: string; year: number; items: { gradePoints: number; creditHours: number }[] }>();
@@ -102,8 +104,8 @@ export function calculateGPA(
   let cumulativeTotalCredits = 0;
   let cumulativeTotalGradePoints = 0;
 
-  // Sort semesters by year then semester name
-  const semOrder: Record<string, number> = { Spring: 1, Summer: 2, Fall: 3 };
+  // Sort semesters by year then semester (use semOrderMap from DB, or fallback)
+  const semOrder: Record<string, number> = semOrderMap ?? { Spring: 1, Summer: 2, Fall: 3 };
   const sorted = [...semMap.values()].sort((a, b) => {
     if (a.year !== b.year) return a.year - b.year;
     return (semOrder[a.semester] || 0) - (semOrder[b.semester] || 0);

@@ -36,13 +36,14 @@ type ClassRow = {
   createdAt: string;
 };
 
-const SEMESTERS = ["Fall", "Spring", "Summer"];
+type SemesterOption = { id: number; name: string; sortOrder: number; isActive: boolean };
 const CURRENT_YEAR = new Date().getFullYear();
 
 export default function ClassesPage() {
   const { hasPermission } = useAuth();
   const [classes, setClasses] = useState<ClassRow[]>([]);
   const [courses, setCourses] = useState<CourseOption[]>([]);
+  const [semesters, setSemesters] = useState<SemesterOption[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [filterSemester, setFilterSemester] = useState<string>("all");
@@ -84,6 +85,12 @@ export default function ClassesPage() {
   }
 
   useEffect(() => {
+    authFetch("/api/semesters?active=true").then((r) => {
+      if (r.ok) r.json().then((d: SemesterOption[]) => setSemesters(d));
+    });
+  }, []);
+
+  useEffect(() => {
     (async () => {
       setLoading(true);
       await Promise.all([loadClasses(), loadCourses()]);
@@ -97,7 +104,7 @@ export default function ClassesPage() {
     setForm({
       name: "",
       courseId: courses[0] ? String(courses[0].id) : "",
-      semester: "Fall",
+      semester: semesters[0]?.name ?? "Fall",
       year: String(CURRENT_YEAR),
       room: "",
       schedule: "",
@@ -238,8 +245,8 @@ export default function ClassesPage() {
               className="h-10 rounded-lg border border-gray-200 bg-transparent px-3 text-sm text-gray-700 outline-none focus:border-brand-300 focus:ring-2 focus:ring-brand-500/20 dark:border-gray-700 dark:text-gray-300 dark:focus:border-brand-500/40"
             >
               <option value="all">All Semesters</option>
-              {SEMESTERS.map((s) => (
-                <option key={s} value={s}>{s}</option>
+              {semesters.map((s) => (
+                <option key={s.id} value={s.name}>{s.name}</option>
               ))}
             </select>
             <div className="relative w-full sm:w-56">
@@ -282,6 +289,7 @@ export default function ClassesPage() {
                 <TableCell isHeader>#</TableCell>
                 <TableCell isHeader>Class</TableCell>
                 <TableCell isHeader>Course</TableCell>
+                <TableCell isHeader>Department</TableCell>
                 <TableCell isHeader>Semester</TableCell>
                 <TableCell isHeader>Room</TableCell>
                 <TableCell isHeader>Schedule</TableCell>
@@ -313,6 +321,9 @@ export default function ClassesPage() {
                         {c.course.name}
                       </p>
                     </div>
+                  </TableCell>
+                  <TableCell>
+                    <Badge color="info" size="sm">{c.course.department.name}</Badge>
                   </TableCell>
                   <TableCell>
                     <div className="flex items-center gap-1.5">
@@ -450,8 +461,8 @@ export default function ClassesPage() {
                       onChange={(e) => setForm((f) => ({ ...f, semester: e.target.value }))}
                       className="h-11 w-full appearance-none rounded-lg border border-gray-200 bg-transparent px-4 py-2.5 text-sm text-gray-800 outline-none focus:border-brand-300 focus:ring-2 focus:ring-brand-500/20 dark:border-gray-700 dark:text-white dark:focus:border-brand-500/40"
                     >
-                      {SEMESTERS.map((s) => (
-                        <option key={s} value={s}>{s}</option>
+                      {semesters.map((s) => (
+                        <option key={s.id} value={s.name}>{s.name}</option>
                       ))}
                     </select>
                   </div>

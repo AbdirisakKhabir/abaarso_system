@@ -33,6 +33,9 @@ export async function GET(req: NextRequest) {
         department: {
           select: { id: true, name: true, code: true },
         },
+        class: {
+          select: { id: true, name: true, semester: true, year: true, course: { select: { code: true } } },
+        },
       },
       orderBy: { createdAt: "desc" },
     });
@@ -58,35 +61,43 @@ export async function POST(req: NextRequest) {
     const {
       firstName,
       lastName,
+      motherName,
+      parentPhone,
       email,
       phone,
       dateOfBirth,
       gender,
       address,
       departmentId,
+      classId,
+      program,
       imageUrl,
       imagePublicId,
       status,
     } = body;
 
     const parsedDeptId = Number(departmentId);
+    const parsedClassId = classId ? Number(classId) : null;
 
-    if (!firstName || !lastName || !email || !Number.isInteger(parsedDeptId)) {
+    if (!firstName || !lastName || !Number.isInteger(parsedDeptId)) {
       return NextResponse.json(
-        { error: "First name, last name, email, and department are required" },
+        { error: "First name, last name, and department are required" },
         { status: 400 }
       );
     }
 
-    // Check duplicate email
-    const existing = await prisma.student.findUnique({
-      where: { email: String(email).toLowerCase().trim() },
-    });
-    if (existing) {
-      return NextResponse.json(
-        { error: "A student with this email already exists" },
-        { status: 400 }
-      );
+    // Check duplicate email only when email is provided
+    const emailVal = email ? String(email).toLowerCase().trim() : null;
+    if (emailVal) {
+      const existing = await prisma.student.findUnique({
+        where: { email: emailVal },
+      });
+      if (existing) {
+        return NextResponse.json(
+          { error: "A student with this email already exists" },
+          { status: 400 }
+        );
+      }
     }
 
     const studentId = await generateStudentId();
@@ -96,15 +107,19 @@ export async function POST(req: NextRequest) {
         studentId,
         firstName: String(firstName).trim(),
         lastName: String(lastName).trim(),
-        email: String(email).toLowerCase().trim(),
+        motherName: motherName ? String(motherName).trim() : null,
+        parentPhone: parentPhone ? String(parentPhone).trim() : null,
+        email: emailVal,
         phone: phone || null,
         dateOfBirth: dateOfBirth ? new Date(dateOfBirth) : null,
         gender: gender || null,
         address: address || null,
         departmentId: parsedDeptId,
+        classId: Number.isInteger(parsedClassId) ? parsedClassId : null,
+        program: program || null,
         imageUrl: imageUrl || null,
         imagePublicId: imagePublicId || null,
-        status: status || "Pending",
+        status: status || "Admitted",
       },
       include: {
         department: { select: { id: true, name: true, code: true } },

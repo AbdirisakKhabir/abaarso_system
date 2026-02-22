@@ -59,6 +59,7 @@ model Faculty {
   name        String       @unique
   code        String       @unique // e.g. "ENG", "SCI", "BUS"
   description String?
+  program     String?      // "Bachelor", "Masters"
   isActive    Boolean      @default(true)
   departments Department[]
   createdAt   DateTime     @default(now())
@@ -74,6 +75,7 @@ model Department {
   description String?
   facultyId   Int
   faculty     Faculty   @relation(fields: [facultyId], references: [id], onDelete: Restrict)
+  tuitionFee  Float?    @default(0)
   isActive    Boolean   @default(true)
   courses     Course[]
   students    Student[]
@@ -100,6 +102,17 @@ model Course {
   @@map("courses")
 }
 
+model Semester {
+  id        Int      @id @default(autoincrement())
+  name      String   @unique // e.g. "Fall", "Spring", "Summer"
+  sortOrder Int      @default(0) // for display/ordering (lower = earlier in year)
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("semesters")
+}
+
 model Class {
   id                 Int                 @id @default(autoincrement())
   name               String // e.g. "CS101-A", "CS101-B"
@@ -112,6 +125,7 @@ model Class {
   capacity           Int                 @default(40)
   isActive           Boolean             @default(true)
   attendanceSessions AttendanceSession[]
+  students           Student[]
   createdAt          DateTime            @default(now())
   updatedAt          DateTime            @updatedAt
 
@@ -124,23 +138,45 @@ model Student {
   studentId         String             @unique // e.g. "STD-2026-0001"
   firstName         String
   lastName          String
-  email             String             @unique
+  motherName        String?
+  parentPhone       String?
+  email             String?            @unique
   phone             String?
   dateOfBirth       DateTime?
   gender            String? // "Male", "Female"
   address           String?
-  imageUrl          String? // Cloudinary URL
+  imageUrl          String? // Cloudinary URL (optional)
   imagePublicId     String? // Cloudinary public_id for deletion
   departmentId      Int
   department        Department         @relation(fields: [departmentId], references: [id], onDelete: Restrict)
+  classId           Int?
+  class             Class?             @relation(fields: [classId], references: [id], onDelete: SetNull)
+  program           String?            // "Bachelor", "Masters"
   admissionDate     DateTime           @default(now())
-  status            String             @default("Pending") // "Pending", "Admitted", "Rejected", "Graduated"
+  status            String             @default("Admitted") // "Pending", "Admitted", "Rejected", "Graduated"
   attendanceRecords AttendanceRecord[]
   examRecords       ExamRecord[]
+  tuitionPayments   TuitionPayment[]
   createdAt         DateTime           @default(now())
   updatedAt         DateTime           @updatedAt
 
   @@map("students")
+}
+
+model TuitionPayment {
+  id           Int      @id @default(autoincrement())
+  studentId    Int
+  student      Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  amount       Float    @default(0)
+  semester     String   // "Fall", "Spring", "Summer"
+  year         Int      // e.g. 2026
+  paidAt       DateTime @default(now())
+  note         String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@unique([studentId, semester, year])
+  @@map("tuition_payments")
 }
 
 model AttendanceSession {

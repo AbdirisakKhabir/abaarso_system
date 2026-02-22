@@ -2,6 +2,7 @@
 
 import React, { useCallback, useEffect, useState } from "react";
 import PageBreadCrumb from "@/components/common/PageBreadCrumb";
+import Button from "@/components/ui/button/Button";
 import {
   Table,
   TableBody,
@@ -33,6 +34,7 @@ type ExamRecord = {
   course: { code: string; name: string; creditHours: number };
 };
 
+type SemesterOption = { id: number; name: string; sortOrder: number; isActive: boolean };
 const GRADE_COLOR: Record<string, "success" | "primary" | "warning" | "error" | "info"> = {
   A: "success", "A-": "success", "B+": "primary", B: "primary", "B-": "info",
   "C+": "warning", C: "warning", D: "error", F: "error",
@@ -41,6 +43,7 @@ const GRADE_COLOR: Record<string, "success" | "primary" | "warning" | "error" | 
 export default function ExamReportPage() {
   const [departments, setDepartments] = useState<Department[]>([]);
   const [classes, setClasses] = useState<ClassItem[]>([]);
+  const [semesters, setSemesters] = useState<SemesterOption[]>([]);
   const [records, setRecords] = useState<ExamRecord[]>([]);
   const [summary, setSummary] = useState<{ total: number; byGrade: Record<string, number>; avgGradePoints: number }>({
     total: 0, byGrade: {}, avgGradePoints: 0,
@@ -72,6 +75,7 @@ export default function ExamReportPage() {
   useEffect(() => {
     authFetch("/api/departments").then((r) => { if (r.ok) r.json().then((d: Department[]) => setDepartments(d)); });
     authFetch("/api/classes").then((r) => { if (r.ok) r.json().then((d: ClassItem[]) => setClasses(d)); });
+    authFetch("/api/semesters?active=true").then((r) => { if (r.ok) r.json().then((d: SemesterOption[]) => setSemesters(d)); });
   }, []);
 
   useEffect(() => {
@@ -81,12 +85,22 @@ export default function ExamReportPage() {
   const filteredClasses = filterDept ? classes.filter((c) => c.course?.department?.id === Number(filterDept)) : classes;
   const currentYear = new Date().getFullYear();
 
+  const handlePrint = () => window.print();
+
   return (
     <div>
-      <PageBreadCrumb pageTitle="Exam Report" />
+      <div className="mb-6 flex flex-wrap items-center justify-between gap-4 no-print">
+        <PageBreadCrumb pageTitle="Exam Report" />
+        <Button size="sm" onClick={handlePrint}>Print</Button>
+      </div>
+
+      <div className="mb-4 print:block hidden print:mb-2">
+        <h1 className="text-xl font-bold text-gray-900">Exam Report</h1>
+        <p className="text-sm text-gray-600">Generated: {new Date().toLocaleDateString()}</p>
+      </div>
 
       <div className="rounded-2xl border border-gray-200 bg-white dark:border-gray-800 dark:bg-white/5">
-        <div className="border-b border-gray-100 px-5 py-4 dark:border-gray-800">
+        <div className="no-print border-b border-gray-100 px-5 py-4 dark:border-gray-800">
           <h3 className="mb-4 text-lg font-semibold text-gray-800 dark:text-white/90">Filters</h3>
           <div className="flex flex-wrap gap-4">
             <div>
@@ -128,9 +142,9 @@ export default function ExamReportPage() {
                 className="h-10 min-w-[120px] rounded-lg border border-gray-200 bg-transparent px-3 text-sm text-gray-800 outline-none focus:border-brand-300 dark:border-gray-700 dark:text-white/80"
               >
                 <option value="all">All</option>
-                <option value="Fall">Fall</option>
-                <option value="Spring">Spring</option>
-                <option value="Summer">Summer</option>
+                {semesters.map((s) => (
+                  <option key={s.id} value={s.name}>{s.name}</option>
+                ))}
               </select>
             </div>
             <div>

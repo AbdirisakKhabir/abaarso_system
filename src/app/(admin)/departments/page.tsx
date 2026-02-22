@@ -24,6 +24,7 @@ type DepartmentRow = {
   description: string | null;
   facultyId: number;
   faculty: Faculty;
+  tuitionFee: number | null;
   isActive: boolean;
   createdAt: string;
 };
@@ -42,6 +43,7 @@ export default function DepartmentsPage() {
     code: "",
     description: "",
     facultyId: "",
+    tuitionFee: "",
   });
   const [submitError, setSubmitError] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -83,6 +85,7 @@ export default function DepartmentsPage() {
       code: "",
       description: "",
       facultyId: faculties[0] ? String(faculties[0].id) : "",
+      tuitionFee: "",
     });
     setSubmitError("");
   }
@@ -95,6 +98,7 @@ export default function DepartmentsPage() {
       code: d.code,
       description: d.description ?? "",
       facultyId: String(d.facultyId),
+      tuitionFee: d.tuitionFee != null ? String(d.tuitionFee) : "",
     });
     setSubmitError("");
   }
@@ -109,6 +113,7 @@ export default function DepartmentsPage() {
         code: form.code,
         description: form.description || undefined,
         facultyId: Number(form.facultyId),
+        tuitionFee: form.tuitionFee ? Number(form.tuitionFee) : undefined,
       };
 
       if (modal === "add") {
@@ -262,6 +267,7 @@ export default function DepartmentsPage() {
                 <TableCell isHeader>Department</TableCell>
                 <TableCell isHeader>Code</TableCell>
                 <TableCell isHeader>Faculty</TableCell>
+                <TableCell isHeader>Tuition Fee</TableCell>
                 <TableCell isHeader>Description</TableCell>
                 <TableCell isHeader>Status</TableCell>
                 <TableCell isHeader className="text-right">Actions</TableCell>
@@ -288,6 +294,9 @@ export default function DepartmentsPage() {
                   </TableCell>
                   <TableCell>
                     <Badge color="info" size="sm">{d.faculty.name}</Badge>
+                  </TableCell>
+                  <TableCell className="text-sm">
+                    {d.tuitionFee != null ? `$${Number(d.tuitionFee).toLocaleString()}` : "—"}
                   </TableCell>
                   <TableCell className="max-w-[180px] truncate text-gray-500 dark:text-gray-400">
                     {d.description || "—"}
@@ -402,6 +411,20 @@ export default function DepartmentsPage() {
                       ))}
                     </select>
                   </div>
+                </div>
+                <div>
+                  <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">
+                    Tuition Fee
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={form.tuitionFee}
+                    onChange={(e) => setForm((f) => ({ ...f, tuitionFee: e.target.value }))}
+                    placeholder="e.g. 5000"
+                    className="h-11 w-full rounded-lg border border-gray-200 bg-transparent px-4 py-2.5 text-sm text-gray-800 outline-none placeholder:text-gray-400 focus:border-brand-300 focus:ring-2 focus:ring-brand-500/20 dark:border-gray-700 dark:text-white dark:placeholder:text-gray-500 dark:focus:border-brand-500/40"
+                  />
                 </div>
                 <div>
                   <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">

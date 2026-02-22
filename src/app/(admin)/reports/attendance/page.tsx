@@ -2,6 +2,7 @@
 
 import React, { useCallback, useEffect, useState } from "react";
 import PageBreadCrumb from "@/components/common/PageBreadCrumb";
+import Button from "@/components/ui/button/Button";
 import {
   Table,
   TableBody,
@@ -79,12 +80,22 @@ export default function AttendanceReportPage() {
 
   const filteredClasses = filterDept ? classes.filter((c) => c.course?.department?.id === Number(filterDept)) : classes;
 
+  const handlePrint = () => window.print();
+
   return (
     <div>
-      <PageBreadCrumb pageTitle="Attendance Report" />
+      <div className="mb-6 flex flex-wrap items-center justify-between gap-4 no-print">
+        <PageBreadCrumb pageTitle="Attendance Report" />
+        <Button size="sm" onClick={handlePrint}>Print</Button>
+      </div>
+
+      <div className="mb-4 print:block hidden print:mb-2">
+        <h1 className="text-xl font-bold text-gray-900">Attendance Report</h1>
+        <p className="text-sm text-gray-600">Generated: {new Date().toLocaleDateString()}</p>
+      </div>
 
       <div className="rounded-2xl border border-gray-200 bg-white dark:border-gray-800 dark:bg-white/5">
-        <div className="border-b border-gray-100 px-5 py-4 dark:border-gray-800">
+        <div className="no-print border-b border-gray-100 px-5 py-4 dark:border-gray-800">
           <h3 className="mb-4 text-lg font-semibold text-gray-800 dark:text-white/90">Filters</h3>
           <div className="flex flex-wrap gap-4">
             <div>

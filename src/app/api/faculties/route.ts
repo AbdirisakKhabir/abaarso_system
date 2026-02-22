@@ -22,6 +22,7 @@ export async function GET(req: NextRequest) {
         name: f.name,
         code: f.code,
         description: f.description,
+        program: f.program,
         isActive: f.isActive,
         departmentCount: f._count.departments,
         createdAt: f.createdAt,
@@ -44,7 +45,7 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json();
-    const { name, code, description } = body;
+    const { name, code, description, program } = body;
 
     if (!name || !code) {
       return NextResponse.json(
@@ -58,6 +59,7 @@ export async function POST(req: NextRequest) {
         name: String(name).trim(),
         code: String(code).trim().toUpperCase(),
         description: description || null,
+        program: program || null,
       },
     });
 

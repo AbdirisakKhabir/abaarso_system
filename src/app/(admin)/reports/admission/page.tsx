@@ -2,6 +2,7 @@
 
 import React, { useCallback, useEffect, useState } from "react";
 import PageBreadCrumb from "@/components/common/PageBreadCrumb";
+import Button from "@/components/ui/button/Button";
 import {
   Table,
   TableBody,
@@ -76,12 +77,22 @@ export default function AdmissionReportPage() {
 
   const filteredClasses = filterDept ? classes.filter((c) => c.course?.department?.id === Number(filterDept)) : classes;
 
+  const handlePrint = () => window.print();
+
   return (
     <div>
-      <PageBreadCrumb pageTitle="Admission Report" />
+      <div className="mb-6 flex flex-wrap items-center justify-between gap-4 no-print">
+        <PageBreadCrumb pageTitle="Admission Report" />
+        <Button size="sm" onClick={handlePrint}>Print</Button>
+      </div>
+
+      <div className="mb-4 print:block hidden print:mb-2">
+        <h1 className="text-xl font-bold text-gray-900">Admission Report</h1>
+        <p className="text-sm text-gray-600">Generated: {new Date().toLocaleDateString()}</p>
+      </div>
 
       <div className="rounded-2xl border border-gray-200 bg-white dark:border-gray-800 dark:bg-white/5">
-        <div className="border-b border-gray-100 px-5 py-4 dark:border-gray-800">
+        <div className="no-print border-b border-gray-100 px-5 py-4 dark:border-gray-800">
           <h3 className="mb-4 text-lg font-semibold text-gray-800 dark:text-white/90">Filters</h3>
           <div className="flex flex-wrap gap-4">
             <div>
@@ -178,7 +189,7 @@ export default function AdmissionReportPage() {
                   <TableRow key={s.id} className="border-b border-gray-50 dark:border-gray-800">
                     <TableCell className="px-5 py-3 font-mono text-sm text-gray-700 dark:text-gray-300">{s.studentId}</TableCell>
                     <TableCell className="px-5 py-3 font-medium text-gray-800 dark:text-white/90">{s.firstName} {s.lastName}</TableCell>
-                    <TableCell className="px-5 py-3 text-sm text-gray-600 dark:text-gray-400">{s.email}</TableCell>
+                    <TableCell className="px-5 py-3 text-sm text-gray-600 dark:text-gray-400">{s.email ?? "—"}</TableCell>
                     <TableCell className="px-5 py-3">
                       <Badge variant="light" color="info">{s.department?.code ?? "—"}</Badge>
                     </TableCell>

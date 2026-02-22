@@ -750,3 +750,19 @@ span.flatpickr-weekday,
   opacity: 0.8;
   cursor: grabbing; /* Changes the cursor to indicate dragging */
 }
+
+/* Print styles - hide navigation and show only report content */
+@media print {
+  .no-print {
+    display: none !important;
+  }
+  .print\:block {
+    display: block !important;
+  }
+  .print\:inline {
+    display: inline !important;
+  }
+  body {
+    background: white;
+  }
+}

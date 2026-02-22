@@ -43,13 +43,24 @@ export async function GET(req: NextRequest) {
       orderBy: [{ year: "desc" }, { semester: "asc" }],
     });
 
+    const semesters = await prisma.semester.findMany({
+      where: { isActive: true },
+      orderBy: { sortOrder: "asc" },
+      select: { name: true, sortOrder: true },
+    });
+    const semOrderMap = semesters.reduce<Record<string, number>>((acc, s, i) => {
+      acc[s.name] = s.sortOrder ?? i;
+      return acc;
+    }, {});
+
     const gpaData = calculateGPA(
       records.map((r) => ({
         semester: r.semester,
         year: r.year,
         gradePoints: r.gradePoints,
         creditHours: r.course.creditHours,
-      }))
+      })),
+      semOrderMap
     );
 
     return NextResponse.json({

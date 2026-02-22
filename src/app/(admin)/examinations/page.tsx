@@ -95,7 +95,7 @@ const GRADE_COLORS: Record<string, "success" | "primary" | "warning" | "error" |
   F: "error",
 };
 
-const SEMESTERS = ["Fall", "Spring", "Summer"];
+type SemesterOption = { id: number; name: string; sortOrder: number; isActive: boolean };
 
 export default function ExaminationsPage() {
   const { hasPermission } = useAuth();
@@ -105,6 +105,7 @@ export default function ExaminationsPage() {
   const [faculties, setFaculties] = useState<FacultyInfo[]>([]);
   const [departments, setDepartments] = useState<DepartmentInfo[]>([]);
   const [classes, setClasses] = useState<ClassInfo[]>([]);
+  const [semesters, setSemesters] = useState<SemesterOption[]>([]);
   const [loading, setLoading] = useState(true);
 
   // Template download: Faculty -> Department -> Class
@@ -138,7 +139,7 @@ export default function ExaminationsPage() {
   const [form, setForm] = useState({
     studentId: "",
     courseId: "",
-    semester: "Fall",
+    semester: "",
     year: new Date().getFullYear().toString(),
     midExam: "",
     finalExam: "",
@@ -196,6 +197,13 @@ export default function ExaminationsPage() {
     try {
       const res = await authFetch("/api/classes");
       if (res.ok) setClasses(await res.json());
+    } catch { /* empty */ }
+  }, []);
+
+  const fetchSemesters = useCallback(async () => {
+    try {
+      const res = await authFetch("/api/semesters?active=true");
+      if (res.ok) setSemesters(await res.json());
     } catch { /* empty */ }
   }, []);
 
@@ -273,7 +281,14 @@ export default function ExaminationsPage() {
     fetchFaculties();
     fetchDepartments();
     fetchClasses();
-  }, [fetchStudents, fetchCourses, fetchFaculties, fetchDepartments, fetchClasses]);
+    fetchSemesters();
+  }, [fetchStudents, fetchCourses, fetchFaculties, fetchDepartments, fetchClasses, fetchSemesters]);
+
+  useEffect(() => {
+    if (semesters.length > 0 && !form.semester) {
+      setForm((f) => ({ ...f, semester: semesters[0].name }));
+    }
+  }, [semesters]);
 
   // Filtered records
   const filtered = records.filter((r) => {
@@ -294,7 +309,7 @@ export default function ExaminationsPage() {
     setForm({
       studentId: "",
       courseId: "",
-      semester: "Fall",
+      semester: semesters[0]?.name ?? "",
       year: new Date().getFullYear().toString(),
       midExam: "",
       finalExam: "",
@@ -591,8 +606,8 @@ export default function ExaminationsPage() {
             className="h-10 rounded-lg border border-gray-200 bg-transparent px-3 text-sm text-gray-800 outline-none dark:border-gray-700 dark:text-white/80"
           >
             <option value="">All Semesters</option>
-            {SEMESTERS.map((s) => (
-              <option key={s} value={s}>{s}</option>
+            {semesters.map((s) => (
+              <option key={s.id} value={s.name}>{s.name}</option>
             ))}
           </select>
           <select
@@ -800,8 +815,8 @@ export default function ExaminationsPage() {
                   disabled={!!editingRecord}
                   className="h-10 w-full rounded-lg border border-gray-200 bg-transparent px-3 text-sm text-gray-800 outline-none focus:border-brand-300 disabled:opacity-60 dark:border-gray-700 dark:text-white/80"
                 >
-                  {SEMESTERS.map((s) => (
-                    <option key={s} value={s}>{s}</option>
+                  {semesters.map((s) => (
+                    <option key={s.id} value={s.name}>{s.name}</option>
                   ))}
                 </select>
               </div>

@@ -22,6 +22,7 @@ export async function GET(req: NextRequest, ctx: RouteContext) {
       where: { id },
       include: {
         department: { select: { id: true, name: true, code: true } },
+        class: { select: { id: true, name: true, semester: true, year: true, course: { select: { code: true } } } },
       },
     });
 
@@ -57,7 +58,9 @@ export async function PATCH(req: NextRequest, ctx: RouteContext) {
 
     if (body.firstName !== undefined) data.firstName = String(body.firstName).trim();
     if (body.lastName !== undefined) data.lastName = String(body.lastName).trim();
-    if (body.email !== undefined) data.email = String(body.email).toLowerCase().trim();
+    if (body.motherName !== undefined) data.motherName = body.motherName ? String(body.motherName).trim() : null;
+    if (body.parentPhone !== undefined) data.parentPhone = body.parentPhone ? String(body.parentPhone).trim() : null;
+    if (body.email !== undefined) data.email = body.email ? String(body.email).toLowerCase().trim() : null;
     if (body.phone !== undefined) data.phone = body.phone || null;
     if (body.dateOfBirth !== undefined)
       data.dateOfBirth = body.dateOfBirth ? new Date(body.dateOfBirth) : null;
@@ -70,6 +73,10 @@ export async function PATCH(req: NextRequest, ctx: RouteContext) {
       }
       data.departmentId = did;
     }
+    if (body.classId !== undefined) {
+      data.classId = body.classId ? Number(body.classId) : null;
+    }
+    if (body.program !== undefined) data.program = body.program || null;
     if (body.status !== undefined) data.status = body.status;
 
     // Handle image update: if new image provided, delete old one from Cloudinary
@@ -94,6 +101,7 @@ export async function PATCH(req: NextRequest, ctx: RouteContext) {
       data,
       include: {
         department: { select: { id: true, name: true, code: true } },
+        class: { select: { id: true, name: true, semester: true, year: true, course: { select: { code: true } } } },
       },
     });
 

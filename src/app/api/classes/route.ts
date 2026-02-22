@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAuthUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { isValidSemester } from "@/lib/semesters";
 
 export async function GET(req: NextRequest) {
   try {
@@ -48,6 +49,13 @@ export async function POST(req: NextRequest) {
     if (!name || !Number.isInteger(parsedCourseId) || !semester || !Number.isInteger(parsedYear)) {
       return NextResponse.json(
         { error: "Name, courseId, semester, and year are required" },
+        { status: 400 }
+      );
+    }
+
+    if (!(await isValidSemester(semester))) {
+      return NextResponse.json(
+        { error: "Invalid semester. Use a semester from the Semesters settings." },
         { status: 400 }
       );
     }

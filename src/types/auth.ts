@@ -10,9 +10,13 @@ export type AuthUser = {
 export const AUTH_STORAGE_KEY = "university_auth";
 export const TOKEN_KEY = "university_token";
 
+/** Session expires after 1 hour of inactivity from login */
+export const SESSION_TTL_MS = 60 * 60 * 1000;
+
 export type StoredAuth = {
   user: AuthUser;
   token: string;
+  loginAt?: number;
 };
 
 export function getStoredAuth(): StoredAuth | null {
@@ -26,10 +30,21 @@ export function getStoredAuth(): StoredAuth | null {
   }
 }
 
-export function setStoredAuth(data: StoredAuth): void {
+export function setStoredAuth(data: StoredAuth, options?: { preserveLoginAt?: boolean }): void {
   if (typeof window === "undefined") return;
-  localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(data));
+  const existing = options?.preserveLoginAt ? getStoredAuth() : null;
+  const payload: StoredAuth = {
+    ...data,
+    loginAt: options?.preserveLoginAt && existing?.loginAt ? existing.loginAt : (data.loginAt ?? Date.now()),
+  };
+  localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(payload));
   localStorage.setItem(TOKEN_KEY, data.token);
+}
+
+export function isSessionExpired(): boolean {
+  const stored = getStoredAuth();
+  if (!stored?.loginAt) return false;
+  return Date.now() - stored.loginAt > SESSION_TTL_MS;
 }
 
 export function clearStoredAuth(): void {
