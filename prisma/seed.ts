@@ -1,10 +1,6 @@
 import "dotenv/config";
-import { PrismaClient } from "@prisma/client";
-import { getDbAdapter } from "../src/lib/db-adapter";
+import { prisma } from "../src/lib/prisma";
 import bcrypt from "bcryptjs";
-
-const adapter = getDbAdapter();
-const prisma = new PrismaClient({ adapter });
 
 const DEFAULT_PERMISSIONS = [
   { name: "users.view", description: "View users", module: "users" },
