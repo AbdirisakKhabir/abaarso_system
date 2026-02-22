@@ -5,7 +5,6 @@ import Image from "next/image";
 import { useParams, useRouter } from "next/navigation";
 import PageBreadCrumb from "@/components/common/PageBreadCrumb";
 import Button from "@/components/ui/button/Button";
-import Badge from "@/components/ui/badge/Badge";
 import { authFetch } from "@/lib/api";
 import {
   ChevronLeftIcon,
@@ -183,9 +182,9 @@ export default function StudentProfilePage() {
               </h1>
               <p className="mt-1 font-mono text-lg tracking-wider text-white/90">{student.studentId}</p>
               <div className="mt-3 flex flex-wrap items-center gap-2">
-                <Badge color="success" size="sm" className="bg-white/20 text-white border-white/30">
+                <span className="inline-flex items-center rounded-full bg-white/20 px-2.5 py-0.5 text-theme-xs font-medium text-white ring-1 ring-white/30">
                   {student.status}
-                </Badge>
+                </span>
                 <span className="text-sm text-white/80">
                   {student.department.name} • {student.program || "—"}
                 </span>
