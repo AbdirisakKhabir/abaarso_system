@@ -40,7 +40,7 @@ export default function SignUpForm() {
       return;
     }
     if (!isChecked) {
-      setError("Please accept terms and conditions.");
+      setError("Please accept terms, conditions and privacy policy.");
       return;
     }
     if (password.length < 6) {
