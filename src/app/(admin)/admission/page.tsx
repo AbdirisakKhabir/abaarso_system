@@ -421,8 +421,6 @@ export default function AdmissionPage() {
                 <TableCell isHeader>#</TableCell>
                 <TableCell isHeader>Student</TableCell>
                 <TableCell isHeader>Student ID</TableCell>
-                <TableCell isHeader>Email</TableCell>
-                <TableCell isHeader>Mother / Parent</TableCell>
                 <TableCell isHeader>Department</TableCell>
                 <TableCell isHeader>Class</TableCell>
                 <TableCell isHeader>Program</TableCell>
@@ -474,12 +472,6 @@ export default function AdmissionPage() {
                     >
                       {s.studentId}
                     </Link>
-                  </TableCell>
-                  <TableCell className="text-sm">{s.email ?? "—"}</TableCell>
-                  <TableCell className="text-xs">
-                    {s.motherName && <span className="block">{s.motherName}</span>}
-                    {s.parentPhone && <span className="text-gray-400">{s.parentPhone}</span>}
-                    {!s.motherName && !s.parentPhone && "—"}
                   </TableCell>
                   <TableCell>
                     <Badge color="info" size="sm">{s.department.name}</Badge>

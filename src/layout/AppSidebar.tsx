@@ -362,16 +362,21 @@ const AppSidebar: React.FC = () => {
       onMouseEnter={() => !isExpanded && setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
     >
-      <div className={`py-8 flex ${!isExpanded && !isHovered ? "lg:justify-center" : "justify-start"}`}>
-        <Link href="/">
+      <div className={`py-8 flex ${!isExpanded && !isHovered && !isMobileOpen ? "lg:justify-center" : ""}`}>
+        <Link href="/" className={`flex items-center gap-2 ${!isExpanded && !isHovered && !isMobileOpen ? "lg:justify-center" : ""}`}>
           <Image
             src="/logo/logo%20abaarso.png"
-            alt="Logo"
-            width={isExpanded || isHovered || isMobileOpen ? 160 : 40}
-            height={isExpanded || isHovered || isMobileOpen ? 44 : 40}
+            alt="ATU Berbera"
+            width={48}
+            height={48}
             priority
-            className="object-contain"
+            className="object-contain h-12 w-12 shrink-0"
           />
+          {(isExpanded || isHovered || isMobileOpen) && (
+            <span className="text-sm font-semibold text-gray-800 dark:text-white/90 whitespace-nowrap">
+              ABAARSO TECH UNIVERSITY
+            </span>
+          )}
         </Link>
       </div>
 
