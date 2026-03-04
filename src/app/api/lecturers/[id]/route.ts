@@ -17,7 +17,13 @@ export async function GET(req: NextRequest, ctx: RouteContext) {
       return NextResponse.json({ error: "Invalid ID" }, { status: 400 });
     }
 
-    const lecturer = await prisma.lecturer.findUnique({ where: { id } });
+    const lecturer = await prisma.lecturer.findUnique({
+      where: { id },
+      include: {
+        departments: { include: { department: { select: { id: true, name: true, code: true } } } },
+        courses: { include: { course: { select: { id: true, name: true, code: true, department: { select: { id: true, name: true, code: true } } } } } },
+      },
+    });
 
     if (!lecturer) {
       return NextResponse.json(
@@ -26,7 +32,11 @@ export async function GET(req: NextRequest, ctx: RouteContext) {
       );
     }
 
-    return NextResponse.json(lecturer);
+    return NextResponse.json({
+      ...lecturer,
+      departments: lecturer.departments.map((d) => d.department),
+      courses: lecturer.courses.map((c) => c.course),
+    });
   } catch (e) {
     console.error("Get lecturer error:", e);
     return NextResponse.json(
@@ -60,13 +70,49 @@ export async function PATCH(req: NextRequest, ctx: RouteContext) {
     if (body.degree !== undefined)
       data.degree = body.degree ? String(body.degree).trim() : null;
     if (body.isActive !== undefined) data.isActive = Boolean(body.isActive);
+    if (body.imageUrl !== undefined) data.imageUrl = body.imageUrl ? String(body.imageUrl).trim() : null;
+    if (body.imagePublicId !== undefined) data.imagePublicId = body.imagePublicId ? String(body.imagePublicId).trim() : null;
+    if (body.cvUrl !== undefined) data.cvUrl = body.cvUrl ? String(body.cvUrl).trim() : null;
+    if (body.cvPublicId !== undefined) data.cvPublicId = body.cvPublicId ? String(body.cvPublicId).trim() : null;
+
+    const deptIds = Array.isArray(body.departmentIds)
+      ? body.departmentIds.map((id: unknown) => Number(id)).filter((id: number) => Number.isInteger(id) && id > 0)
+      : undefined;
+    const crsIds = Array.isArray(body.courseIds)
+      ? body.courseIds.map((id: unknown) => Number(id)).filter((id: number) => Number.isInteger(id) && id > 0)
+      : undefined;
+
+    if (deptIds !== undefined) {
+      await prisma.lecturerDepartment.deleteMany({ where: { lecturerId: id } });
+      if (deptIds.length > 0) {
+        await prisma.lecturerDepartment.createMany({
+          data: deptIds.map((departmentId: number) => ({ lecturerId: id, departmentId })),
+        });
+      }
+    }
+    if (crsIds !== undefined) {
+      await prisma.lecturerCourse.deleteMany({ where: { lecturerId: id } });
+      if (crsIds.length > 0) {
+        await prisma.lecturerCourse.createMany({
+          data: crsIds.map((courseId: number) => ({ lecturerId: id, courseId })),
+        });
+      }
+    }
 
     const lecturer = await prisma.lecturer.update({
       where: { id },
       data,
+      include: {
+        departments: { include: { department: { select: { id: true, name: true, code: true } } } },
+        courses: { include: { course: { select: { id: true, name: true, code: true, department: { select: { id: true, name: true, code: true } } } } } },
+      },
     });
 
-    return NextResponse.json(lecturer);
+    return NextResponse.json({
+      ...lecturer,
+      departments: lecturer.departments.map((d) => d.department),
+      courses: lecturer.courses.map((c) => c.course),
+    });
   } catch (e: unknown) {
     if (
       typeof e === "object" &&

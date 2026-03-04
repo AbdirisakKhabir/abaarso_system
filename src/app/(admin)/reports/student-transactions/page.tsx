@@ -48,6 +48,7 @@ export default function StudentTransactionsReportPage() {
   const [filterYear, setFilterYear] = useState(String(CURRENT_YEAR));
   const [filterDept, setFilterDept] = useState("");
   const [filterClass, setFilterClass] = useState("");
+  const [filterSearch, setFilterSearch] = useState("");
   const [filterPhone, setFilterPhone] = useState("");
   const [filterDateFrom, setFilterDateFrom] = useState("");
   const [filterDateTo, setFilterDateTo] = useState("");
@@ -58,6 +59,7 @@ export default function StudentTransactionsReportPage() {
       const params = new URLSearchParams({ year: filterYear });
       if (filterDept) params.set("departmentId", filterDept);
       if (filterClass) params.set("classId", filterClass);
+      if (filterSearch.trim()) params.set("search", filterSearch.trim());
       if (filterPhone) params.set("phone", filterPhone);
       if (filterDateFrom) params.set("dateFrom", filterDateFrom);
       if (filterDateTo) params.set("dateTo", filterDateTo);
@@ -65,7 +67,7 @@ export default function StudentTransactionsReportPage() {
       if (res.ok) setTransactions(await res.json());
     } catch { /* empty */ }
     setLoading(false);
-  }, [filterYear, filterDept, filterClass, filterPhone, filterDateFrom, filterDateTo]);
+  }, [filterYear, filterDept, filterClass, filterSearch, filterPhone, filterDateFrom, filterDateTo]);
 
   useEffect(() => {
     authFetch("/api/departments").then((r) => {
@@ -97,7 +99,9 @@ export default function StudentTransactionsReportPage() {
       t.unpaidCount,
       t.totalPaid,
     ]);
-    const csv = [headers.join(","), ...rows.map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(","))].join("\n");
+    const totalPaid = transactions.reduce((s, t) => s + t.totalPaid, 0);
+    const totalRow = ["", "TOTAL", "", "", "", "", totalPaid];
+    const csv = [headers.join(","), ...rows.map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(",")), totalRow.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(",")].join("\n");
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
@@ -123,13 +127,27 @@ export default function StudentTransactionsReportPage() {
 
       <div className="mb-4 print:block hidden print:mb-2">
         <h1 className="text-xl font-bold text-gray-900">Student Transactions Report</h1>
-        <p className="text-sm text-gray-600">Year: {filterYear} | Generated: {new Date().toLocaleDateString()}</p>
+        <p className="text-sm text-gray-600">
+          Year: {filterYear}
+          {filterSearch.trim() && ` | Student: "${filterSearch.trim()}"`}
+          {" | Generated: "}{new Date().toLocaleDateString()}
+        </p>
       </div>
 
       <div className="rounded-2xl border border-gray-200 bg-white dark:border-gray-800 dark:bg-white/5">
         <div className="no-print border-b border-gray-100 px-5 py-4 dark:border-gray-800">
           <h3 className="mb-4 text-lg font-semibold text-gray-800 dark:text-white/90">Filters</h3>
           <div className="flex flex-wrap gap-4">
+            <div className="w-full sm:w-64">
+              <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400">Search Student</label>
+              <input
+                type="text"
+                value={filterSearch}
+                onChange={(e) => setFilterSearch(e.target.value)}
+                placeholder="Name, Student ID, or phone"
+                className="h-10 w-full rounded-lg border border-gray-200 bg-transparent px-3 text-sm text-gray-800 outline-none placeholder:text-gray-400 focus:border-brand-300 dark:border-gray-700 dark:text-white/80 dark:placeholder:text-gray-500"
+              />
+            </div>
             <div>
               <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400">Year</label>
               <select
@@ -173,7 +191,23 @@ export default function StudentTransactionsReportPage() {
           </div>
         </div>
         <div className="px-5 py-4">
-          <h4 className="mb-4 text-base font-semibold text-gray-800 dark:text-white/90">Student Transactions</h4>
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-4">
+            <h4 className="text-base font-semibold text-gray-800 dark:text-white/90">Student Transactions</h4>
+            {!loading && transactions.length > 0 && (
+              <div className="flex flex-wrap gap-4 rounded-xl bg-brand-50 px-4 py-2 dark:bg-brand-500/10">
+                <span className="text-sm">
+                  <span className="font-medium text-gray-600 dark:text-gray-400">Students: </span>
+                  <span className="font-bold text-brand-600 dark:text-brand-400">{transactions.length}</span>
+                </span>
+                <span className="text-sm">
+                  <span className="font-medium text-gray-600 dark:text-gray-400">Total Paid: </span>
+                  <span className="font-bold text-green-600 dark:text-green-400">
+                    ${transactions.reduce((s, t) => s + t.totalPaid, 0).toLocaleString()}
+                  </span>
+                </span>
+              </div>
+            )}
+          </div>
           {loading ? (
             <div className="flex justify-center py-16">
               <div className="h-8 w-8 animate-spin rounded-full border-4 border-gray-200 border-t-brand-500" />
@@ -221,6 +255,16 @@ export default function StudentTransactionsReportPage() {
                       </TableCell>
                     </TableRow>
                   ))}
+                  {transactions.length > 0 && (
+                    <TableRow className="bg-gray-50 font-semibold dark:bg-gray-800/50">
+                      <TableCell colSpan={6} className="text-right">
+                        Total
+                      </TableCell>
+                      <TableCell className="text-right font-bold text-green-600 dark:text-green-400">
+                        ${transactions.reduce((s, t) => s + t.totalPaid, 0).toLocaleString()}
+                      </TableCell>
+                    </TableRow>
+                  )}
                 </TableBody>
               </Table>
             </div>

@@ -4,8 +4,10 @@ import PageBreadCrumb from "@/components/common/PageBreadCrumb";
 import DashboardMetrics from "@/components/dashboard/DashboardMetrics";
 import RecentStudents from "@/components/dashboard/RecentStudents";
 import RecentAttendance from "@/components/dashboard/RecentAttendance";
-import StudentsByDepartment from "@/components/dashboard/StudentsByDepartment";
-import StudentsByStatus from "@/components/dashboard/StudentsByStatus";
+import RevenueChart from "@/components/dashboard/RevenueChart";
+import StudentsByDepartmentChart from "@/components/dashboard/StudentsByDepartmentChart";
+import StudentsByStatusChart from "@/components/dashboard/StudentsByStatusChart";
+import AttendanceChart from "@/components/dashboard/AttendanceChart";
 
 export const metadata: Metadata = {
   title: "Abaarso Tech University | Dashboard",
@@ -21,20 +23,28 @@ export default function DashboardPage() {
           <DashboardMetrics />
         </div>
 
+        <div className="col-span-12 lg:col-span-8">
+          <RevenueChart />
+        </div>
+
+        <div className="col-span-12 lg:col-span-4">
+          <StudentsByStatusChart />
+        </div>
+
+        <div className="col-span-12 lg:col-span-7">
+          <StudentsByDepartmentChart />
+        </div>
+
+        <div className="col-span-12 lg:col-span-5">
+          <AttendanceChart />
+        </div>
+
         <div className="col-span-12 lg:col-span-7">
           <RecentStudents />
         </div>
 
         <div className="col-span-12 lg:col-span-5">
           <RecentAttendance />
-        </div>
-
-        <div className="col-span-12 lg:col-span-5">
-          <StudentsByDepartment />
-        </div>
-
-        <div className="col-span-12 lg:col-span-7">
-          <StudentsByStatus />
         </div>
       </div>
     </div>

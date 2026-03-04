@@ -7,6 +7,7 @@ generator client {
 
 datasource db {
   provider = "mysql"
+  url      = env("DATABASE_URL")
 }
 
 model User {
@@ -18,6 +19,14 @@ model User {
   role               Role                @relation(fields: [roleId], references: [id], onDelete: Restrict)
   isActive           Boolean             @default(true)
   attendanceSessions AttendanceSession[]
+  tuitionPayments    TuitionPayment[]
+  bankWithdrawals    BankWithdrawal[]
+  bankTransfers      BankTransfer[]
+  transactionHistory TransactionHistory[]
+  expensesRequested  Expense[]           @relation("ExpenseRequestedBy")
+  expensesApproved   Expense[]           @relation("ExpenseApprovedBy")
+  payrollsRequested  Payroll[]           @relation("PayrollRequestedBy")
+  payrollsApproved   Payroll[]           @relation("PayrollApprovedBy")
   createdAt          DateTime            @default(now())
   updatedAt          DateTime            @updatedAt
 
@@ -69,48 +78,77 @@ model Faculty {
 }
 
 model Lecturer {
-  id        Int      @id @default(autoincrement())
-  name      String
-  email     String   @unique
-  phone     String?
-  degree    String?
-  isActive  Boolean  @default(true)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id               Int                 @id @default(autoincrement())
+  name             String
+  email            String              @unique
+  phone            String?
+  degree           String?
+  imageUrl         String?             // Cloudinary URL
+  imagePublicId    String?
+  cvUrl            String?             // Cloudinary URL for CV PDF
+  cvPublicId       String?
+  isActive         Boolean             @default(true)
+  departments      LecturerDepartment[]
+  courses          LecturerCourse[]
+  classSchedules   ClassSchedule[]
+  createdAt        DateTime            @default(now())
+  updatedAt        DateTime            @updatedAt
 
   @@map("lecturers")
 }
 
+model LecturerDepartment {
+  lecturerId   Int
+  departmentId Int
+  lecturer     Lecturer   @relation(fields: [lecturerId], references: [id], onDelete: Cascade)
+  department   Department @relation(fields: [departmentId], references: [id], onDelete: Cascade)
+
+  @@id([lecturerId, departmentId])
+  @@map("lecturer_departments")
+}
+
+model LecturerCourse {
+  lecturerId Int
+  courseId   Int
+  lecturer   Lecturer @relation(fields: [lecturerId], references: [id], onDelete: Cascade)
+  course     Course   @relation(fields: [courseId], references: [id], onDelete: Cascade)
+
+  @@id([lecturerId, courseId])
+  @@map("lecturer_courses")
+}
+
 model Department {
-  id          Int       @id @default(autoincrement())
-  name        String    @unique
-  code        String    @unique // e.g. "CS", "EE", "ACC"
+  id          Int                 @id @default(autoincrement())
+  name        String              @unique
+  code        String              @unique // e.g. "CS", "EE", "ACC"
   description String?
   facultyId   Int
-  faculty     Faculty   @relation(fields: [facultyId], references: [id], onDelete: Restrict)
-  tuitionFee  Float?    @default(0)
-  isActive    Boolean   @default(true)
+  faculty     Faculty             @relation(fields: [facultyId], references: [id], onDelete: Restrict)
+  tuitionFee  Float?              @default(0)
+  isActive    Boolean             @default(true)
   courses     Course[]
   students    Student[]
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  lecturers   LecturerDepartment[]
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
 
   @@map("departments")
 }
 
 model Course {
-  id           Int          @id @default(autoincrement())
-  name         String       @unique
-  code         String       @unique // e.g. "CS101", "ENG201"
+  id           Int             @id @default(autoincrement())
+  name         String          @unique
+  code         String          @unique // e.g. "CS101", "ENG201"
   description  String?
-  creditHours  Int          @default(3)
+  creditHours  Int             @default(3)
   departmentId Int
-  department   Department   @relation(fields: [departmentId], references: [id], onDelete: Restrict)
-  isActive     Boolean      @default(true)
+  department   Department     @relation(fields: [departmentId], references: [id], onDelete: Restrict)
+  isActive     Boolean         @default(true)
   classes      Class[]
   examRecords  ExamRecord[]
-  createdAt    DateTime     @default(now())
-  updatedAt    DateTime     @updatedAt
+  lecturers    LecturerCourse[]
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
 
   @@map("courses")
 }
@@ -139,11 +177,32 @@ model Class {
   isActive           Boolean             @default(true)
   attendanceSessions AttendanceSession[]
   students           Student[]
+  classSchedules     ClassSchedule[]
   createdAt          DateTime            @default(now())
   updatedAt          DateTime            @updatedAt
 
   @@unique([name, semester, year])
   @@map("classes")
+}
+
+model ClassSchedule {
+  id         Int      @id @default(autoincrement())
+  classId    Int
+  class      Class    @relation(fields: [classId], references: [id], onDelete: Cascade)
+  lecturerId Int
+  lecturer   Lecturer @relation(fields: [lecturerId], references: [id], onDelete: Restrict)
+  dayOfWeek  String   // "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"
+  shift      String   // "Morning", "Afternoon", "Evening"
+  startTime  String   // e.g. "09:00"
+  endTime    String   // e.g. "10:30"
+  semester   String
+  year       Int
+  room       String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@unique([classId, dayOfWeek, shift, startTime])
+  @@map("class_schedules")
 }
 
 model Student {
@@ -167,29 +226,130 @@ model Student {
   program           String?            // "Bachelor", "Masters"
   admissionDate     DateTime           @default(now())
   status            String             @default("Admitted") // "Pending", "Admitted", "Rejected", "Graduated"
+  paymentStatus     String             @default("Fully Paid") // "Full Scholarship", "Half Scholar", "Fully Paid"
+  balance           Float              @default(0) // Amount owed; charged at registration, reduced by payments
   attendanceRecords AttendanceRecord[]
   examRecords       ExamRecord[]
   tuitionPayments   TuitionPayment[]
+  transactionHistory TransactionHistory[]
   createdAt         DateTime           @default(now())
   updatedAt         DateTime           @updatedAt
 
   @@map("students")
 }
 
+model Bank {
+  id                  Int       @id @default(autoincrement())
+  name                String    // e.g. "Dahabshiil - Main", "Edahab - Tuition"
+  code                String    @unique // e.g. "DHB-001", "EDH-001"
+  accountNumber       String?   // Bank account number
+  balance             Float     @default(0)
+  isActive            Boolean   @default(true)
+  tuitionPayments     TuitionPayment[]  // Payments deposited to this bank
+  withdrawals        BankWithdrawal[]  @relation("WithdrawFromBank")
+  transfersOut        BankTransfer[]    @relation("TransferFromBank")
+  transfersIn         BankTransfer[]    @relation("TransferToBank")
+  transactionHistory  TransactionHistory[]
+  expenses            Expense[]
+  payrolls            Payroll[]
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  @@map("banks")
+}
+
+model TransactionHistory {
+  id                Int       @id @default(autoincrement())
+  type              String    // "deposit" | "withdrawal" | "transfer_out" | "transfer_in"
+  amount            Float
+  bankId            Int
+  bank              Bank      @relation(fields: [bankId], references: [id], onDelete: Restrict)
+  relatedBankId    Int?       // For transfers: the other bank
+  description       String?   // Human-readable e.g. "Tuition: John Doe - Fall 2026"
+  studentId         Int?
+  student           Student?  @relation(fields: [studentId], references: [id], onDelete: SetNull)
+  tuitionPaymentId  Int?
+  bankWithdrawalId  Int?
+  bankTransferId    Int?
+  createdAt         DateTime  @default(now())
+  createdById       Int?
+  createdBy         User?     @relation(fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@map("transaction_history")
+}
+
 model TuitionPayment {
-  id           Int      @id @default(autoincrement())
-  studentId    Int
-  student      Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
-  amount       Float    @default(0)
-  semester     String   // "Fall", "Spring", "Summer"
-  year         Int      // e.g. 2026
-  paidAt       DateTime @default(now())
-  note         String?
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  id             Int       @id @default(autoincrement())
+  studentId      Int
+  student        Student   @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  bankId         Int?      // Optional for legacy payments; required for new deposits
+  bank           Bank?     @relation(fields: [bankId], references: [id], onDelete: SetNull)
+  amount         Float     @default(0)
+  semester       String    // "Fall", "Spring", "Summer"
+  year           Int       // e.g. 2026
+  paymentMethod  String    @default("bank_receipt") // "bank_receipt" | "electronic"
+  receiptNumber  String?   // Bank receipt number
+  transactionId  String?   // Electronic transaction ID
+  paymentDate    DateTime  @default(now()) // Date student actually paid
+  paidAt         DateTime  @default(now()) // When recorded in system
+  recordedById   Int?
+  recordedBy     User?     @relation(fields: [recordedById], references: [id], onDelete: SetNull)
+  note           String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
 
   @@unique([studentId, semester, year])
   @@map("tuition_payments")
+}
+
+model BankWithdrawal {
+  id          Int      @id @default(autoincrement())
+  bankId      Int
+  bank        Bank     @relation("WithdrawFromBank", fields: [bankId], references: [id], onDelete: Restrict)
+  amount      Float
+  reason      String?
+  withdrawnAt DateTime @default(now())
+  createdById Int?
+  createdBy   User?    @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  createdAt   DateTime @default(now())
+
+  @@map("bank_withdrawals")
+}
+
+model Expense {
+  id              Int       @id @default(autoincrement())
+  amount          Float
+  description     String
+  category        String?   // e.g. "Operations", "Salaries", "Utilities"
+  bankId          Int?      // Bank to withdraw from when approved
+  bank            Bank?     @relation(fields: [bankId], references: [id], onDelete: SetNull)
+  status          String    @default("pending") // "pending" | "approved" | "rejected"
+  requestedById   Int
+  requestedBy     User      @relation("ExpenseRequestedBy", fields: [requestedById], references: [id], onDelete: Restrict)
+  approvedById    Int?
+  approvedBy      User?     @relation("ExpenseApprovedBy", fields: [approvedById], references: [id], onDelete: SetNull)
+  approvedAt      DateTime?
+  rejectionReason String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@map("expenses")
+}
+
+model BankTransfer {
+  id            Int      @id @default(autoincrement())
+  fromBankId   Int
+  fromBank     Bank     @relation("TransferFromBank", fields: [fromBankId], references: [id], onDelete: Restrict)
+  toBankId     Int
+  toBank       Bank     @relation("TransferToBank", fields: [toBankId], references: [id], onDelete: Restrict)
+  amount       Float
+  reason       String?
+  transferredAt DateTime @default(now())
+  createdById  Int?
+  createdBy    User?    @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  createdAt    DateTime @default(now())
+
+  @@map("bank_transfers")
 }
 
 model AttendanceSession {
@@ -222,6 +382,57 @@ model AttendanceRecord {
 
   @@unique([sessionId, studentId])
   @@map("attendance_records")
+}
+
+model Position {
+  id          Int        @id @default(autoincrement())
+  name        String     @unique // e.g. "Registrar", "Accountant", "HR Officer"
+  description String?
+  isActive    Boolean    @default(true)
+  employees   Employee[]
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  @@map("positions")
+}
+
+model Employee {
+  id         Int      @id @default(autoincrement())
+  name       String
+  email      String   @unique
+  phone      String?
+  positionId Int
+  position   Position @relation(fields: [positionId], references: [id], onDelete: Restrict)
+  department String?  // e.g. "Admin", "Finance", "IT Support"
+  hireDate   DateTime @default(now())
+  isActive   Boolean  @default(true)
+  payrolls   Payroll[]
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@map("employees")
+}
+
+model Payroll {
+  id              Int       @id @default(autoincrement())
+  amount          Float
+  description     String
+  period          String?   // e.g. "January 2026", "Q1 2026"
+  employeeId      Int?      // Optional link to employee
+  employee        Employee? @relation(fields: [employeeId], references: [id], onDelete: SetNull)
+  bankId          Int?      // Bank to pay from when approved
+  bank            Bank?     @relation(fields: [bankId], references: [id], onDelete: SetNull)
+  status          String    @default("pending") // "pending" | "approved" | "rejected"
+  requestedById   Int
+  requestedBy     User      @relation("PayrollRequestedBy", fields: [requestedById], references: [id], onDelete: Restrict)
+  approvedById    Int?
+  approvedBy      User?     @relation("PayrollApprovedBy", fields: [approvedById], references: [id], onDelete: SetNull)
+  approvedAt      DateTime?
+  rejectionReason String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@map("payrolls")
 }
 
 model ExamRecord {

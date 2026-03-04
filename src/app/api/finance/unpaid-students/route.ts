@@ -56,25 +56,47 @@ export async function GET(req: NextRequest) {
         department: { select: { name: true, code: true, tuitionFee: true } },
         tuitionPayments: {
           where: { semester, year: parsedYear },
-          select: { id: true },
+          select: { id: true, amount: true },
         },
       },
       orderBy: [{ studentId: "asc" }],
     });
 
-    // Filter to only those who have NOT paid for this semester/year
+    // Expected amount based on payment status:
+    // Full Scholarship = 0 (exclude from unpaid list)
+    // Half Scholar = 50% of tuition
+    // Fully Paid = 100% of tuition
     const unpaidStudents = studentsInClass
-      .filter((s) => s.tuitionPayments.length === 0)
-      .map((s) => ({
-        id: s.id,
-        studentId: s.studentId,
-        firstName: s.firstName,
-        lastName: s.lastName,
-        email: s.email,
-        phone: s.phone,
-        department: s.department,
-        tuitionFee: s.department.tuitionFee,
-      }));
+      .filter((s) => {
+        const tuitionFee = s.department.tuitionFee ?? 0;
+        const paymentStatus = s.paymentStatus ?? "Fully Paid";
+        if (paymentStatus === "Full Scholarship") return false; // Never unpaid
+        const expectedAmount =
+          paymentStatus === "Half Scholar" ? tuitionFee * 0.5 : tuitionFee;
+        const paidAmount = s.tuitionPayments.reduce((sum, p) => sum + p.amount, 0);
+        return paidAmount < expectedAmount;
+      })
+      .map((s) => {
+        const tuitionFee = s.department.tuitionFee ?? 0;
+        const paymentStatus = s.paymentStatus ?? "Fully Paid";
+        const expectedAmount =
+          paymentStatus === "Half Scholar" ? tuitionFee * 0.5 : tuitionFee;
+        const paidAmount = s.tuitionPayments.reduce((sum, p) => sum + p.amount, 0);
+        const amountDue = expectedAmount - paidAmount;
+        return {
+          id: s.id,
+          studentId: s.studentId,
+          firstName: s.firstName,
+          lastName: s.lastName,
+          email: s.email,
+          phone: s.phone,
+          department: s.department,
+          tuitionFee: amountDue, // Amount still due for display
+          paymentStatus,
+          amountPaid: paidAmount,
+          amountDue,
+        };
+      });
 
     return NextResponse.json({
       class: {

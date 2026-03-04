@@ -59,6 +59,7 @@ export async function POST(req: NextRequest) {
 
     const body = await req.json();
     const {
+      studentId: providedStudentId,
       firstName,
       lastName,
       motherName,
@@ -74,6 +75,7 @@ export async function POST(req: NextRequest) {
       imageUrl,
       imagePublicId,
       status,
+      paymentStatus,
     } = body;
 
     const parsedDeptId = Number(departmentId);
@@ -100,7 +102,35 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    const studentId = await generateStudentId();
+    // Use provided studentId or auto-generate
+    let studentId: string;
+    const trimmedId = providedStudentId ? String(providedStudentId).trim() : "";
+    if (trimmedId) {
+      const existing = await prisma.student.findUnique({
+        where: { studentId: trimmedId },
+      });
+      if (existing) {
+        return NextResponse.json(
+          { error: "A student with this Student ID already exists" },
+          { status: 400 }
+        );
+      }
+      studentId = trimmedId;
+    } else {
+      studentId = await generateStudentId();
+    }
+
+    // Initial balance = department tuition fee, adjusted by payment status
+    const dept = await prisma.department.findUnique({
+      where: { id: parsedDeptId },
+      select: { tuitionFee: true },
+    });
+    const tuitionFee = dept?.tuitionFee ?? 0;
+    const ps = ["Full Scholarship", "Half Scholar", "Fully Paid"].includes(paymentStatus) ? paymentStatus : "Fully Paid";
+    const initialBalance =
+      ps === "Full Scholarship" ? 0
+      : ps === "Half Scholar" ? tuitionFee * 0.5
+      : tuitionFee;
 
     const student = await prisma.student.create({
       data: {
@@ -120,6 +150,8 @@ export async function POST(req: NextRequest) {
         imageUrl: imageUrl || null,
         imagePublicId: imagePublicId || null,
         status: status || "Admitted",
+        paymentStatus: ps,
+        balance: initialBalance,
       },
       include: {
         department: { select: { id: true, name: true, code: true } },

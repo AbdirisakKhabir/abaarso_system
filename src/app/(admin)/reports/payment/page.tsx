@@ -5,22 +5,27 @@ import PageBreadCrumb from "@/components/common/PageBreadCrumb";
 import { DollarLineIcon, ListIcon } from "@/icons";
 
 export const metadata: Metadata = {
-  title: "Payment Reports | Abaarso Tech University",
-  description: "Student transactions and class revenue reports",
+  title: "Finance Reports | Abaarso Tech University",
+  description: "Finance, payment, bank, and treasury reports",
 };
 
 const paymentReportLinks = [
   { name: "Student Transactions", path: "/reports/student-transactions", icon: ListIcon, description: "View student payment status by department and class" },
   { name: "Class Revenue", path: "/reports/class-revenue", icon: DollarLineIcon, description: "View class revenue with paid/unpaid counts" },
   { name: "Unpaid Students", path: "/reports/unpaid-students", icon: DollarLineIcon, description: "Generate list of students who have not paid for a specific semester and class" },
+  { name: "Bank Balances", path: "/reports/bank-balances", icon: DollarLineIcon, description: "Current balance of each bank account" },
+  { name: "Bank Transactions", path: "/reports/bank-transactions", icon: ListIcon, description: "Deposits, withdrawals, and transfers by bank and date" },
+  { name: "Transaction History", path: "/reports/transaction-history", icon: ListIcon, description: "Unified log of all financial transactions (auto-created)" },
+  { name: "Treasury Summary", path: "/reports/treasury", icon: DollarLineIcon, description: "Overview of bank balance, receivables, revenue, and withdrawals" },
+  { name: "Daily Revenue", path: "/reports/daily-revenue", icon: DollarLineIcon, description: "Revenue collected per day within a date range" },
 ];
 
 export default function PaymentReportsIndexPage() {
   return (
     <div>
-      <PageBreadCrumb pageTitle="Payment Reports" />
+      <PageBreadCrumb pageTitle="Finance Reports" />
       <p className="mb-6 text-sm text-gray-500 dark:text-gray-400">
-        Select a payment report to view and print.
+        Select a finance report to view, export, and print.
       </p>
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {paymentReportLinks.map((report) => (

@@ -56,6 +56,21 @@ export async function PATCH(req: NextRequest, ctx: RouteContext) {
     const body = await req.json();
     const data: Record<string, unknown> = {};
 
+    if (body.studentId !== undefined) {
+      const trimmed = String(body.studentId).trim();
+      if (trimmed) {
+        const existing = await prisma.student.findFirst({
+          where: { studentId: trimmed, NOT: { id } },
+        });
+        if (existing) {
+          return NextResponse.json(
+            { error: "A student with this Student ID already exists" },
+            { status: 400 }
+          );
+        }
+        data.studentId = trimmed;
+      }
+    }
     if (body.firstName !== undefined) data.firstName = String(body.firstName).trim();
     if (body.lastName !== undefined) data.lastName = String(body.lastName).trim();
     if (body.motherName !== undefined) data.motherName = body.motherName ? String(body.motherName).trim() : null;
@@ -78,6 +93,15 @@ export async function PATCH(req: NextRequest, ctx: RouteContext) {
     }
     if (body.program !== undefined) data.program = body.program || null;
     if (body.status !== undefined) data.status = body.status;
+    if (body.paymentStatus !== undefined) {
+      data.paymentStatus = ["Full Scholarship", "Half Scholar", "Fully Paid"].includes(body.paymentStatus)
+        ? body.paymentStatus
+        : "Fully Paid";
+    }
+    if (body.balance !== undefined) {
+      const b = Number(body.balance);
+      data.balance = !Number.isNaN(b) ? Math.max(0, b) : undefined;
+    }
 
     // Handle image update: if new image provided, delete old one from Cloudinary
     if (body.imageUrl !== undefined) {

@@ -34,6 +34,8 @@ type StudentProfile = {
   class: { id: number; name: string; semester: string; year: number; course: { code: string; name: string } } | null;
   program: string | null;
   status: string;
+  paymentStatus: string;
+  balance: number;
   admissionDate: string;
   tuitionPayments: { id: number; semester: string; year: number; amount: number; paidAt: string }[];
 };
@@ -264,6 +266,22 @@ export default function StudentProfilePage() {
               <InfoRow icon={GroupIcon} label="Program" value={student.program || "—"} />
               <InfoRow
                 icon={CalenderIcon}
+                label="Date of Birth"
+                value={student.dateOfBirth ? new Date(student.dateOfBirth).toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" }) : "—"}
+              />
+              <InfoRow icon={UserIcon} label="Gender" value={student.gender || "—"} />
+              <InfoRow
+                icon={DollarLineIcon}
+                label="Payment Status"
+                value={student.paymentStatus || "Fully Paid"}
+              />
+              <InfoRow
+                icon={DollarLineIcon}
+                label="Balance"
+                value={`$${(student.balance ?? 0).toLocaleString()}`}
+              />
+              <InfoRow
+                icon={CalenderIcon}
                 label="Admission Date"
                 value={new Date(student.admissionDate).toLocaleDateString("en-US", {
                   year: "numeric",
@@ -284,6 +302,7 @@ export default function StudentProfilePage() {
               <InfoRow icon={UserIcon} label="Phone" value={student.phone || "—"} />
               <InfoRow icon={UserIcon} label="Mother Name" value={student.motherName || "—"} />
               <InfoRow icon={UserIcon} label="Parent Phone" value={student.parentPhone || "—"} />
+              <InfoRow icon={UserIcon} label="Address" value={student.address || "—"} />
             </div>
           </div>
 

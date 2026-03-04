@@ -201,6 +201,25 @@ export default function ClassRevenueReportPage() {
                         </TableCell>
                       </TableRow>
                     ))}
+                    {revenue.length > 0 && (
+                      <TableRow className="bg-gray-50 font-semibold dark:bg-gray-800/50">
+                        <TableCell colSpan={4} className="font-bold">
+                          Total
+                        </TableCell>
+                        <TableCell className="text-center font-bold">
+                          {revenue.reduce((s, r) => s + r.studentCount, 0)}
+                        </TableCell>
+                        <TableCell className="text-center font-bold">
+                          {revenue.reduce((s, r) => s + r.paidCount, 0)}
+                        </TableCell>
+                        <TableCell className="text-center font-bold">
+                          {revenue.reduce((s, r) => s + r.unpaidCount, 0)}
+                        </TableCell>
+                        <TableCell className="text-right font-bold text-green-600 dark:text-green-400">
+                          ${totalRevenue.toLocaleString()}
+                        </TableCell>
+                      </TableRow>
+                    )}
                   </TableBody>
                 </Table>
               </div>

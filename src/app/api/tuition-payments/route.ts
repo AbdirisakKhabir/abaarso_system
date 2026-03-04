@@ -35,6 +35,8 @@ export async function GET(req: NextRequest) {
             class: { select: { id: true, name: true, semester: true, year: true, course: { select: { code: true } } } },
           },
         },
+        bank: { select: { id: true, name: true, code: true } },
+        recordedBy: { select: { id: true, name: true, email: true } },
       },
       orderBy: [{ year: "desc" }, { semester: "asc" }, { paidAt: "desc" }],
     });
@@ -54,13 +56,38 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json();
-    const { studentId: studentIdStr, amount, semester, year, note } = body;
+    const {
+      studentId: studentIdStr,
+      amount,
+      semester,
+      year,
+      note,
+      bankId,
+      paymentMethod,
+      receiptNumber,
+      transactionId,
+      paymentDate,
+    } = body;
 
     if (!studentIdStr || !semester || !year) {
       return NextResponse.json(
         { error: "Student ID, semester, and year are required" },
         { status: 400 }
       );
+    }
+
+    if (!bankId) {
+      return NextResponse.json(
+        { error: "Bank is required for recording deposits" },
+        { status: 400 }
+      );
+    }
+
+    const bank = await prisma.bank.findUnique({
+      where: { id: Number(bankId) },
+    });
+    if (!bank || !bank.isActive) {
+      return NextResponse.json({ error: "Invalid or inactive bank" }, { status: 400 });
     }
 
     if (!(await isValidSemester(semester))) {
@@ -104,24 +131,58 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const payment = await prisma.tuitionPayment.create({
-      data: {
-        studentId: student.id,
-        amount: amt,
-        semester: String(semester),
-        year: Number(year),
-        note: note || null,
-      },
-      include: {
-        student: {
-          select: {
-            studentId: true,
-            firstName: true,
-            lastName: true,
-            department: { select: { name: true, code: true } },
+    const paymentMethodVal = paymentMethod === "electronic" ? "electronic" : "bank_receipt";
+    const paymentDateVal = paymentDate ? new Date(paymentDate) : new Date();
+
+    const payment = await prisma.$transaction(async (tx) => {
+      const p = await tx.tuitionPayment.create({
+        data: {
+          studentId: student.id,
+          bankId: bank.id,
+          amount: amt,
+          semester: String(semester),
+          year: Number(year),
+          paymentMethod: paymentMethodVal,
+          receiptNumber: receiptNumber ? String(receiptNumber).trim() : null,
+          transactionId: transactionId ? String(transactionId).trim() : null,
+          paymentDate: paymentDateVal,
+          recordedById: auth.userId,
+          note: note || null,
+        },
+      });
+      const newBalance = Math.max(0, (student.balance ?? 0) - amt);
+      await tx.student.update({
+        where: { id: student.id },
+        data: { balance: newBalance },
+      });
+      await tx.bank.update({
+        where: { id: bank.id },
+        data: { balance: { increment: amt } },
+      });
+      await tx.transactionHistory.create({
+        data: {
+          type: "deposit",
+          amount: amt,
+          bankId: bank.id,
+          description: `Tuition: ${student.firstName} ${student.lastName} (${student.studentId}) - ${String(semester)} ${year}`,
+          studentId: student.id,
+          tuitionPaymentId: p.id,
+          createdById: auth.userId,
+        },
+      });
+      return tx.tuitionPayment.findUnique({
+        where: { id: p.id },
+        include: {
+          student: {
+            select: {
+              studentId: true,
+              firstName: true,
+              lastName: true,
+              department: { select: { name: true, code: true } },
+            },
           },
         },
-      },
+      });
     });
 
     return NextResponse.json(payment);

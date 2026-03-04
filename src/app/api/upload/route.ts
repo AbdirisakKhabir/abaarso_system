@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAuthUser } from "@/lib/auth";
-import { uploadImage } from "@/lib/cloudinary";
+import { uploadImage, uploadRaw } from "@/lib/cloudinary";
 
 export async function POST(req: NextRequest) {
   try {
@@ -12,12 +12,35 @@ export async function POST(req: NextRequest) {
     const formData = await req.formData();
     const file = formData.get("file") as File | null;
     const folder = (formData.get("folder") as string) || "university/students";
+    const type = (formData.get("type") as string) || "image"; // "image" | "raw" (PDF)
 
     if (!file) {
       return NextResponse.json({ error: "No file provided" }, { status: 400 });
     }
 
-    // Validate file type
+    const buffer = Buffer.from(await file.arrayBuffer());
+
+    if (type === "raw") {
+      // PDF / raw files for lecturer CV
+      const allowedTypes = ["application/pdf"];
+      if (!allowedTypes.includes(file.type)) {
+        return NextResponse.json(
+          { error: "Invalid file type. Only PDF is allowed for CV upload." },
+          { status: 400 }
+        );
+      }
+      if (file.size > 10 * 1024 * 1024) {
+        return NextResponse.json(
+          { error: "File too large. Maximum size is 10MB." },
+          { status: 400 }
+        );
+      }
+      const cvFolder = folder === "university/students" ? "university/lecturers/cv" : folder;
+      const result = await uploadRaw(buffer, cvFolder, "raw");
+      return NextResponse.json(result);
+    }
+
+    // Image upload
     const allowedTypes = ["image/jpeg", "image/png", "image/webp", "image/gif"];
     if (!allowedTypes.includes(file.type)) {
       return NextResponse.json(
@@ -25,18 +48,13 @@ export async function POST(req: NextRequest) {
         { status: 400 }
       );
     }
-
-    // Validate file size (max 5MB)
     if (file.size > 5 * 1024 * 1024) {
       return NextResponse.json(
         { error: "File too large. Maximum size is 5MB." },
         { status: 400 }
       );
     }
-
-    const buffer = Buffer.from(await file.arrayBuffer());
     const result = await uploadImage(buffer, folder);
-
     return NextResponse.json(result);
   } catch (e) {
     console.error("Upload error:", e);

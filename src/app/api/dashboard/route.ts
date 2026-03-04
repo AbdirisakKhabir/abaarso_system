@@ -84,6 +84,58 @@ export async function GET(req: NextRequest) {
 
     const deptMap = Object.fromEntries(departments.map((d) => [d.id, d]));
 
+    const currentYear = new Date().getFullYear();
+    const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+    // Monthly revenue (tuition payments) for current year
+    const paymentsThisYear = await prisma.tuitionPayment.findMany({
+      where: { year: currentYear },
+      select: { amount: true, paidAt: true },
+    });
+    const revenueByMonth = Array.from({ length: 12 }, (_, i) => {
+      const month = i + 1;
+      const total = paymentsThisYear
+        .filter((p) => new Date(p.paidAt).getMonth() + 1 === month)
+        .reduce((s, p) => s + p.amount, 0);
+      return { month: monthNames[i], total };
+    });
+
+    // Monthly admissions (students admitted) for current year
+    const admissionsThisYear = await prisma.student.findMany({
+      where: {
+        admissionDate: {
+          gte: new Date(`${currentYear}-01-01`),
+          lte: new Date(`${currentYear}-12-31T23:59:59.999Z`),
+        },
+      },
+      select: { admissionDate: true },
+    });
+    const admissionsByMonth = Array.from({ length: 12 }, (_, i) => {
+      const month = i + 1;
+      const count = admissionsThisYear.filter(
+        (s) => new Date(s.admissionDate).getMonth() + 1 === month
+      ).length;
+      return { month: monthNames[i], count };
+    });
+
+    // Monthly attendance sessions for current year
+    const sessionsThisYear = await prisma.attendanceSession.findMany({
+      where: {
+        date: {
+          gte: new Date(`${currentYear}-01-01`),
+          lte: new Date(`${currentYear}-12-31`),
+        },
+      },
+      select: { date: true },
+    });
+    const attendanceByMonth = Array.from({ length: 12 }, (_, i) => {
+      const month = i + 1;
+      const count = sessionsThisYear.filter(
+        (s) => new Date(s.date).getMonth() + 1 === month
+      ).length;
+      return { month: monthNames[i], count };
+    });
+
     return NextResponse.json({
       counts: {
         users: usersCount,
@@ -120,6 +172,11 @@ export async function GET(req: NextRequest) {
         department: deptMap[d.departmentId],
         count: d._count.id,
       })),
+      chartData: {
+        revenueByMonth,
+        admissionsByMonth,
+        attendanceByMonth,
+      },
     });
   } catch (e) {
     console.error("Dashboard stats error:", e);

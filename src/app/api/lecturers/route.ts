@@ -11,9 +11,23 @@ export async function GET(req: NextRequest) {
 
     const lecturers = await prisma.lecturer.findMany({
       orderBy: { name: "asc" },
+      include: {
+        departments: {
+          include: { department: { select: { id: true, name: true, code: true } } },
+        },
+        courses: {
+          include: { course: { select: { id: true, name: true, code: true, department: { select: { id: true, name: true, code: true } } } } },
+        },
+      },
     });
 
-    return NextResponse.json(lecturers);
+    return NextResponse.json(
+      lecturers.map((l) => ({
+        ...l,
+        departments: l.departments.map((d) => d.department),
+        courses: l.courses.map((c) => c.course),
+      }))
+    );
   } catch (e) {
     console.error("Lecturers list error:", e);
     return NextResponse.json(
@@ -31,7 +45,7 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json();
-    const { name, email, phone, degree } = body;
+    const { name, email, phone, degree, departmentIds, courseIds, imageUrl, imagePublicId, cvUrl, cvPublicId } = body;
 
     if (!name || !email) {
       return NextResponse.json(
@@ -40,16 +54,41 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    const deptIds = Array.isArray(departmentIds)
+      ? departmentIds.map((id: unknown) => Number(id)).filter((id: number) => Number.isInteger(id) && id > 0)
+      : [];
+    const crsIds = Array.isArray(courseIds)
+      ? courseIds.map((id: unknown) => Number(id)).filter((id: number) => Number.isInteger(id) && id > 0)
+      : [];
+
     const lecturer = await prisma.lecturer.create({
       data: {
         name: String(name).trim(),
         email: String(email).trim().toLowerCase(),
         phone: phone ? String(phone).trim() : null,
         degree: degree ? String(degree).trim() : null,
+        imageUrl: imageUrl ? String(imageUrl).trim() : null,
+        imagePublicId: imagePublicId ? String(imagePublicId).trim() : null,
+        cvUrl: cvUrl ? String(cvUrl).trim() : null,
+        cvPublicId: cvPublicId ? String(cvPublicId).trim() : null,
+        departments: deptIds.length > 0
+          ? { create: deptIds.map((departmentId: number) => ({ departmentId })) }
+          : undefined,
+        courses: crsIds.length > 0
+          ? { create: crsIds.map((courseId: number) => ({ courseId })) }
+          : undefined,
+      },
+      include: {
+        departments: { include: { department: { select: { id: true, name: true, code: true } } } },
+        courses: { include: { course: { select: { id: true, name: true, code: true, department: { select: { id: true, name: true, code: true } } } } } },
       },
     });
 
-    return NextResponse.json(lecturer);
+    return NextResponse.json({
+      ...lecturer,
+      departments: lecturer.departments.map((d) => d.department),
+      courses: lecturer.courses.map((c) => c.course),
+    });
   } catch (e: unknown) {
     if (
       typeof e === "object" &&

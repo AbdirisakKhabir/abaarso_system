@@ -25,6 +25,9 @@ type UnpaidStudent = {
   phone: string | null;
   department: { name: string; code: string; tuitionFee: number | null };
   tuitionFee: number | null;
+  paymentStatus?: string;
+  amountPaid?: number;
+  amountDue?: number;
 };
 const CURRENT_YEAR = new Date().getFullYear();
 
@@ -94,7 +97,7 @@ export default function UnpaidStudentsReportPage() {
 
   const handleExportCSV = () => {
     if (unpaidStudents.length === 0) return;
-    const headers = ["Student ID", "First Name", "Last Name", "Email", "Phone", "Department", "Tuition Fee"];
+    const headers = ["Student ID", "First Name", "Last Name", "Email", "Phone", "Department", "Payment Status", "Amount Due"];
     const rows = unpaidStudents.map((s) => [
       s.studentId,
       s.firstName,
@@ -102,9 +105,12 @@ export default function UnpaidStudentsReportPage() {
       s.email || "",
       s.phone || "",
       `${s.department.code} - ${s.department.name}`,
+      s.paymentStatus || "Fully Paid",
       s.tuitionFee != null ? String(s.tuitionFee) : "",
     ]);
-    const csv = [headers.join(","), ...rows.map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(","))].join("\n");
+    const totalDue = unpaidStudents.reduce((s, t) => s + (t.tuitionFee ?? 0), 0);
+    const totalRow = ["", "TOTAL", "", "", "", "", "", totalDue.toFixed(2)];
+    const csv = [headers.join(","), ...rows.map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(",")), totalRow.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(",")].join("\n");
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
@@ -196,44 +202,72 @@ export default function UnpaidStudentsReportPage() {
                 </p>
               </div>
             ) : (
-              <div className="overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-700">
-                <Table>
-                  <TableHeader>
-                    <TableRow className="bg-transparent! hover:bg-transparent!">
-                      <TableCell isHeader>Student ID</TableCell>
-                      <TableCell isHeader>Name</TableCell>
-                      <TableCell isHeader>Email</TableCell>
-                      <TableCell isHeader>Phone</TableCell>
-                      <TableCell isHeader>Department</TableCell>
-                      <TableCell isHeader className="text-right">Tuition Fee</TableCell>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {unpaidStudents.map((s) => (
-                      <TableRow key={s.id}>
-                        <TableCell>
-                          <span className="no-print">
-                            <Link
-                              href={`/students/${encodeURIComponent(s.studentId)}`}
-                              className="font-mono font-medium text-brand-600 hover:underline dark:text-brand-400"
-                            >
-                              {s.studentId}
-                            </Link>
-                          </span>
-                          <span className="hidden print:inline font-mono font-medium text-gray-800">{s.studentId}</span>
+              <>
+                <div className="mb-4 flex flex-wrap gap-4 rounded-xl bg-amber-50 px-4 py-3 dark:bg-amber-500/10">
+                  <span className="text-sm">
+                    <span className="font-medium text-gray-600 dark:text-gray-400">Students: </span>
+                    <span className="font-bold text-amber-700 dark:text-amber-400">{unpaidStudents.length}</span>
+                  </span>
+                  <span className="text-sm">
+                    <span className="font-medium text-gray-600 dark:text-gray-400">Total Amount Due: </span>
+                    <span className="font-bold text-amber-700 dark:text-amber-400">
+                      ${unpaidStudents
+                        .reduce((s, t) => s + (t.tuitionFee ?? 0), 0)
+                        .toLocaleString()}
+                    </span>
+                  </span>
+                </div>
+                <div className="overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-700">
+                  <Table>
+                    <TableHeader>
+                      <TableRow className="bg-transparent! hover:bg-transparent!">
+                        <TableCell isHeader>Student ID</TableCell>
+                        <TableCell isHeader>Name</TableCell>
+                        <TableCell isHeader>Email</TableCell>
+                        <TableCell isHeader>Phone</TableCell>
+                        <TableCell isHeader>Department</TableCell>
+                        <TableCell isHeader>Payment</TableCell>
+                        <TableCell isHeader className="text-right">Amount Due</TableCell>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {unpaidStudents.map((s) => (
+                        <TableRow key={s.id}>
+                          <TableCell>
+                            <span className="no-print">
+                              <Link
+                                href={`/students/${encodeURIComponent(s.studentId)}`}
+                                className="font-mono font-medium text-brand-600 hover:underline dark:text-brand-400"
+                              >
+                                {s.studentId}
+                              </Link>
+                            </span>
+                            <span className="hidden print:inline font-mono font-medium text-gray-800">{s.studentId}</span>
+                          </TableCell>
+                          <TableCell>{s.firstName} {s.lastName}</TableCell>
+                          <TableCell>{s.email || "—"}</TableCell>
+                          <TableCell>{s.phone || "—"}</TableCell>
+                          <TableCell>{s.department.code} - {s.department.name}</TableCell>
+                          <TableCell>{s.paymentStatus || "Fully Paid"}</TableCell>
+                          <TableCell className="text-right">
+                            {s.tuitionFee != null ? `$${Number(s.tuitionFee).toLocaleString()}` : "—"}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                      <TableRow className="bg-gray-50 font-semibold dark:bg-gray-800/50">
+                        <TableCell colSpan={6} className="text-right">
+                          Total
                         </TableCell>
-                        <TableCell>{s.firstName} {s.lastName}</TableCell>
-                        <TableCell>{s.email || "—"}</TableCell>
-                        <TableCell>{s.phone || "—"}</TableCell>
-                        <TableCell>{s.department.code} - {s.department.name}</TableCell>
-                        <TableCell className="text-right">
-                          {s.tuitionFee != null ? `$${Number(s.tuitionFee).toLocaleString()}` : "—"}
+                        <TableCell className="text-right font-bold text-amber-600 dark:text-amber-400">
+                          ${unpaidStudents
+                            .reduce((s, t) => s + (t.tuitionFee ?? 0), 0)
+                            .toLocaleString()}
                         </TableCell>
                       </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
+                    </TableBody>
+                  </Table>
+                </div>
+              </>
             )}
           </>
         )}

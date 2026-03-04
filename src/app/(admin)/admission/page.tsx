@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState, useRef } from "react";
+import React, { useEffect, useState } from "react";
 import Image from "next/image";
 import PageBreadCrumb from "@/components/common/PageBreadCrumb";
 import Button from "@/components/ui/button/Button";
@@ -15,7 +15,7 @@ import Badge from "@/components/ui/badge/Badge";
 import Link from "next/link";
 import { authFetch } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
-import { PencilIcon, PlusIcon, TrashBinIcon, UserCircleIcon } from "@/icons";
+import { ArrowUpIcon, DownloadIcon, PencilIcon, PlusIcon, TrashBinIcon, UserCircleIcon } from "@/icons";
 
 type Department = { id: number; name: string; code: string };
 
@@ -49,6 +49,8 @@ type StudentRow = {
   program: string | null;
   admissionDate: string;
   status: string;
+  paymentStatus: string;
+  balance: number;
   createdAt: string;
 };
 
@@ -61,6 +63,14 @@ const STATUS_COLOR: Record<string, "warning" | "success" | "error" | "info" | "p
   Graduated: "info",
 };
 
+const PAYMENT_STATUSES = ["Full Scholarship", "Half Scholar", "Fully Paid"] as const;
+
+const PAYMENT_STATUS_COLOR: Record<string, "success" | "info" | "primary"> = {
+  "Full Scholarship": "success",
+  "Half Scholar": "info",
+  "Fully Paid": "primary",
+};
+
 export default function AdmissionPage() {
   const { hasPermission } = useAuth();
   const [students, setStudents] = useState<StudentRow[]>([]);
@@ -69,30 +79,10 @@ export default function AdmissionPage() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [filterStatus, setFilterStatus] = useState<string>("all");
-  const [modal, setModal] = useState<"add" | "edit" | null>(null);
-  const [editingId, setEditingId] = useState<number | null>(null);
-  const [form, setForm] = useState({
-    firstName: "",
-    lastName: "",
-    motherName: "",
-    parentPhone: "",
-    email: "",
-    phone: "",
-    dateOfBirth: "",
-    gender: "",
-    address: "",
-    departmentId: "",
-    classId: "",
-    program: "",
-    status: "Admitted",
-    imageUrl: "",
-    imagePublicId: "",
-  });
-  const [submitError, setSubmitError] = useState("");
-  const [submitting, setSubmitting] = useState(false);
-  const [uploading, setUploading] = useState(false);
-  const [imagePreview, setImagePreview] = useState<string | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [modal, setModal] = useState<"import" | null>(null);
+  const [importFile, setImportFile] = useState<File | null>(null);
+  const [importLoading, setImportLoading] = useState(false);
+  const [importResult, setImportResult] = useState<{ created: number; errors?: string[] } | null>(null);
 
   const canCreate = hasPermission("admission.create");
   const canEdit = hasPermission("admission.edit");
@@ -142,145 +132,50 @@ export default function AdmissionPage() {
     })();
   }, []);
 
-  function openAdd() {
-    setModal("add");
-    setEditingId(null);
-    setForm({
-      firstName: "",
-      lastName: "",
-      motherName: "",
-      parentPhone: "",
-      email: "",
-      phone: "",
-      dateOfBirth: "",
-      gender: "",
-      address: "",
-      departmentId: departments[0] ? String(departments[0].id) : "",
-      classId: "",
-      program: "",
-      status: "Admitted",
-      imageUrl: "",
-      imagePublicId: "",
-    });
-    setImagePreview(null);
-    setSubmitError("");
-  }
-
-  function openEdit(s: StudentRow) {
-    setModal("edit");
-    setEditingId(s.id);
-    setForm({
-      firstName: s.firstName,
-      lastName: s.lastName,
-      motherName: s.motherName ?? "",
-      parentPhone: s.parentPhone ?? "",
-      email: s.email ?? "",
-      phone: s.phone ?? "",
-      dateOfBirth: s.dateOfBirth ? s.dateOfBirth.split("T")[0] : "",
-      gender: s.gender ?? "",
-      address: s.address ?? "",
-      departmentId: String(s.departmentId),
-      classId: s.classId ? String(s.classId) : "",
-      program: s.program ?? "",
-      status: s.status,
-      imageUrl: s.imageUrl ?? "",
-      imagePublicId: s.imagePublicId ?? "",
-    });
-    setImagePreview(s.imageUrl);
-    setSubmitError("");
-  }
-
-  async function handleImageUpload(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    // Local preview
-    const reader = new FileReader();
-    reader.onloadend = () => setImagePreview(reader.result as string);
-    reader.readAsDataURL(file);
-
-    setUploading(true);
+  async function handleDownloadTemplate() {
+    setImportLoading(true);
+    setImportResult(null);
     try {
-      const fd = new FormData();
-      fd.append("file", file);
-      fd.append("folder", "university/students");
-
-      const res = await authFetch("/api/upload", {
-        method: "POST",
-        body: fd,
-      });
-
+      const res = await authFetch("/api/students/template");
       if (!res.ok) {
         const data = await res.json();
-        setSubmitError(data.error || "Image upload failed");
-        setImagePreview(form.imageUrl || null);
+        alert(data.error || "Failed to download template");
         return;
       }
-
-      const data = await res.json();
-      setForm((f) => ({
-        ...f,
-        imageUrl: data.url,
-        imagePublicId: data.publicId,
-      }));
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "Student_Import_Template.xlsx";
+      a.click();
+      URL.revokeObjectURL(url);
     } catch {
-      setSubmitError("Image upload failed");
-      setImagePreview(form.imageUrl || null);
+      alert("Failed to download template");
     } finally {
-      setUploading(false);
+      setImportLoading(false);
     }
   }
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    setSubmitError("");
-    setSubmitting(true);
+  async function handleImportExcel() {
+    if (!importFile) return;
+    setImportLoading(true);
+    setImportResult(null);
     try {
-      const payload = {
-        firstName: form.firstName,
-        lastName: form.lastName,
-        motherName: form.motherName || undefined,
-        parentPhone: form.parentPhone || undefined,
-        email: form.email || undefined,
-        phone: form.phone || undefined,
-        dateOfBirth: form.dateOfBirth || undefined,
-        gender: form.gender || undefined,
-        address: form.address || undefined,
-        departmentId: Number(form.departmentId),
-        classId: form.classId || undefined,
-        program: form.program || undefined,
-        status: form.status,
-        imageUrl: form.imageUrl || undefined,
-        imagePublicId: form.imagePublicId || undefined,
-      };
-
-      if (modal === "add") {
-        const res = await authFetch("/api/students", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
-        });
-        const data = await res.json();
-        if (!res.ok) {
-          setSubmitError(data.error || "Failed to create student");
-          return;
-        }
-      } else if (modal === "edit" && editingId) {
-        const res = await authFetch(`/api/students/${editingId}`, {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
-        });
-        const data = await res.json();
-        if (!res.ok) {
-          setSubmitError(data.error || "Failed to update student");
-          return;
-        }
+      const fd = new FormData();
+      fd.append("file", importFile);
+      const res = await authFetch("/api/students/import", { method: "POST", body: fd });
+      const data = await res.json();
+      if (!res.ok) {
+        alert(data.error || "Import failed");
+        return;
       }
+      setImportResult({ created: data.created, errors: data.errors });
+      setImportFile(null);
       await loadStudents();
-      setModal(null);
+    } catch {
+      alert("Import failed");
     } finally {
-      setSubmitting(false);
+      setImportLoading(false);
     }
   }
 
@@ -331,11 +226,34 @@ export default function AdmissionPage() {
       {/* Header */}
       <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <PageBreadCrumb pageTitle="Admission" />
-        {canCreate && (
-          <Button startIcon={<PlusIcon />} onClick={openAdd} size="sm">
-            New Student
-          </Button>
-        )}
+        <div className="flex items-center gap-2">
+          {canCreate && (
+            <>
+              <Button
+                variant="outline"
+                startIcon={<DownloadIcon />}
+                onClick={handleDownloadTemplate}
+                disabled={importLoading}
+                size="sm"
+              >
+                Template
+              </Button>
+              <Button
+                variant="outline"
+                startIcon={<ArrowUpIcon />}
+                onClick={() => { setModal("import"); setImportResult(null); setImportFile(null); }}
+                size="sm"
+              >
+                Import Excel
+              </Button>
+              <Link href="/admission/new">
+                <Button startIcon={<PlusIcon />} size="sm">
+                  New Student
+                </Button>
+              </Link>
+            </>
+          )}
+        </div>
       </div>
 
       {/* Stats */}
@@ -422,10 +340,9 @@ export default function AdmissionPage() {
                 <TableCell isHeader>Student</TableCell>
                 <TableCell isHeader>Student ID</TableCell>
                 <TableCell isHeader>Department</TableCell>
-                <TableCell isHeader>Class</TableCell>
-                <TableCell isHeader>Program</TableCell>
                 <TableCell isHeader>Status</TableCell>
-                <TableCell isHeader>Admitted</TableCell>
+                <TableCell isHeader>Payment</TableCell>
+                <TableCell isHeader className="text-right">Balance</TableCell>
                 <TableCell isHeader className="text-right">Actions</TableCell>
               </TableRow>
             </TableHeader>
@@ -476,21 +393,18 @@ export default function AdmissionPage() {
                   <TableCell>
                     <Badge color="info" size="sm">{s.department.name}</Badge>
                   </TableCell>
-                  <TableCell className="text-xs">
-                    {s.class ? `${s.class.course?.code} ${s.class.name}` : "—"}
-                  </TableCell>
-                  <TableCell className="text-xs">{s.program ?? "—"}</TableCell>
                   <TableCell>
                     <Badge color={STATUS_COLOR[s.status] || "light"} size="sm">
                       {s.status}
                     </Badge>
                   </TableCell>
-                  <TableCell className="text-xs text-gray-400 dark:text-gray-500">
-                    {new Date(s.admissionDate).toLocaleDateString("en-US", {
-                      year: "numeric",
-                      month: "short",
-                      day: "numeric",
-                    })}
+                  <TableCell>
+                    <Badge color={PAYMENT_STATUS_COLOR[s.paymentStatus] || "light"} size="sm">
+                      {s.paymentStatus || "Fully Paid"}
+                    </Badge>
+                  </TableCell>
+                  <TableCell className="text-right font-medium text-gray-800 dark:text-white/90">
+                    ${(s.balance ?? 0).toLocaleString()}
                   </TableCell>
                   <TableCell className="text-right">
                     <div className="inline-flex items-center gap-1">
@@ -503,14 +417,13 @@ export default function AdmissionPage() {
                         <UserCircleIcon className="h-4 w-4" />
                       </Link>
                       {canEdit && (
-                        <button
-                          type="button"
-                          onClick={() => openEdit(s)}
+                        <Link
+                          href={`/admission/${s.id}/edit`}
                           className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-gray-400 transition-colors hover:bg-brand-50 hover:text-brand-500 dark:hover:bg-brand-500/10"
                           aria-label="Edit"
                         >
                           <PencilIcon className="h-4 w-4" />
-                        </button>
+                        </Link>
                       )}
                       {canDelete && (
                         <button
@@ -531,18 +444,17 @@ export default function AdmissionPage() {
         )}
       </div>
 
-      {/* Modal */}
-      {modal && (
+      {/* Import Modal */}
+      {modal === "import" && (
         <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/60 p-4 backdrop-blur-sm">
-          <div className="w-full max-w-2xl rounded-2xl border border-gray-200 bg-white shadow-xl dark:border-gray-700 dark:bg-gray-900">
-            {/* Header */}
+          <div className="w-full max-w-lg rounded-2xl border border-gray-200 bg-white shadow-xl dark:border-gray-700 dark:bg-gray-900">
             <div className="flex items-center justify-between border-b border-gray-200 px-6 py-4 dark:border-gray-700">
               <h2 className="text-lg font-semibold text-gray-800 dark:text-white/90">
-                {modal === "add" ? "New Student Admission" : "Edit Student"}
+                Import Students from Excel
               </h2>
               <button
                 type="button"
-                onClick={() => setModal(null)}
+                onClick={() => { setModal(null); setImportFile(null); setImportResult(null); }}
                 className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-gray-800 dark:hover:text-gray-300"
               >
                 <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -550,268 +462,57 @@ export default function AdmissionPage() {
                 </svg>
               </button>
             </div>
-
-            {/* Body */}
-            <form onSubmit={handleSubmit} className="max-h-[70vh] overflow-y-auto px-6 py-5">
-              <div className="space-y-5">
-                {submitError && (
-                  <div className="rounded-lg bg-error-50 px-4 py-3 text-sm text-error-600 dark:bg-error-500/10 dark:text-error-400">
-                    {submitError}
-                  </div>
-                )}
-
-                {/* Photo Upload */}
-                <div className="flex items-center gap-5">
-                  <div
-                    className="relative flex h-20 w-20 shrink-0 cursor-pointer items-center justify-center overflow-hidden rounded-full border-2 border-dashed border-gray-300 bg-gray-50 transition-colors hover:border-brand-400 dark:border-gray-600 dark:bg-gray-800 dark:hover:border-brand-500"
-                    onClick={() => fileInputRef.current?.click()}
-                  >
-                    {uploading ? (
-                      <div className="h-6 w-6 animate-spin rounded-full border-2 border-gray-300 border-t-brand-500" />
-                    ) : imagePreview ? (
-                      <Image
-                        src={imagePreview}
-                        alt="Preview"
-                        fill
-                        className="object-cover"
-                      />
-                    ) : (
-                      <svg className="h-8 w-8 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M6.827 6.175A2.31 2.31 0 015.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 00-1.134-.175 2.31 2.31 0 01-1.64-1.055l-.822-1.316a2.192 2.192 0 00-1.736-1.039 48.774 48.774 0 00-5.232 0 2.192 2.192 0 00-1.736 1.039l-.821 1.316z" />
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 12.75a4.5 4.5 0 11-9 0 4.5 4.5 0 019 0z" />
-                      </svg>
-                    )}
-                    <input
-                      ref={fileInputRef}
-                      type="file"
-                      accept="image/jpeg,image/png,image/webp,image/gif"
-                      className="hidden"
-                      onChange={handleImageUpload}
-                    />
-                  </div>
-                  <div>
-                    <p className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                      Student Photo <span className="text-gray-400">(optional)</span>
-                    </p>
-                    <p className="mt-0.5 text-xs text-gray-400 dark:text-gray-500">
-                      Click to upload. JPEG, PNG, WebP (max 5MB)
-                    </p>
-                  </div>
-                </div>
-
-                {/* Name Row */}
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">
-                      First Name <span className="text-error-500">*</span>
-                    </label>
-                    <input
-                      type="text"
-                      required
-                      value={form.firstName}
-                      onChange={(e) => setForm((f) => ({ ...f, firstName: e.target.value }))}
-                      placeholder="First name"
-                      className="h-11 w-full rounded-lg border border-gray-200 bg-transparent px-4 py-2.5 text-sm text-gray-800 outline-none placeholder:text-gray-400 focus:border-brand-300 focus:ring-2 focus:ring-brand-500/20 dark:border-gray-700 dark:text-white dark:placeholder:text-gray-500 dark:focus:border-brand-500/40"
-                    />
-                  </div>
-                  <div>
-                    <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">
-                      Last Name <span className="text-error-500">*</span>
-                    </label>
-                    <input
-                      type="text"
-                      required
-                      value={form.lastName}
-                      onChange={(e) => setForm((f) => ({ ...f, lastName: e.target.value }))}
-                      placeholder="Last name"
-                      className="h-11 w-full rounded-lg border border-gray-200 bg-transparent px-4 py-2.5 text-sm text-gray-800 outline-none placeholder:text-gray-400 focus:border-brand-300 focus:ring-2 focus:ring-brand-500/20 dark:border-gray-700 dark:text-white dark:placeholder:text-gray-500 dark:focus:border-brand-500/40"
-                    />
-                  </div>
-                </div>
-
-                {/* Mother Name & Parent Phone */}
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">
-                      Mother Name
-                    </label>
-                    <input
-                      type="text"
-                      value={form.motherName}
-                      onChange={(e) => setForm((f) => ({ ...f, motherName: e.target.value }))}
-                      placeholder="Mother's full name"
-                      className="h-11 w-full rounded-lg border border-gray-200 bg-transparent px-4 py-2.5 text-sm text-gray-800 outline-none placeholder:text-gray-400 focus:border-brand-300 focus:ring-2 focus:ring-brand-500/20 dark:border-gray-700 dark:text-white dark:placeholder:text-gray-500 dark:focus:border-brand-500/40"
-                    />
-                  </div>
-                  <div>
-                    <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">
-                      Parent Phone
-                    </label>
-                    <input
-                      type="tel"
-                      value={form.parentPhone}
-                      onChange={(e) => setForm((f) => ({ ...f, parentPhone: e.target.value }))}
-                      placeholder="+252 xxx xxx"
-                      className="h-11 w-full rounded-lg border border-gray-200 bg-transparent px-4 py-2.5 text-sm text-gray-800 outline-none placeholder:text-gray-400 focus:border-brand-300 focus:ring-2 focus:ring-brand-500/20 dark:border-gray-700 dark:text-white dark:placeholder:text-gray-500 dark:focus:border-brand-500/40"
-                    />
-                  </div>
-                </div>
-
-                {/* Email & Phone */}
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">
-                      Email
-                    </label>
-                    <input
-                      type="email"
-                      value={form.email}
-                      onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
-                      placeholder="student@email.com (optional)"
-                      className="h-11 w-full rounded-lg border border-gray-200 bg-transparent px-4 py-2.5 text-sm text-gray-800 outline-none placeholder:text-gray-400 focus:border-brand-300 focus:ring-2 focus:ring-brand-500/20 dark:border-gray-700 dark:text-white dark:placeholder:text-gray-500 dark:focus:border-brand-500/40"
-                    />
-                  </div>
-                  <div>
-                    <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">
-                      Phone
-                    </label>
-                    <input
-                      type="tel"
-                      value={form.phone}
-                      onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))}
-                      placeholder="+252 xxx xxx"
-                      className="h-11 w-full rounded-lg border border-gray-200 bg-transparent px-4 py-2.5 text-sm text-gray-800 outline-none placeholder:text-gray-400 focus:border-brand-300 focus:ring-2 focus:ring-brand-500/20 dark:border-gray-700 dark:text-white dark:placeholder:text-gray-500 dark:focus:border-brand-500/40"
-                    />
-                  </div>
-                </div>
-
-                {/* DOB & Gender */}
-                <div className="grid grid-cols-3 gap-4">
-                  <div>
-                    <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">
-                      Date of Birth
-                    </label>
-                    <input
-                      type="date"
-                      value={form.dateOfBirth}
-                      onChange={(e) => setForm((f) => ({ ...f, dateOfBirth: e.target.value }))}
-                      className="h-11 w-full rounded-lg border border-gray-200 bg-transparent px-4 py-2.5 text-sm text-gray-800 outline-none focus:border-brand-300 focus:ring-2 focus:ring-brand-500/20 dark:border-gray-700 dark:text-white dark:focus:border-brand-500/40"
-                    />
-                  </div>
-                  <div>
-                    <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">
-                      Gender
-                    </label>
-                    <select
-                      value={form.gender}
-                      onChange={(e) => setForm((f) => ({ ...f, gender: e.target.value }))}
-                      className="h-11 w-full appearance-none rounded-lg border border-gray-200 bg-transparent px-4 py-2.5 text-sm text-gray-800 outline-none focus:border-brand-300 focus:ring-2 focus:ring-brand-500/20 dark:border-gray-700 dark:text-white dark:focus:border-brand-500/40"
-                    >
-                      <option value="">Select</option>
-                      <option value="Male">Male</option>
-                      <option value="Female">Female</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">
-                      Status
-                    </label>
-                    <select
-                      value={form.status}
-                      onChange={(e) => setForm((f) => ({ ...f, status: e.target.value }))}
-                      className="h-11 w-full appearance-none rounded-lg border border-gray-200 bg-transparent px-4 py-2.5 text-sm text-gray-800 outline-none focus:border-brand-300 focus:ring-2 focus:ring-brand-500/20 dark:border-gray-700 dark:text-white dark:focus:border-brand-500/40"
-                    >
-                      {STATUSES.map((s) => (
-                        <option key={s} value={s}>{s}</option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-
-                {/* Department & Class & Program */}
-                <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-                  <div>
-                    <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">
-                      Department <span className="text-error-500">*</span>
-                    </label>
-                    <select
-                      required
-                      value={form.departmentId}
-                      onChange={(e) => setForm((f) => ({ ...f, departmentId: e.target.value, classId: "" }))}
-                      className="h-11 w-full appearance-none rounded-lg border border-gray-200 bg-transparent px-4 py-2.5 text-sm text-gray-800 outline-none focus:border-brand-300 focus:ring-2 focus:ring-brand-500/20 dark:border-gray-700 dark:text-white dark:focus:border-brand-500/40"
-                    >
-                      <option value="">Select a department</option>
-                      {departments.map((d) => (
-                        <option key={d.id} value={String(d.id)}>
-                          {d.name} ({d.code})
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <div>
-                    <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">
-                      Class
-                    </label>
-                    <select
-                      value={form.classId}
-                      onChange={(e) => setForm((f) => ({ ...f, classId: e.target.value }))}
-                      className="h-11 w-full appearance-none rounded-lg border border-gray-200 bg-transparent px-4 py-2.5 text-sm text-gray-800 outline-none focus:border-brand-300 focus:ring-2 focus:ring-brand-500/20 dark:border-gray-700 dark:text-white dark:focus:border-brand-500/40"
-                    >
-                      <option value="">Select class (optional)</option>
-                      {classes
-                        .filter((c) => !form.departmentId || c.departmentId === Number(form.departmentId))
-                        .map((c) => (
-                          <option key={c.id} value={String(c.id)}>
-                            {c.course?.code} - {c.name} ({c.semester} {c.year})
-                          </option>
+            <div className="space-y-4 px-6 py-5">
+              <p className="text-sm text-gray-600 dark:text-gray-400">
+                Download the template, fill in student data (Student ID is optional—leave empty to auto-generate), then upload the file.
+              </p>
+              <Button variant="outline" startIcon={<DownloadIcon />} onClick={handleDownloadTemplate} disabled={importLoading} size="sm">
+                Download Template
+              </Button>
+              <div>
+                <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">
+                  Excel File
+                </label>
+                <input
+                  type="file"
+                  accept=".xlsx,.xls"
+                  onChange={(e) => setImportFile(e.target.files?.[0] ?? null)}
+                  className="block w-full text-sm text-gray-600 file:mr-4 file:rounded-lg file:border-0 file:bg-brand-50 file:px-4 file:py-2 file:text-sm file:font-medium file:text-brand-600 hover:file:bg-brand-100 dark:file:bg-brand-500/10 dark:file:text-brand-400"
+                />
+              </div>
+              {importResult && (
+                <div className="rounded-lg bg-success-50 px-4 py-3 text-sm text-success-700 dark:bg-success-500/10 dark:text-success-400">
+                  <p className="font-medium">Imported {importResult.created} student(s) successfully.</p>
+                  {importResult.errors && importResult.errors.length > 0 && (
+                    <details className="mt-2">
+                      <summary className="cursor-pointer text-error-600 dark:text-error-400">
+                        {importResult.errors.length} error(s)
+                      </summary>
+                      <ul className="mt-1 list-inside list-disc text-error-600 dark:text-error-400">
+                        {importResult.errors.slice(0, 10).map((err, i) => (
+                          <li key={i}>{err}</li>
                         ))}
-                    </select>
-                  </div>
-                  <div>
-                    <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">
-                      Program
-                    </label>
-                    <select
-                      value={form.program}
-                      onChange={(e) => setForm((f) => ({ ...f, program: e.target.value }))}
-                      className="h-11 w-full appearance-none rounded-lg border border-gray-200 bg-transparent px-4 py-2.5 text-sm text-gray-800 outline-none focus:border-brand-300 focus:ring-2 focus:ring-brand-500/20 dark:border-gray-700 dark:text-white dark:focus:border-brand-500/40"
-                    >
-                      <option value="">Select program</option>
-                      <option value="Bachelor">Bachelor Degree</option>
-                      <option value="Masters">Masters Degree</option>
-                    </select>
-                  </div>
+                        {importResult.errors.length > 10 && (
+                          <li>...and {importResult.errors.length - 10} more</li>
+                        )}
+                      </ul>
+                    </details>
+                  )}
                 </div>
-
-                {/* Address */}
-                <div>
-                  <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">
-                    Address
-                  </label>
-                  <textarea
-                    rows={2}
-                    value={form.address}
-                    onChange={(e) => setForm((f) => ({ ...f, address: e.target.value }))}
-                    placeholder="Home address"
-                    className="w-full rounded-lg border border-gray-200 bg-transparent px-4 py-2.5 text-sm text-gray-800 outline-none placeholder:text-gray-400 focus:border-brand-300 focus:ring-2 focus:ring-brand-500/20 dark:border-gray-700 dark:text-white dark:placeholder:text-gray-500 dark:focus:border-brand-500/40"
-                  />
-                </div>
-              </div>
-
-              {/* Footer */}
-              <div className="mt-6 flex items-center justify-end gap-3">
-                <Button type="button" variant="outline" onClick={() => setModal(null)} size="sm">
-                  Cancel
+              )}
+              <div className="flex justify-end gap-2">
+                <Button variant="outline" onClick={() => { setModal(null); setImportFile(null); setImportResult(null); }} size="sm">
+                  Close
                 </Button>
-                <Button type="submit" disabled={submitting || uploading} size="sm">
-                  {submitting
-                    ? "Saving..."
-                    : modal === "add"
-                      ? "Admit Student"
-                      : "Update Student"}
+                <Button
+                  onClick={handleImportExcel}
+                  disabled={!importFile || importLoading}
+                  size="sm"
+                >
+                  {importLoading ? "Importing..." : "Import"}
                 </Button>
               </div>
-            </form>
+            </div>
           </div>
         </div>
       )}

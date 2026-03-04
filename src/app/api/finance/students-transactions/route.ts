@@ -15,13 +15,29 @@ export async function GET(req: NextRequest) {
     const classId = searchParams.get("classId");
     const year = searchParams.get("year");
     const phone = searchParams.get("phone")?.trim();
+    const search = searchParams.get("search")?.trim();
     const dateFrom = searchParams.get("dateFrom")?.trim();
     const dateTo = searchParams.get("dateTo")?.trim();
 
-    const where: { status: string; departmentId?: number; classId?: number; phone?: { contains: string } } = { status: "Admitted" };
+    const where: {
+      status: string;
+      departmentId?: number;
+      classId?: number;
+      phone?: { contains: string };
+      OR?: { studentId?: { contains: string }; firstName?: { contains: string }; lastName?: { contains: string }; phone?: { contains: string } }[];
+    } = { status: "Admitted" };
     if (departmentId) where.departmentId = Number(departmentId);
     if (classId) where.classId = Number(classId);
-    if (phone) where.phone = { contains: phone };
+    if (search) {
+      where.OR = [
+        { studentId: { contains: search } },
+        { firstName: { contains: search } },
+        { lastName: { contains: search } },
+        { phone: { contains: search } },
+      ];
+    } else if (phone) {
+      where.phone = { contains: phone };
+    }
 
     const paymentWhere: { year?: number; paidAt?: { gte?: Date; lte?: Date } } = {};
     if (year) paymentWhere.year = Number(year);

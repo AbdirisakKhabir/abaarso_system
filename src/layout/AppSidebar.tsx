@@ -39,7 +39,7 @@ type NavItem = {
   subItems?: SubItem[];
 };
 
-type MenuCategory = "academics" | "reports" | "activities";
+type MenuCategory = "academics" | "reports" | "hr" | "activities";
 
 // --- Data Structures ---
 
@@ -82,6 +82,12 @@ const academicsItems: NavItem[] = [
     permission: "classes.view",
   },
   {
+    icon: <TimeIcon />,
+    name: "Schedule",
+    path: "/schedule",
+    permission: "schedule.view",
+  },
+  {
     icon: <UserCircleIcon />,
     name: "Lecturers",
     path: "/lecturers",
@@ -92,6 +98,11 @@ const academicsItems: NavItem[] = [
     name: "Admission",
     path: "/admission",
     permission: "admission.view",
+    subItems: [
+      { name: "Student List", path: "/admission", permission: "admission.view" },
+      { name: "Upgrade Students", path: "/admission/upgrade", permission: "admission.edit" },
+      { name: "Transfer Student", path: "/admission/transfer", permission: "admission.edit" },
+    ],
   },
   {
     icon: <PieChartIcon />,
@@ -114,7 +125,26 @@ const academicsItems: NavItem[] = [
     icon: <DollarLineIcon />,
     name: "Finance",
     path: "/finance",
-    permission: "admission.view",
+    permission: "finance.view",
+    subItems: [
+      { name: "Record Payment", path: "/finance", permission: "finance.view" },
+      { name: "Banks", path: "/finance/banks", permission: "banks.view" },
+      { name: "Expenses", path: "/finance/expenses", permission: "expenses.view" },
+    ],
+  },
+];
+
+const hrItems: NavItem[] = [
+  {
+    icon: <UserCircleIcon />,
+    name: "Human Resources",
+    path: "/hr",
+    permission: "hr.view",
+    subItems: [
+      { name: "Employees", path: "/hr/employees", permission: "hr.view" },
+      { name: "Positions", path: "/hr/positions", permission: "hr.view" },
+      { name: "Payroll Requests", path: "/hr/payroll", permission: "payroll.view" },
+    ],
   },
 ];
 
@@ -139,13 +169,20 @@ const reportsItems: NavItem[] = [
   },
   {
     icon: <DollarLineIcon />,
-    name: "Payment Reports",
+    name: "Finance Reports",
     path: "/reports/payment",
     permission: "reports.view",
     subItems: [
       { name: "Student Transactions", path: "/reports/student-transactions", permission: "reports.view" },
       { name: "Class Revenue", path: "/reports/class-revenue", permission: "reports.view" },
       { name: "Unpaid Students", path: "/reports/unpaid-students", permission: "reports.view" },
+      { name: "Bank Balances", path: "/reports/bank-balances", permission: "banks.view" },
+      { name: "Bank Transactions", path: "/reports/bank-transactions", permission: "banks.view" },
+      { name: "Transaction History", path: "/reports/transaction-history", permission: "finance.view" },
+      { name: "Treasury Summary", path: "/reports/treasury", permission: "finance.view" },
+      { name: "Daily Revenue", path: "/reports/daily-revenue", permission: "finance.view" },
+      { name: "Expense Report", path: "/reports/expenses", permission: "expenses.view" },
+      { name: "Income Statement", path: "/reports/income-statement", permission: "finance.view" },
     ],
   },
 ];
@@ -200,6 +237,7 @@ const AppSidebar: React.FC = () => {
   // Filtered menus (memoized to prevent useEffect infinite loop)
   const academicsNav = useMemo(() => filterByPermission(academicsItems, hasPermission), [hasPermission]);
   const reportsNav = useMemo(() => filterByPermission(reportsItems, hasPermission), [hasPermission]);
+  const hrNav = useMemo(() => filterByPermission(hrItems, hasPermission), [hasPermission]);
   const activitiesNav = useMemo(() => filterByPermission(activitiesItems, hasPermission), [hasPermission]);
 
   // State
@@ -225,12 +263,13 @@ const AppSidebar: React.FC = () => {
   useEffect(() => {
     let submenuMatched = false;
     let matchedState: { type: MenuCategory; index: number } | null = null;
-    const categories: MenuCategory[] = ["academics", "reports", "activities"];
+    const categories: MenuCategory[] = ["academics", "reports", "hr", "activities"];
 
     categories.forEach((menuType) => {
       const items =
         menuType === "academics" ? academicsNav :
-        menuType === "reports" ? reportsNav : activitiesNav;
+        menuType === "reports" ? reportsNav :
+        menuType === "hr" ? hrNav : activitiesNav;
 
       items.forEach((nav, index) => {
         if (nav.subItems) {
@@ -252,7 +291,7 @@ const AppSidebar: React.FC = () => {
       if (!submenuMatched && prev === null) return prev;
       return null;
     });
-  }, [pathname, academicsNav, reportsNav, activitiesNav]);
+  }, [pathname, academicsNav, reportsNav, hrNav, activitiesNav]);
 
   // Effect: Update height for transitions (measure after DOM update)
   useEffect(() => {
@@ -401,6 +440,16 @@ const AppSidebar: React.FC = () => {
                   {isExpanded || isHovered || isMobileOpen ? "Academics" : <HorizontaLDots />}
                 </h2>
                 {renderMenuItems(academicsNav, "academics")}
+              </div>
+            )}
+
+            {/* HR Section */}
+            {hrNav.length > 0 && (
+              <div>
+                <h2 className={`mb-4 text-xs uppercase flex text-gray-400 ${!isExpanded && !isHovered ? "lg:justify-center" : "justify-start"}`}>
+                  {isExpanded || isHovered || isMobileOpen ? "Human Resources" : <HorizontaLDots />}
+                </h2>
+                {renderMenuItems(hrNav, "hr")}
               </div>
             )}
 

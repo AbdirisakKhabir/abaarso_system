@@ -11,6 +11,7 @@ import {
   TableRow,
 } from "../ui/table";
 import Badge from "../ui/badge/Badge";
+import { PageIcon } from "@/icons";
 
 type Student = {
   id: number;
@@ -40,14 +41,19 @@ export default function RecentStudents() {
     s === "Admitted" ? "success" : s === "Pending" ? "warning" : s === "Rejected" ? "error" : "info";
 
   return (
-    <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white px-4 pb-3 pt-4 dark:border-gray-800 dark:bg-white/5 sm:px-6">
-      <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-        <h3 className="text-lg font-semibold text-gray-800 dark:text-white/90">
-          Recent Students
-        </h3>
+    <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white px-4 pb-4 shadow-sm dark:border-gray-800 dark:bg-white/5 sm:px-6 sm:pb-6">
+      <div className="mb-4 flex flex-col gap-2 pt-5 sm:flex-row sm:items-center sm:justify-between sm:pt-6">
+        <div className="flex items-center gap-3">
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-500/15 text-emerald-600 dark:bg-emerald-500/25 dark:text-emerald-400">
+            <PageIcon className="size-5" />
+          </div>
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+            Recent Students
+          </h3>
+        </div>
         <Link
           href="/admission"
-          className="inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50 hover:text-gray-800 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-400 dark:hover:bg-white/5 dark:hover:text-gray-200"
+          className="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-gray-50 px-4 py-2.5 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-100 hover:text-gray-900 dark:border-gray-700 dark:bg-gray-800/50 dark:text-gray-300 dark:hover:bg-gray-800 dark:hover:text-white"
         >
           See all
         </Link>

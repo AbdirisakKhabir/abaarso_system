@@ -52,6 +52,26 @@ const DEFAULT_PERMISSIONS = [
   { name: "lecturers.create", description: "Create lecturers", module: "lecturers" },
   { name: "lecturers.edit", description: "Edit lecturers", module: "lecturers" },
   { name: "lecturers.delete", description: "Delete lecturers", module: "lecturers" },
+  { name: "schedule.view", description: "View semester schedule", module: "schedule" },
+  { name: "schedule.create", description: "Create semester schedule", module: "schedule" },
+  { name: "schedule.edit", description: "Edit semester schedule", module: "schedule" },
+  { name: "schedule.delete", description: "Delete schedule slots", module: "schedule" },
+  { name: "hr.view", description: "View HR (employees, positions)", module: "hr" },
+  { name: "hr.create", description: "Create employees and positions", module: "hr" },
+  { name: "hr.edit", description: "Edit employees and positions", module: "hr" },
+  { name: "hr.delete", description: "Delete employees and positions", module: "hr" },
+  { name: "banks.view", description: "View banks and balances", module: "finance" },
+  { name: "banks.create", description: "Create banks", module: "finance" },
+  { name: "banks.edit", description: "Edit banks", module: "finance" },
+  { name: "banks.delete", description: "Delete banks", module: "finance" },
+  { name: "banks.withdraw", description: "Withdraw from bank", module: "finance" },
+  { name: "banks.transfer", description: "Transfer between banks", module: "finance" },
+  { name: "expenses.view", description: "View expenses", module: "finance" },
+  { name: "expenses.create", description: "Request expenses (Finance)", module: "finance" },
+  { name: "expenses.approve", description: "Approve or reject expenses (President)", module: "finance" },
+  { name: "payroll.view", description: "View payroll requests", module: "hr" },
+  { name: "payroll.create", description: "Request payroll (HR)", module: "hr" },
+  { name: "payroll.approve", description: "Approve or reject payroll (President)", module: "hr" },
 ];
 
 async function main() {
@@ -91,6 +111,18 @@ async function main() {
     });
   }
 
+  // Create default bank for tuition deposits
+  await prisma.bank.upsert({
+    where: { code: "MAIN-001" },
+    create: {
+      name: "Main Bank Account",
+      code: "MAIN-001",
+      accountNumber: null,
+      balance: 0,
+    },
+    update: {},
+  });
+
   // Create default semesters (Fall, Spring, Summer)
   const defaultSemesters = [
     { name: "Spring", sortOrder: 1 },
@@ -118,7 +150,127 @@ async function main() {
     update: {},
   });
 
-  console.log("Seed completed. Admin user: admin@abaarsotech.edu / admin123");
+  // Finance role: view/create expenses, finance, banks
+  const financePermNames = [
+    "finance.view", "finance.create", "banks.view", "banks.withdraw", "banks.transfer",
+    "expenses.view", "expenses.create", "reports.view", "dashboard.view",
+  ];
+  const financePerms = allPermissions.filter((p) => financePermNames.includes(p.name));
+  const financeRole = await prisma.role.upsert({
+    where: { name: "Finance" },
+    create: { name: "Finance", description: "Finance staff - record payments, request expenses" },
+    update: {},
+  });
+  for (const perm of financePerms) {
+    await prisma.rolePermission.upsert({
+      where: { roleId_permissionId: { roleId: financeRole.id, permissionId: perm.id } },
+      create: { roleId: financeRole.id, permissionId: perm.id },
+      update: {},
+    });
+  }
+
+  // President role: approve expenses, view finance
+  const presidentPermNames = [
+    "finance.view", "banks.view", "expenses.view", "expenses.approve",
+    "payroll.view", "payroll.approve",
+    "reports.view", "dashboard.view",
+  ];
+  const presidentPerms = allPermissions.filter((p) => presidentPermNames.includes(p.name));
+  const presidentRole = await prisma.role.upsert({
+    where: { name: "President" },
+    create: { name: "President", description: "University President - approve expenses" },
+    update: {},
+  });
+  for (const perm of presidentPerms) {
+    await prisma.rolePermission.upsert({
+      where: { roleId_permissionId: { roleId: presidentRole.id, permissionId: perm.id } },
+      create: { roleId: presidentRole.id, permissionId: perm.id },
+      update: {},
+    });
+  }
+
+  // Dean role: academic oversight - faculties, departments, courses, classes, lecturers, schedule, reports
+  const deanPermNames = [
+    "dashboard.view", "faculties.view", "faculties.edit", "departments.view", "departments.edit",
+    "courses.view", "courses.edit", "classes.view", "classes.edit",
+    "lecturers.view", "lecturers.edit", "schedule.view", "schedule.edit",
+    "admission.view", "attendance.view", "examinations.view",
+    "semesters.view", "reports.view",
+  ];
+  const deanPerms = allPermissions.filter((p) => deanPermNames.includes(p.name));
+  const deanRole = await prisma.role.upsert({
+    where: { name: "Dean" },
+    create: { name: "Dean", description: "Faculty Dean - academic oversight, manage departments and courses" },
+    update: {},
+  });
+  for (const perm of deanPerms) {
+    await prisma.rolePermission.upsert({
+      where: { roleId_permissionId: { roleId: deanRole.id, permissionId: perm.id } },
+      create: { roleId: deanRole.id, permissionId: perm.id },
+      update: {},
+    });
+  }
+
+  // Lecturer role: take attendance, record exams, view schedule and classes
+  const lecturerPermNames = [
+    "dashboard.view", "attendance.view", "attendance.create", "attendance.edit",
+    "examinations.view", "examinations.create", "examinations.edit",
+    "schedule.view", "classes.view", "lecturers.view",
+  ];
+  const lecturerPerms = allPermissions.filter((p) => lecturerPermNames.includes(p.name));
+  const lecturerRole = await prisma.role.upsert({
+    where: { name: "Lecturer" },
+    create: { name: "Lecturer", description: "Teaching staff - take attendance, record exams" },
+    update: {},
+  });
+  for (const perm of lecturerPerms) {
+    await prisma.rolePermission.upsert({
+      where: { roleId_permissionId: { roleId: lecturerRole.id, permissionId: perm.id } },
+      create: { roleId: lecturerRole.id, permissionId: perm.id },
+      update: {},
+    });
+  }
+
+  // HR role: manage employees and positions
+  const hrPermNames = [
+    "dashboard.view", "hr.view", "hr.create", "hr.edit", "hr.delete",
+    "payroll.view", "payroll.create",
+  ];
+  const hrPerms = allPermissions.filter((p) => hrPermNames.includes(p.name));
+  const hrRole = await prisma.role.upsert({
+    where: { name: "HR" },
+    create: { name: "HR", description: "Human Resources - manage employees and positions" },
+    update: {},
+  });
+  for (const perm of hrPerms) {
+    await prisma.rolePermission.upsert({
+      where: { roleId_permissionId: { roleId: hrRole.id, permissionId: perm.id } },
+      create: { roleId: hrRole.id, permissionId: perm.id },
+      update: {},
+    });
+  }
+
+  // Admission role: manage student admissions
+  const admissionPermNames = [
+    "dashboard.view", "admission.view", "admission.create", "admission.edit", "admission.delete",
+    "departments.view", "classes.view",
+  ];
+  const admissionPerms = allPermissions.filter((p) => admissionPermNames.includes(p.name));
+  const admissionRole = await prisma.role.upsert({
+    where: { name: "Admission" },
+    create: { name: "Admission", description: "Admission staff - manage student admissions, upgrades, transfers" },
+    update: {},
+  });
+  for (const perm of admissionPerms) {
+    await prisma.rolePermission.upsert({
+      where: { roleId_permissionId: { roleId: admissionRole.id, permissionId: perm.id } },
+      create: { roleId: admissionRole.id, permissionId: perm.id },
+      update: {},
+    });
+  }
+
+  console.log("Seed completed. Admin: admin@abaarsotech.edu / admin123");
+  console.log("Roles: Admin, Finance, President, Dean, Lecturer, HR, Admission created/updated.");
 }
 
 main()

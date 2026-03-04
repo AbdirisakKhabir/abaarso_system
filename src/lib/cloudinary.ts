@@ -40,4 +40,35 @@ export async function deleteImage(publicId: string): Promise<void> {
   await cloudinary.uploader.destroy(publicId);
 }
 
+export async function uploadRaw(
+  fileBuffer: Buffer,
+  folder = "university/lecturers",
+  resourceType: "raw" | "auto" = "raw"
+): Promise<{ url: string; publicId: string }> {
+  return new Promise((resolve, reject) => {
+    cloudinary.uploader
+      .upload_stream(
+        {
+          folder,
+          resource_type: resourceType,
+        },
+        (error, result) => {
+          if (error || !result) {
+            reject(error || new Error("Upload failed"));
+          } else {
+            resolve({
+              url: result.secure_url,
+              publicId: result.public_id,
+            });
+          }
+        }
+      )
+      .end(fileBuffer);
+  });
+}
+
+export async function deleteRaw(publicId: string): Promise<void> {
+  await cloudinary.uploader.destroy(publicId, { resource_type: "raw" });
+}
+
 export default cloudinary;
