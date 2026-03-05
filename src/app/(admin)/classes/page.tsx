@@ -15,18 +15,13 @@ import { authFetch } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import { PencilIcon, PlusIcon, TrashBinIcon } from "@/icons";
 
-type CourseOption = { id: number; name: string; code: string };
+type DepartmentOption = { id: number; name: string; code: string };
 
 type ClassRow = {
   id: number;
   name: string;
-  courseId: number;
-  course: {
-    id: number;
-    name: string;
-    code: string;
-    department: { id: number; name: string; code: string };
-  };
+  departmentId: number;
+  department: { id: number; name: string; code: string };
   semester: string;
   year: number;
   room: string | null;
@@ -37,13 +32,14 @@ type ClassRow = {
 };
 
 type SemesterOption = { id: number; name: string; sortOrder: number; isActive: boolean };
-const CURRENT_YEAR = new Date().getFullYear();
+type AcademicYearOption = { id: number; startYear: number; endYear: number; name: string; isActive?: boolean };
 
 export default function ClassesPage() {
   const { hasPermission } = useAuth();
   const [classes, setClasses] = useState<ClassRow[]>([]);
-  const [courses, setCourses] = useState<CourseOption[]>([]);
+  const [departments, setDepartments] = useState<DepartmentOption[]>([]);
   const [semesters, setSemesters] = useState<SemesterOption[]>([]);
+  const [academicYears, setAcademicYears] = useState<AcademicYearOption[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [filterSemester, setFilterSemester] = useState<string>("all");
@@ -51,9 +47,9 @@ export default function ClassesPage() {
   const [editingId, setEditingId] = useState<number | null>(null);
   const [form, setForm] = useState({
     name: "",
-    courseId: "",
+    departmentId: "",
     semester: "Fall",
-    year: String(CURRENT_YEAR),
+    academicYearId: "",
     room: "",
     schedule: "",
     capacity: "40",
@@ -70,18 +66,14 @@ export default function ClassesPage() {
     if (res.ok) setClasses(await res.json());
   }
 
-  async function loadCourses() {
-    const res = await authFetch("/api/courses");
-    if (res.ok) {
-      const data = await res.json();
-      setCourses(
-        data.map((c: CourseOption & Record<string, unknown>) => ({
-          id: c.id,
-          name: c.name,
-          code: c.code,
-        }))
-      );
-    }
+  async function loadDepartments() {
+    const res = await authFetch("/api/departments");
+    if (res.ok) setDepartments(await res.json());
+  }
+
+  async function loadAcademicYears() {
+    const res = await authFetch("/api/academic-years");
+    if (res.ok) setAcademicYears(await res.json());
   }
 
   useEffect(() => {
@@ -93,7 +85,7 @@ export default function ClassesPage() {
   useEffect(() => {
     (async () => {
       setLoading(true);
-      await Promise.all([loadClasses(), loadCourses()]);
+      await Promise.all([loadClasses(), loadDepartments(), loadAcademicYears()]);
       setLoading(false);
     })();
   }, []);
@@ -101,11 +93,12 @@ export default function ClassesPage() {
   function openAdd() {
     setModal("add");
     setEditingId(null);
+    const defaultYear = academicYears.find((y) => y.isActive) ?? academicYears[academicYears.length - 1];
     setForm({
       name: "",
-      courseId: courses[0] ? String(courses[0].id) : "",
+      departmentId: departments[0] ? String(departments[0].id) : "",
       semester: semesters[0]?.name ?? "Fall",
-      year: String(CURRENT_YEAR),
+      academicYearId: defaultYear ? String(defaultYear.id) : "",
       room: "",
       schedule: "",
       capacity: "40",
@@ -116,11 +109,12 @@ export default function ClassesPage() {
   function openEdit(c: ClassRow) {
     setModal("edit");
     setEditingId(c.id);
+    const ay = academicYears.find((y) => y.startYear <= c.year && c.year <= y.endYear);
     setForm({
       name: c.name,
-      courseId: String(c.courseId),
+      departmentId: String(c.departmentId),
       semester: c.semester,
-      year: String(c.year),
+      academicYearId: ay ? String(ay.id) : "",
       room: c.room ?? "",
       schedule: c.schedule ?? "",
       capacity: String(c.capacity),
@@ -132,12 +126,14 @@ export default function ClassesPage() {
     e.preventDefault();
     setSubmitError("");
     setSubmitting(true);
+    const ay = academicYears.find((y) => String(y.id) === form.academicYearId);
+    const year = ay ? (form.semester === "Fall" ? ay.startYear : ay.endYear) : new Date().getFullYear();
     try {
       const payload = {
         name: form.name,
-        courseId: Number(form.courseId),
+        departmentId: Number(form.departmentId),
         semester: form.semester,
-        year: Number(form.year),
+        year,
         room: form.room || undefined,
         schedule: form.schedule || undefined,
         capacity: Number(form.capacity),
@@ -189,9 +185,8 @@ export default function ClassesPage() {
     const q = search.toLowerCase();
     return (
       c.name.toLowerCase().includes(q) ||
-      c.course.name.toLowerCase().includes(q) ||
-      c.course.code.toLowerCase().includes(q) ||
-      c.course.department.name.toLowerCase().includes(q) ||
+      c.department.name.toLowerCase().includes(q) ||
+      c.department.code.toLowerCase().includes(q) ||
       (c.room?.toLowerCase().includes(q) ?? false)
     );
   });
@@ -288,7 +283,6 @@ export default function ClassesPage() {
               <TableRow className="bg-transparent! hover:bg-transparent!">
                 <TableCell isHeader>#</TableCell>
                 <TableCell isHeader>Class</TableCell>
-                <TableCell isHeader>Course</TableCell>
                 <TableCell isHeader>Department</TableCell>
                 <TableCell isHeader>Semester</TableCell>
                 <TableCell isHeader>Room</TableCell>
@@ -315,15 +309,10 @@ export default function ClassesPage() {
                     </div>
                   </TableCell>
                   <TableCell>
-                    <div className="min-w-0">
-                      <Badge color="warning" size="sm">{c.course.code}</Badge>
-                      <p className="mt-0.5 text-xs text-gray-400 dark:text-gray-500 truncate max-w-[140px]">
-                        {c.course.name}
-                      </p>
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <Badge color="info" size="sm">{c.course.department.name}</Badge>
+                    <Badge color="info" size="sm">{c.department.code}</Badge>
+                    <p className="mt-0.5 text-xs text-gray-400 dark:text-gray-500 truncate max-w-[140px]">
+                      {c.department.name}
+                    </p>
                   </TableCell>
                   <TableCell>
                     <div className="flex items-center gap-1.5">
@@ -427,24 +416,24 @@ export default function ClassesPage() {
                       required
                       value={form.name}
                       onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
-                      placeholder="e.g. CS101-A"
+                      placeholder="e.g. Level 1-A"
                       className="h-11 w-full rounded-lg border border-gray-200 bg-transparent px-4 py-2.5 text-sm text-gray-800 outline-none placeholder:text-gray-400 focus:border-brand-300 focus:ring-2 focus:ring-brand-500/20 dark:border-gray-700 dark:text-white dark:placeholder:text-gray-500 dark:focus:border-brand-500/40"
                     />
                   </div>
                   <div>
                     <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">
-                      Course <span className="text-error-500">*</span>
+                      Department <span className="text-error-500">*</span>
                     </label>
                     <select
                       required
-                      value={form.courseId}
-                      onChange={(e) => setForm((f) => ({ ...f, courseId: e.target.value }))}
+                      value={form.departmentId}
+                      onChange={(e) => setForm((f) => ({ ...f, departmentId: e.target.value }))}
                       className="h-11 w-full appearance-none rounded-lg border border-gray-200 bg-transparent px-4 py-2.5 text-sm text-gray-800 outline-none focus:border-brand-300 focus:ring-2 focus:ring-brand-500/20 dark:border-gray-700 dark:text-white dark:focus:border-brand-500/40"
                     >
-                      <option value="">Select a course</option>
-                      {courses.map((c) => (
-                        <option key={c.id} value={String(c.id)}>
-                          {c.code} — {c.name}
+                      <option value="">Select a department</option>
+                      {departments.map((d) => (
+                        <option key={d.id} value={String(d.id)}>
+                          {d.code} — {d.name}
                         </option>
                       ))}
                     </select>
@@ -468,17 +457,21 @@ export default function ClassesPage() {
                   </div>
                   <div>
                     <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">
-                      Year <span className="text-error-500">*</span>
+                      Academic Year <span className="text-error-500">*</span>
                     </label>
-                    <input
-                      type="number"
+                    <select
                       required
-                      min={2020}
-                      max={2040}
-                      value={form.year}
-                      onChange={(e) => setForm((f) => ({ ...f, year: e.target.value }))}
-                      className="h-11 w-full rounded-lg border border-gray-200 bg-transparent px-4 py-2.5 text-sm text-gray-800 outline-none focus:border-brand-300 focus:ring-2 focus:ring-brand-500/20 dark:border-gray-700 dark:text-white dark:focus:border-brand-500/40"
-                    />
+                      value={form.academicYearId}
+                      onChange={(e) => setForm((f) => ({ ...f, academicYearId: e.target.value }))}
+                      className="h-11 w-full appearance-none rounded-lg border border-gray-200 bg-transparent px-4 py-2.5 text-sm text-gray-800 outline-none focus:border-brand-300 focus:ring-2 focus:ring-brand-500/20 dark:border-gray-700 dark:text-white dark:focus:border-brand-500/40"
+                    >
+                      <option value="">Select academic year</option>
+                      {academicYears.map((ay) => (
+                        <option key={ay.id} value={String(ay.id)}>
+                          {ay.name}
+                        </option>
+                      ))}
+                    </select>
                   </div>
                   <div>
                     <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">

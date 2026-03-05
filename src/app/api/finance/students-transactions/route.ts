@@ -48,7 +48,7 @@ export async function GET(req: NextRequest) {
       where,
       include: {
         department: { select: { id: true, name: true, code: true, tuitionFee: true } },
-        class: { select: { id: true, name: true, semester: true, year: true, course: { select: { code: true } } } },
+        class: { select: { id: true, name: true, semester: true, year: true, department: { select: { code: true } } } },
         tuitionPayments: {
           where: Object.keys(paymentWhere).length > 0 ? paymentWhere : undefined,
           select: { id: true, semester: true, year: true, amount: true, paidAt: true },

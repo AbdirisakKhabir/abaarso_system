@@ -32,6 +32,9 @@ type ExamRecord = {
   gradePoints: number | null;
   student: { studentId: string; firstName: string; lastName: string; department: { code: string } };
   course: { code: string; name: string; creditHours: number };
+  attendancePercent?: number;
+  attendanceMarks?: number;
+  totalSessions?: number;
 };
 
 type SemesterOption = { id: number; name: string; sortOrder: number; isActive: boolean };
@@ -82,7 +85,7 @@ export default function ExamReportPage() {
     fetchReport();
   }, [fetchReport]);
 
-  const filteredClasses = filterDept ? classes.filter((c) => c.course?.department?.id === Number(filterDept)) : classes;
+  const filteredClasses = filterDept ? classes.filter((c) => c.department?.id === Number(filterDept)) : classes;
   const currentYear = new Date().getFullYear();
 
   const handlePrint = () => window.print();
@@ -129,7 +132,7 @@ export default function ExamReportPage() {
                 <option value="">All Classes</option>
                 {filteredClasses.map((c) => (
                   <option key={c.id} value={c.id}>
-                    {c.course?.code} - {c.name} ({c.semester} {c.year})
+                    {c.department?.code} - {c.name} ({c.semester} {c.year})
                   </option>
                 ))}
               </select>

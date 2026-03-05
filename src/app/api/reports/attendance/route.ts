@@ -15,10 +15,10 @@ export async function GET(req: NextRequest) {
     const dateFrom = searchParams.get("dateFrom");
     const dateTo = searchParams.get("dateTo");
 
-    const where: { classId?: number; class?: { course?: { departmentId?: number } }; date?: { gte?: Date; lte?: Date } } = {};
+    const where: { classId?: number; class?: { departmentId?: number }; date?: { gte?: Date; lte?: Date } } = {};
 
     if (departmentId) {
-      where.class = { course: { departmentId: Number(departmentId) } };
+      where.class = { departmentId: Number(departmentId) };
     }
     if (classId) {
       where.classId = Number(classId);
@@ -38,9 +38,7 @@ export async function GET(req: NextRequest) {
             name: true,
             semester: true,
             year: true,
-            course: {
-              select: { id: true, name: true, code: true, department: { select: { id: true, name: true, code: true } } },
-            },
+            department: { select: { id: true, name: true, code: true } },
           },
         },
         takenBy: { select: { id: true, name: true, email: true } },

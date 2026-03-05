@@ -22,7 +22,7 @@ export async function GET(req: NextRequest, ctx: RouteContext) {
       where: { id },
       include: {
         department: { select: { id: true, name: true, code: true } },
-        class: { select: { id: true, name: true, semester: true, year: true, course: { select: { code: true } } } },
+        class: { select: { id: true, name: true, semester: true, year: true, department: { select: { code: true } } } },
       },
     });
 
@@ -125,7 +125,7 @@ export async function PATCH(req: NextRequest, ctx: RouteContext) {
       data,
       include: {
         department: { select: { id: true, name: true, code: true } },
-        class: { select: { id: true, name: true, semester: true, year: true, course: { select: { code: true } } } },
+        class: { select: { id: true, name: true, semester: true, year: true, department: { select: { code: true } } } },
       },
     });
 

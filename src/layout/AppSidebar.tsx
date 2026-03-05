@@ -144,6 +144,7 @@ const hrItems: NavItem[] = [
       { name: "Employees", path: "/hr/employees", permission: "hr.view" },
       { name: "Positions", path: "/hr/positions", permission: "hr.view" },
       { name: "Payroll Requests", path: "/hr/payroll", permission: "payroll.view" },
+      { name: "HR Report", path: "/reports/hr", permission: "hr.view" },
     ],
   },
 ];
@@ -166,6 +167,18 @@ const reportsItems: NavItem[] = [
     name: "Exam Report",
     path: "/reports/exam",
     permission: "reports.view",
+  },
+  {
+    icon: <UserCircleIcon />,
+    name: "Lecturer Report",
+    path: "/reports/lecturers",
+    permission: "lecturers.view",
+  },
+  {
+    icon: <UserCircleIcon />,
+    name: "HR Report",
+    path: "/reports/hr",
+    permission: "hr.view",
   },
   {
     icon: <DollarLineIcon />,

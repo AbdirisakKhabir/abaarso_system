@@ -21,14 +21,7 @@ export async function GET(req: NextRequest, ctx: RouteContext) {
     const cls = await prisma.class.findUnique({
       where: { id },
       include: {
-        course: {
-          select: {
-            id: true,
-            name: true,
-            code: true,
-            department: { select: { id: true, name: true, code: true } },
-          },
-        },
+        department: { select: { id: true, name: true, code: true } },
       },
     });
 
@@ -63,12 +56,12 @@ export async function PATCH(req: NextRequest, ctx: RouteContext) {
     const data: Record<string, unknown> = {};
 
     if (body.name !== undefined) data.name = String(body.name).trim();
-    if (body.courseId !== undefined) {
-      const cid = Number(body.courseId);
-      if (!Number.isInteger(cid)) {
-        return NextResponse.json({ error: "Invalid courseId" }, { status: 400 });
+    if (body.departmentId !== undefined) {
+      const did = Number(body.departmentId);
+      if (!Number.isInteger(did)) {
+        return NextResponse.json({ error: "Invalid departmentId" }, { status: 400 });
       }
-      data.courseId = cid;
+      data.departmentId = did;
     }
     if (body.semester !== undefined) {
       const sem = String(body.semester).trim();
@@ -99,14 +92,7 @@ export async function PATCH(req: NextRequest, ctx: RouteContext) {
       where: { id },
       data,
       include: {
-        course: {
-          select: {
-            id: true,
-            name: true,
-            code: true,
-            department: { select: { id: true, name: true, code: true } },
-          },
-        },
+        department: { select: { id: true, name: true, code: true } },
       },
     });
 

@@ -14,7 +14,8 @@ import { authFetch } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import { PlusIcon, TrashBinIcon, PencilIcon, DownloadIcon } from "@/icons";
 
-const DAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+// Match ATU schedule sheet: Saturday, Sunday, Monday, Tuesday, Wednesday, Thursday (Friday often OFF)
+const DAYS = ["Saturday", "Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday"];
 const SHIFTS = ["Morning", "Afternoon", "Evening"];
 const TIME_PRESETS = [
   "08:00-09:30",
@@ -22,38 +23,66 @@ const TIME_PRESETS = [
   "11:00-12:30",
   "14:00-15:30",
   "15:30-17:00",
+  "16:00-19:00",  // 4:00-7:00pm
+  "19:00-22:00",  // 7:00-10:00pm
 ];
 
+type DepartmentOption = { id: number; name: string; code: string };
 type ClassOption = {
   id: number;
   name: string;
-  courseId: number;
-  course: { id: number; name: string; code: string };
+  departmentId: number;
+  department: { id: number; name: string; code: string };
   semester: string;
   year: number;
 };
 
+type CourseOption = { id: number; name: string; code: string; departmentId: number };
 type LecturerOption = { id: number; name: string; email: string };
 
 type ScheduleSlot = {
   id: string;
   classId: number;
+  courseId?: number;
   lecturerId: number;
   dayOfWeek: string;
   shift: string;
   startTime: string;
   endTime: string;
   room: string;
+  course?: { code: string; name: string };
+  lecturer?: { name: string };
 };
+
+/** Format 24h time to 12h am/pm (e.g. "19:00" -> "7:00pm") */
+function formatTime12h(time: string): string {
+  if (!time || time === "OFF") return time;
+  const [h, m] = time.split(":").map(Number);
+  const h12 = h === 0 ? 12 : h > 12 ? h - 12 : h;
+  const ampm = h < 12 ? "am" : "pm";
+  return `${h12}:${String(m || 0).padStart(2, "0")}${ampm}`;
+}
+
+/** Format time range for display (e.g. "7:00-10:00pm") */
+function formatTimeRange(start: string, end: string): string {
+  if (!start || !end) return "—";
+  return `${formatTime12h(start)}-${formatTime12h(end)}`;
+}
 
 export default function SchedulePage() {
   const { hasPermission } = useAuth();
+  const [departments, setDepartments] = useState<DepartmentOption[]>([]);
   const [semesters, setSemesters] = useState<{ id: number; name: string }[]>([]);
   const [classes, setClasses] = useState<ClassOption[]>([]);
+  const [courses, setCourses] = useState<CourseOption[]>([]);
   const [lecturersByCourse, setLecturersByCourse] = useState<Record<number, LecturerOption[]>>({});
   const [slots, setSlots] = useState<ScheduleSlot[]>([]);
+  const [departmentId, setDepartmentId] = useState("");
+  const [classId, setClassId] = useState("");
   const [semester, setSemester] = useState("");
-  const [year, setYear] = useState(String(new Date().getFullYear()));
+  const [academicYears, setAcademicYears] = useState<{ id: number; startYear: number; endYear: number; name: string }[]>([]);
+  const [academicYearId, setAcademicYearId] = useState("");
+  const year = academicYears.find((ay) => String(ay.id) === academicYearId)?.endYear ?? new Date().getFullYear();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -62,6 +91,7 @@ export default function SchedulePage() {
   const [form, setForm] = useState<ScheduleSlot>({
     id: "",
     classId: 0,
+    courseId: 0,
     lecturerId: 0,
     dayOfWeek: DAYS[0],
     shift: SHIFTS[0],
@@ -74,7 +104,13 @@ export default function SchedulePage() {
   const canView = hasPermission("schedule.view");
   const canDelete = hasPermission("schedule.delete");
 
-  const filteredClasses = classes.filter((c) => c.semester === semester && c.year === Number(year));
+  const filteredClasses = classes.filter(
+    (c) => c.semester === semester && c.year === Number(year) && (!departmentId || c.department?.id === Number(departmentId))
+  );
+  const selectedClass = filteredClasses.find((c) => c.id === Number(classId));
+  const coursesForClass = selectedClass
+    ? courses.filter((c) => c.departmentId === selectedClass.departmentId)
+    : [];
 
   const loadSemesters = useCallback(async () => {
     const res = await authFetch("/api/semesters?active=true");
@@ -90,6 +126,26 @@ export default function SchedulePage() {
     if (res.ok) setClasses(await res.json());
   }, []);
 
+  const loadCourses = useCallback(async () => {
+    const res = await authFetch("/api/courses");
+    if (res.ok) setCourses(await res.json());
+  }, []);
+
+  const loadAcademicYears = useCallback(async () => {
+    const res = await authFetch("/api/academic-years");
+    if (res.ok) {
+      const data = await res.json();
+      setAcademicYears(data);
+      if (data.length > 0) {
+        setAcademicYearId((prev) => {
+          if (prev) return prev;
+          const current = data.find((ay: { endYear: number }) => ay.endYear >= new Date().getFullYear()) ?? data[data.length - 1];
+          return String(current.id);
+        });
+      }
+    }
+  }, []);
+
   const loadLecturersForCourse = useCallback(async (courseId: number) => {
     const res = await authFetch(`/api/lecturers/by-course/${courseId}`);
     if (res.ok) {
@@ -100,48 +156,60 @@ export default function SchedulePage() {
 
   const loadSchedules = useCallback(async () => {
     if (!semester || !year) return;
-    const res = await authFetch(`/api/schedules?semester=${encodeURIComponent(semester)}&year=${year}`);
+    const params = new URLSearchParams({ semester, year: String(year) });
+    if (classId) params.set("classId", classId);
+    const res = await authFetch(`/api/schedules?${params.toString()}`);
     if (res.ok) {
       const data = await res.json();
       setSlots(
-        data.map((s: { id: number; classId: number; lecturerId: number; dayOfWeek: string; shift: string; startTime: string; endTime: string; room: string | null }) => ({
+        data.map((s: { id: number; classId: number; courseId?: number; lecturerId: number; dayOfWeek: string; shift: string; startTime: string; endTime: string; room: string | null; course?: { code: string; name: string }; lecturer?: { name: string } }) => ({
           id: `existing-${s.id}`,
           classId: s.classId,
+          courseId: s.courseId,
           lecturerId: s.lecturerId,
           dayOfWeek: s.dayOfWeek,
           shift: s.shift,
           startTime: s.startTime,
           endTime: s.endTime,
           room: s.room ?? "",
+          course: s.course ? { code: s.course.code, name: s.course.name } : undefined,
+          lecturer: s.lecturer ? { name: s.lecturer.name } : undefined,
         }))
       );
     } else {
       setSlots([]);
     }
-  }, [semester, year]);
+  }, [semester, year, classId]);
+
+  const loadDepartments = useCallback(async () => {
+    const res = await authFetch("/api/departments");
+    if (res.ok) setDepartments(await res.json());
+  }, []);
 
   useEffect(() => {
     (async () => {
       setLoading(true);
-      await Promise.all([loadSemesters(), loadClasses()]);
+      await Promise.all([loadDepartments(), loadSemesters(), loadClasses(), loadCourses(), loadAcademicYears()]);
       setLoading(false);
     })();
-  }, [loadSemesters, loadClasses]);
+  }, [loadDepartments, loadSemesters, loadClasses, loadCourses, loadAcademicYears]);
 
   useEffect(() => {
     if (semester && year) loadSchedules();
   }, [semester, year, loadSchedules]);
 
   useEffect(() => {
-    [...new Set(classes.map((c) => c.courseId))].forEach(loadLecturersForCourse);
-  }, [classes, loadLecturersForCourse]);
+    courses.forEach((c) => loadLecturersForCourse(c.id));
+  }, [courses, loadLecturersForCourse]);
 
   function openAdd() {
+    if (!classId) return;
     setModal("add");
     setEditingSlotId(null);
     setForm({
       id: "",
-      classId: filteredClasses[0]?.id ?? 0,
+      classId: Number(classId),
+      courseId: coursesForClass[0]?.id ?? 0,
       lecturerId: 0,
       dayOfWeek: DAYS[0],
       shift: SHIFTS[0],
@@ -173,14 +241,14 @@ export default function SchedulePage() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError("");
-    const cls = filteredClasses.find((c) => c.id === form.classId) ?? classes.find((c) => c.id === form.classId);
-    const lecturers = lecturersByCourse[cls?.courseId ?? 0] ?? [];
+    const courseId = form.courseId ?? 0;
+    const lecturers = lecturersByCourse[courseId] ?? [];
     if (lecturers.length > 0 && !lecturers.some((l) => l.id === form.lecturerId)) {
       setError("Select a lecturer assigned to this course. Assign in Lecturers page first.");
       return;
     }
-    if (!form.classId || !form.lecturerId || !form.startTime || !form.endTime) {
-      setError("Class, Lecturer, and Time are required.");
+    if (!form.classId || !courseId || !form.lecturerId || !form.startTime || !form.endTime) {
+      setError("Class, Course, Lecturer, and Time are required.");
       return;
     }
 
@@ -188,6 +256,7 @@ export default function SchedulePage() {
     try {
       const payload = {
         classId: form.classId,
+        courseId,
         lecturerId: form.lecturerId,
         dayOfWeek: form.dayOfWeek,
         shift: form.shift,
@@ -208,10 +277,12 @@ export default function SchedulePage() {
           return;
         }
       } else if (modal === "edit" && form.id.startsWith("existing-")) {
+        const patchPayload = { ...payload };
+        if (form.courseId) patchPayload.courseId = form.courseId;
         const res = await authFetch(`/api/schedules/${form.id.replace("existing-", "")}`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
+          body: JSON.stringify(patchPayload),
         });
         if (!res.ok) {
           const data = await res.json();
@@ -234,28 +305,40 @@ export default function SchedulePage() {
   }
 
   function handlePrintSchedules() {
-    const slotsByClass = filteredClasses.map((cls) => {
-      const classSlots = slots.filter((s) => s.classId === cls.id);
-      return { class: cls, slots: classSlots };
-    });
-
-    const sheetsHtml = slotsByClass
-      .map(({ class: cls, slots: classSlots }) => {
-        const rows = classSlots
-          .map(
-            (s) => {
-              const lecturer = lecturersByCourse[cls.courseId]?.find((l) => l.id === s.lecturerId);
-              return `<tr><td>${s.dayOfWeek}</td><td>${s.shift}</td><td>${s.startTime} – ${s.endTime}</td><td>${lecturer?.name ?? "—"}</td><td>${s.room || "—"}</td></tr>`;
-            }
-          )
-          .join("");
+    const targetClasses = classId ? filteredClasses.filter((c) => c.id === Number(classId)) : filteredClasses;
+    const sheetsHtml = targetClasses
+      .map((cls) => {
+        const classSlots = slots.filter((s) => s.classId === cls.id);
+        const slotsByDay = DAYS.map((day) => classSlots.filter((s) => s.dayOfWeek === day));
+        let rowNum = 0;
+        const rows = DAYS.flatMap((day, dayIdx) => {
+          const daySlots = slotsByDay[dayIdx];
+          if (daySlots.length === 0) {
+            rowNum++;
+            return `<tr><td class="tc">${rowNum}</td><td>${day}</td><td>OFF</td><td>OFF</td><td>OFF</td><td>OFF</td></tr>`;
+          }
+          return daySlots.map((s) => {
+            rowNum++;
+            const lecturer = lecturersByCourse[(s as ScheduleSlot).courseId ?? 0]?.find((l) => l.id === s.lecturerId);
+            const code = s.course?.code ?? "—";
+            const name = s.course?.name ?? "—";
+            return `<tr><td class="tc">${rowNum}</td><td>${day}</td><td>${formatTimeRange(s.startTime, s.endTime)}</td><td>${code}</td><td>${name}</td><td>${lecturer?.name ?? "—"}</td></tr>`;
+          });
+        }).join("");
+        const deptName = cls.department?.name ?? "";
+        const deptCode = cls.department?.code ?? "";
         return `
           <div class="print-sheet">
-            <h2 class="sheet-title">${cls.name} (${cls.course.code})</h2>
-            <p class="sheet-meta">${semester} ${year}</p>
+            <div class="sheet-header">
+              <h1>ABAARSO TECH UNIVERSITY BERBERA</h1>
+              <p class="sub">ACADEMIC OFFICE</p>
+              <h2>SCHEDULE</h2>
+              <p class="meta">Department: ${deptCode} - ${deptName} | Semester: ${cls.semester} ${cls.year}</p>
+              <p class="meta">Starting Date: 1st November, ${year} — Ending Date: 5th February, ${Number(year) + 1}</p>
+            </div>
             <table class="sheet-table">
-              <thead><tr><th>Day</th><th>Shift</th><th>Time</th><th>Lecturer</th><th>Room</th></tr></thead>
-              <tbody>${rows || "<tr><td colspan='5'>No schedule slots</td></tr>"}</tbody>
+              <thead><tr><th>S/No</th><th>DAY</th><th>TIME</th><th>C. CODE</th><th>COURSE</th><th>LECTURER</th></tr></thead>
+              <tbody>${rows || "<tr><td colspan='6'>No schedule slots</td></tr>"}</tbody>
             </table>
           </div>
         `;
@@ -268,29 +351,24 @@ export default function SchedulePage() {
       <!DOCTYPE html>
       <html>
         <head>
-          <title>Class Schedules - ${semester} ${year}</title>
+          <title>Schedule - ${semester} ${year}</title>
           <style>
             body { font-family: system-ui, sans-serif; margin: 0; padding: 20px; color: #111; }
             .print-sheet { page-break-after: always; margin-bottom: 24px; }
             .print-sheet:last-child { page-break-after: auto; }
             .sheet-header { text-align: center; margin-bottom: 24px; border-bottom: 2px solid #333; padding-bottom: 12px; }
-            .sheet-header h1 { margin: 0; font-size: 22px; }
-            .sheet-header p { margin: 4px 0 0; font-size: 14px; color: #555; }
-            .sheet-title { margin: 0 0 4px; font-size: 18px; }
-            .sheet-meta { margin: 0 0 12px; font-size: 14px; color: #555; }
+            .sheet-header h1 { margin: 0; font-size: 20px; }
+            .sheet-header .sub { margin: 4px 0 0; font-size: 14px; color: #555; }
+            .sheet-header h2 { margin: 16px 0 8px; font-size: 18px; }
+            .sheet-header .meta { margin: 4px 0; font-size: 13px; color: #555; }
             .sheet-table { width: 100%; border-collapse: collapse; font-size: 13px; }
             .sheet-table th, .sheet-table td { border: 1px solid #333; padding: 8px 12px; text-align: left; }
+            .sheet-table td.tc { text-align: center; }
             .sheet-table th { background: #f5f5f5; font-weight: 600; }
             @media print { body { padding: 0; } .print-sheet { margin-bottom: 0; } }
           </style>
         </head>
-        <body>
-          <div class="sheet-header">
-            <h1>ATU Berbera – Class Schedule</h1>
-            <p>${semester} ${year}</p>
-          </div>
-          ${sheetsHtml}
-        </body>
+        <body>${sheetsHtml}</body>
       </html>
     `);
     printWindow.document.close();
@@ -299,9 +377,7 @@ export default function SchedulePage() {
     printWindow.close();
   }
 
-  const lecturersForForm = lecturersByCourse[
-    (filteredClasses.find((c) => c.id === form.classId) ?? classes.find((c) => c.id === form.classId))?.courseId ?? 0
-  ] ?? [];
+  const lecturersForForm = lecturersByCourse[form.courseId ?? 0] ?? [];
 
   const lecturerMismatch = form.lecturerId > 0 && lecturersForForm.length > 0 && !lecturersForForm.some((l) => l.id === form.lecturerId);
 
@@ -322,8 +398,36 @@ export default function SchedulePage() {
         <PageBreadCrumb pageTitle="Semester Schedule" />
       </div>
 
-      {/* Semester & Year */}
+      {/* Filters: Department, Class, Semester, Year - match ATU sheet */}
       <div className="mb-6 flex flex-wrap items-end gap-4 rounded-2xl border border-gray-200 bg-white p-4 dark:border-gray-800 dark:bg-white/3">
+        <div>
+          <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">Department</label>
+          <select
+            value={departmentId}
+            onChange={(e) => { setDepartmentId(e.target.value); setClassId(""); }}
+            disabled={loading}
+            className="h-10 min-w-[160px] rounded-lg border border-gray-200 bg-transparent px-4 text-sm outline-none focus:border-brand-500 dark:border-gray-700 dark:bg-gray-800/50"
+          >
+            <option value="">All Departments</option>
+            {departments.map((d) => (
+              <option key={d.id} value={d.id}>{d.code} - {d.name}</option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">Class</label>
+          <select
+            value={classId}
+            onChange={(e) => setClassId(e.target.value)}
+            disabled={loading}
+            className="h-10 min-w-[180px] rounded-lg border border-gray-200 bg-transparent px-4 text-sm outline-none focus:border-brand-500 dark:border-gray-700 dark:bg-gray-800/50"
+          >
+            <option value="">All Classes</option>
+            {filteredClasses.map((c) => (
+              <option key={c.id} value={c.id}>{c.name} ({c.department?.code ?? ""})</option>
+            ))}
+          </select>
+        </div>
         <div>
           <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">Semester</label>
           <select
@@ -338,15 +442,18 @@ export default function SchedulePage() {
           </select>
         </div>
         <div>
-          <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">Year</label>
-          <input
-            type="number"
-            value={year}
-            onChange={(e) => setYear(e.target.value)}
-            min={2020}
-            max={2030}
-            className="h-10 w-24 rounded-lg border border-gray-200 bg-transparent px-4 text-sm outline-none focus:border-brand-500 dark:border-gray-700 dark:bg-gray-800/50"
-          />
+          <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">Academic Year</label>
+          <select
+            value={academicYearId}
+            onChange={(e) => setAcademicYearId(e.target.value)}
+            disabled={loading}
+            className="h-10 min-w-[140px] rounded-lg border border-gray-200 bg-transparent px-4 text-sm outline-none focus:border-brand-500 dark:border-gray-700 dark:bg-gray-800/50"
+          >
+            <option value="">Select year</option>
+            {academicYears.map((ay) => (
+              <option key={ay.id} value={ay.id}>{ay.name}</option>
+            ))}
+          </select>
         </div>
         <div className="flex gap-2">
           <Button
@@ -356,10 +463,10 @@ export default function SchedulePage() {
             size="sm"
             disabled={loading || filteredClasses.length === 0}
           >
-            Print Class Schedules
+            Print Schedule
           </Button>
           {canCreate && (
-            <Button startIcon={<PlusIcon />} onClick={openAdd} size="sm" disabled={loading || filteredClasses.length === 0}>
+            <Button startIcon={<PlusIcon />} onClick={openAdd} size="sm" disabled={loading || !classId || filteredClasses.length === 0}>
               Add Slot
             </Button>
           )}
@@ -376,67 +483,109 @@ export default function SchedulePage() {
           <div className="rounded-xl border-2 border-dashed border-gray-200 py-12 text-center dark:border-gray-700">
             <p className="text-sm text-gray-500 dark:text-gray-400">Create classes first in the Classes page.</p>
           </div>
-        ) : slots.length === 0 ? (
+        ) : !classId ? (
           <div className="rounded-xl border-2 border-dashed border-gray-200 py-12 text-center dark:border-gray-700">
-            <p className="mb-4 text-sm text-gray-500 dark:text-gray-400">No schedule slots yet.</p>
-            {canCreate && (
-              <Button startIcon={<PlusIcon />} onClick={openAdd} size="sm">Add First Slot</Button>
-            )}
+            <p className="text-sm text-gray-500 dark:text-gray-400">Select a Department and Class to view or edit the schedule.</p>
           </div>
         ) : (
           <Table>
             <TableHeader>
               <TableRow className="bg-transparent! hover:bg-transparent!">
-                <TableCell isHeader>Class</TableCell>
-                <TableCell isHeader>Lecturer</TableCell>
+                <TableCell isHeader className="w-14">S/No</TableCell>
                 <TableCell isHeader>Day</TableCell>
-                <TableCell isHeader>Shift</TableCell>
                 <TableCell isHeader>Time</TableCell>
-                <TableCell isHeader>Room</TableCell>
+                <TableCell isHeader>C. Code</TableCell>
+                <TableCell isHeader>Course</TableCell>
+                <TableCell isHeader>Lecturer</TableCell>
                 {canCreate && <TableCell isHeader className="text-right">Actions</TableCell>}
               </TableRow>
             </TableHeader>
             <TableBody>
-              {slots.map((slot) => {
-                const cls = filteredClasses.find((c) => c.id === slot.classId) ?? classes.find((c) => c.id === slot.classId);
-                const lecturer = lecturersByCourse[cls?.courseId ?? 0]?.find((l) => l.id === slot.lecturerId);
-                return (
-                  <TableRow key={slot.id}>
-                    <TableCell className="font-medium">
-                      {cls ? `${cls.name} (${cls.course.code})` : "—"}
-                    </TableCell>
-                    <TableCell>{lecturer?.name ?? "—"}</TableCell>
-                    <TableCell>{slot.dayOfWeek}</TableCell>
-                    <TableCell>{slot.shift}</TableCell>
-                    <TableCell>{slot.startTime} – {slot.endTime}</TableCell>
-                    <TableCell>{slot.room || "—"}</TableCell>
-                    {canCreate && (
-                      <TableCell className="text-right">
-                        <div className="inline-flex gap-1">
-                          <button
-                            type="button"
-                            onClick={() => openEdit(slot)}
-                            className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-gray-400 transition-colors hover:bg-brand-50 hover:text-brand-500 dark:hover:bg-brand-500/10"
-                            aria-label="Edit"
-                          >
-                            <PencilIcon className="h-4 w-4" />
-                          </button>
-                          {canDelete && slot.id.startsWith("existing-") && (
-                            <button
-                              type="button"
-                              onClick={() => handleDelete(slot)}
-                              className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-gray-400 transition-colors hover:bg-error-50 hover:text-error-500 dark:hover:bg-error-500/10"
-                              aria-label="Delete"
+              {(() => {
+                const classSlots = classId ? slots.filter((s) => s.classId === Number(classId)) : slots;
+                const slotsByDay = DAYS.map((day) => classSlots.filter((s) => s.dayOfWeek === day));
+                let rowNum = 0;
+                return DAYS.flatMap((day, dayIdx) => {
+                  const daySlots = slotsByDay[dayIdx];
+                  if (daySlots.length === 0) {
+                    rowNum++;
+                    return (
+                      <TableRow key={`${day}-off`}>
+                        <TableCell className="text-center font-medium">{rowNum}</TableCell>
+                        <TableCell>{day}</TableCell>
+                        <TableCell>OFF</TableCell>
+                        <TableCell>OFF</TableCell>
+                        <TableCell>OFF</TableCell>
+                        <TableCell>OFF</TableCell>
+                        {canCreate && (
+                          <TableCell className="text-right">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => {
+                                setForm({
+                                  id: "",
+                                  classId: Number(classId),
+                                  courseId: coursesForClass[0]?.id ?? 0,
+                                  lecturerId: 0,
+                                  dayOfWeek: day,
+                                  shift: SHIFTS[0],
+                                  startTime: "09:00",
+                                  endTime: "10:30",
+                                  room: "",
+                                });
+                                setModal("add");
+                                setEditingSlotId(null);
+                                setError("");
+                              }}
                             >
-                              <TrashBinIcon className="h-4 w-4" />
-                            </button>
-                          )}
-                        </div>
-                      </TableCell>
-                    )}
-                  </TableRow>
-                );
-              })}
+                              Add
+                            </Button>
+                          </TableCell>
+                        )}
+                      </TableRow>
+                    );
+                  }
+                  return daySlots.map((slot) => {
+                    rowNum++;
+                    const lecturer = slot.lecturer?.name ?? lecturersByCourse[(slot as ScheduleSlot).courseId ?? 0]?.find((l) => l.id === slot.lecturerId)?.name;
+                    return (
+                      <TableRow key={slot.id}>
+                        <TableCell className="text-center font-medium">{rowNum}</TableCell>
+                        <TableCell>{day}</TableCell>
+                        <TableCell>{formatTimeRange(slot.startTime, slot.endTime)}</TableCell>
+                        <TableCell>{slot.course?.code ?? "—"}</TableCell>
+                        <TableCell>{slot.course?.name ?? "—"}</TableCell>
+                        <TableCell>{lecturer ?? "—"}</TableCell>
+                        {canCreate && (
+                          <TableCell className="text-right">
+                            <div className="inline-flex gap-1">
+                              <button
+                                type="button"
+                                onClick={() => openEdit(slot)}
+                                className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-gray-400 transition-colors hover:bg-brand-50 hover:text-brand-500 dark:hover:bg-brand-500/10"
+                                aria-label="Edit"
+                              >
+                                <PencilIcon className="h-4 w-4" />
+                              </button>
+                              {canDelete && slot.id.startsWith("existing-") && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleDelete(slot)}
+                                  className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-gray-400 transition-colors hover:bg-error-50 hover:text-error-500 dark:hover:bg-error-500/10"
+                                  aria-label="Delete"
+                                >
+                                  <TrashBinIcon className="h-4 w-4" />
+                                </button>
+                              )}
+                            </div>
+                          </TableCell>
+                        )}
+                      </TableRow>
+                    );
+                  });
+                });
+              })()}
             </TableBody>
           </Table>
         )}
@@ -469,20 +618,43 @@ export default function SchedulePage() {
               )}
 
               <div className="space-y-4">
-                <div>
-                  <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">Class</label>
-                  <select
-                    value={form.classId}
-                    onChange={(e) => setForm((f) => ({ ...f, classId: Number(e.target.value), lecturerId: 0 }))}
-                    className="h-10 w-full rounded-lg border border-gray-200 bg-transparent px-3 text-sm outline-none focus:border-brand-500 dark:border-gray-700 dark:bg-gray-800/50"
-                    required
-                  >
-                    <option value={0}>Select class</option>
-                    {filteredClasses.map((c) => (
-                      <option key={c.id} value={c.id}>{c.name} ({c.course.code})</option>
-                    ))}
-                  </select>
-                </div>
+                {classId && selectedClass && (
+                  <div className="rounded-lg bg-gray-50 px-4 py-2 text-sm text-gray-600 dark:bg-gray-800/50 dark:text-gray-400">
+                    Class: <strong>{selectedClass.name}</strong> ({selectedClass.department?.code ?? ""})
+                  </div>
+                )}
+                {coursesForClass.length > 0 && (
+                  <div>
+                    <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">Course</label>
+                    <select
+                      value={form.courseId ?? 0}
+                      onChange={(e) => setForm((f) => ({ ...f, courseId: Number(e.target.value), lecturerId: 0 }))}
+                      className="h-10 w-full rounded-lg border border-gray-200 bg-transparent px-3 text-sm outline-none focus:border-brand-500 dark:border-gray-700 dark:bg-gray-800/50"
+                      required
+                    >
+                      <option value={0}>Select course</option>
+                      {coursesForClass.map((c) => (
+                        <option key={c.id} value={c.id}>{c.code} - {c.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+                {!classId && (
+                  <div>
+                    <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">Class</label>
+                    <select
+                      value={form.classId}
+                      onChange={(e) => setForm((f) => ({ ...f, classId: Number(e.target.value), lecturerId: 0 }))}
+                      className="h-10 w-full rounded-lg border border-gray-200 bg-transparent px-3 text-sm outline-none focus:border-brand-500 dark:border-gray-700 dark:bg-gray-800/50"
+                      required
+                    >
+                      <option value={0}>Select class</option>
+                      {filteredClasses.map((c) => (
+                        <option key={c.id} value={c.id}>{c.name} ({c.department?.code})</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
 
                 <div>
                   <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">Lecturer</label>
@@ -498,7 +670,7 @@ export default function SchedulePage() {
                     {lecturersForForm.map((l) => (
                       <option key={l.id} value={l.id}>{l.name}</option>
                     ))}
-                    {form.classId > 0 && lecturersForForm.length === 0 && (
+                    {(form.courseId ?? 0) > 0 && lecturersForForm.length === 0 && (
                       <option value={0} disabled>No lecturers for this course</option>
                     )}
                   </select>

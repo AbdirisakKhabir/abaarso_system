@@ -21,10 +21,6 @@ export async function GET(req: NextRequest, ctx: RouteContext) {
       where: { id },
       include: {
         department: { select: { id: true, name: true, code: true } },
-        classes: {
-          select: { id: true, name: true, semester: true, year: true, isActive: true },
-          orderBy: [{ year: "desc" }, { semester: "asc" }],
-        },
       },
     });
 
@@ -116,10 +112,10 @@ export async function DELETE(req: NextRequest, ctx: RouteContext) {
       return NextResponse.json({ error: "Invalid ID" }, { status: 400 });
     }
 
-    const count = await prisma.class.count({ where: { courseId: id } });
+    const count = await prisma.classSchedule.count({ where: { courseId: id } });
     if (count > 0) {
       return NextResponse.json(
-        { error: "Cannot delete a course that has classes. Remove classes first." },
+        { error: "Cannot delete a course that has schedule slots. Remove schedule slots first." },
         { status: 400 }
       );
     }

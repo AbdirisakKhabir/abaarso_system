@@ -75,7 +75,7 @@ export default function AdmissionReportPage() {
     fetchReport();
   }, [fetchReport]);
 
-  const filteredClasses = filterDept ? classes.filter((c) => c.course?.department?.id === Number(filterDept)) : classes;
+  const filteredClasses = filterDept ? classes.filter((c) => c.department?.id === Number(filterDept)) : classes;
 
   const handlePrint = () => window.print();
 
@@ -121,7 +121,7 @@ export default function AdmissionReportPage() {
                 <option value="">All Classes</option>
                 {filteredClasses.map((c) => (
                   <option key={c.id} value={c.id}>
-                    {c.course?.code} - {c.name} ({c.semester} {c.year})
+                    {c.department?.code} - {c.name} ({c.semester} {c.year})
                   </option>
                 ))}
               </select>

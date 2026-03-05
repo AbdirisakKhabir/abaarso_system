@@ -34,7 +34,7 @@ export async function GET(req: NextRequest) {
           select: { id: true, name: true, code: true },
         },
         class: {
-          select: { id: true, name: true, semester: true, year: true, course: { select: { code: true } } },
+          select: { id: true, name: true, semester: true, year: true, department: { select: { code: true } } },
         },
       },
       orderBy: { createdAt: "desc" },

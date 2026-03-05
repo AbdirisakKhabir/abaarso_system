@@ -123,6 +123,17 @@ async function main() {
     update: {},
   });
 
+  // Create default academic years
+  const currentYear = new Date().getFullYear();
+  for (let y = currentYear - 2; y <= currentYear + 2; y++) {
+    const name = `${y}-${y + 1}`;
+    await prisma.academicYear.upsert({
+      where: { name },
+      create: { startYear: y, endYear: y + 1, name, isActive: y === currentYear - 1 || y === currentYear },
+      update: {},
+    });
+  }
+
   // Create default semesters (Fall, Spring, Summer)
   const defaultSemesters = [
     { name: "Spring", sortOrder: 1 },

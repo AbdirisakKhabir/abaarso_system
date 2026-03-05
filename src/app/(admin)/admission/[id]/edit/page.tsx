@@ -77,13 +77,13 @@ export default function EditStudentPage() {
         if (classRes.ok) {
           const data = await classRes.json();
           setClasses(
-            data.map((c: { id: number; name: string; semester: string; year: number; course?: { code?: string; department?: { id?: number } } }) => ({
+            data.map((c: { id: number; name: string; semester: string; year: number; department?: { code?: string; id?: number } }) => ({
               id: c.id,
               name: c.name,
               semester: c.semester,
               year: c.year,
-              course: { code: c.course?.code ?? "" },
-              departmentId: c.course?.department?.id ?? 0,
+              department: { code: c.department?.code ?? "" },
+              departmentId: c.department?.id ?? 0,
             }))
           );
         }

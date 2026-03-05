@@ -112,13 +112,13 @@ export default function AdmissionPage() {
     if (res.ok) {
       const data = await res.json();
       setClasses(
-        data.map((c: { id: number; name: string; semester: string; year: number; course: { code: string; department?: { id: number } } }) => ({
+        data.map((c: { id: number; name: string; semester: string; year: number; department: { id: number; code: string } }) => ({
           id: c.id,
           name: c.name,
           semester: c.semester,
           year: c.year,
-          course: { code: c.course?.code ?? "" },
-          departmentId: c.course?.department?.id ?? 0,
+          department: { code: c.department?.code ?? "" },
+          departmentId: c.department?.id ?? 0,
         }))
       );
     }

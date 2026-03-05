@@ -14,16 +14,16 @@ export async function GET(req: NextRequest) {
     const departmentId = searchParams.get("departmentId");
     const semester = searchParams.get("semester");
 
-    const where: { year: number; semester?: string; course?: { departmentId: number } } = {
+    const where: { year: number; semester?: string; departmentId?: number } = {
       year: Number(year),
     };
     if (semester) where.semester = semester;
-    if (departmentId) where.course = { departmentId: Number(departmentId) };
+    if (departmentId) where.departmentId = Number(departmentId);
 
     const classes = await prisma.class.findMany({
       where,
       include: {
-        course: { select: { id: true, name: true, code: true, department: { select: { id: true, name: true, code: true } } } },
+        department: { select: { id: true, name: true, code: true } },
         students: {
           include: {
             tuitionPayments: {
@@ -49,8 +49,7 @@ export async function GET(req: NextRequest) {
         name: cls.name,
         semester: cls.semester,
         year: cls.year,
-        course: cls.course,
-        department: cls.course.department,
+        department: cls.department,
         studentCount,
         paidCount,
         unpaidCount: studentCount - paidCount,

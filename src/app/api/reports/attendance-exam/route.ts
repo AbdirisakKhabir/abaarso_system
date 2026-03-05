@@ -8,10 +8,10 @@ import {
 import { getSemesterDateRange } from "@/lib/semester-dates";
 
 /**
- * GET /api/examinations/record-class?classId=X&courseId=Y
- * Returns class info + course info + all students in the class + their existing exam records
- * for that course. Includes attendance (10% of grade) computed from semester-filtered sessions.
- * Presentation field is pre-filled from attendance when no record exists.
+ * GET /api/reports/attendance-exam?classId=X&courseId=Y
+ * Returns students with attendance (Present, Absent, Late, Excused, %, marks) and exam records
+ * for the selected class and course. Attendance is filtered by class semester/year.
+ * courseId is optional - if provided, includes exam record for that course only.
  */
 export async function GET(req: NextRequest) {
   try {
@@ -23,21 +23,16 @@ export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url);
     const classId = searchParams.get("classId");
     const courseId = searchParams.get("courseId");
-    if (!classId || !courseId) {
+
+    if (!classId) {
       return NextResponse.json(
-        { error: "classId and courseId are required" },
+        { error: "classId is required" },
         { status: 400 }
       );
     }
 
-    const parsedClassId = Number(classId);
-    const parsedCourseId = Number(courseId);
-    if (!Number.isInteger(parsedClassId) || !Number.isInteger(parsedCourseId)) {
-      return NextResponse.json({ error: "Invalid classId or courseId" }, { status: 400 });
-    }
-
     const cls = await prisma.class.findUnique({
-      where: { id: parsedClassId },
+      where: { id: Number(classId) },
       include: {
         department: { select: { id: true, name: true, code: true } },
       },
@@ -47,63 +42,24 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: "Class not found" }, { status: 404 });
     }
 
-    const course = await prisma.course.findUnique({
-      where: { id: parsedCourseId },
-      include: {
-        department: { select: { id: true, name: true, code: true } },
-      },
-    });
-
-    if (!course || course.departmentId !== cls.departmentId) {
-      return NextResponse.json(
-        { error: "Course not found or does not belong to the class's department" },
-        { status: 400 }
-      );
-    }
-
-    // Get all students in this class (students with classId = this class)
     const students = await prisma.student.findMany({
-      where: { classId: parsedClassId, status: "Admitted" },
+      where: { classId: Number(classId), status: "Admitted" },
       select: {
         id: true,
         studentId: true,
         firstName: true,
         lastName: true,
-        imageUrl: true,
       },
       orderBy: [{ studentId: "asc" }],
     });
 
     const studentIds = students.map((s) => s.id);
 
-    // Fetch existing exam records for this course in this semester
-    const examRecords = await prisma.examRecord.findMany({
-      where: {
-        studentId: { in: studentIds },
-        courseId: parsedCourseId,
-        semester: cls.semester,
-        year: cls.year,
-      },
-      select: {
-        studentId: true,
-        midExam: true,
-        finalExam: true,
-        assessment: true,
-        project: true,
-        assignment: true,
-        presentation: true,
-        totalMarks: true,
-        grade: true,
-        gradePoints: true,
-      },
-    });
-    const examByStudent = new Map(examRecords.map((r) => [r.studentId, r]));
-
-    // Compute attendance for each student (semester-filtered)
+    // Attendance (semester-filtered)
     const { start, end } = getSemesterDateRange(cls.semester, cls.year);
     const sessions = await prisma.attendanceSession.findMany({
       where: {
-        classId: parsedClassId,
+        classId: Number(classId),
         date: { gte: start, lte: end },
       },
       select: { id: true },
@@ -135,8 +91,48 @@ export async function GET(req: NextRequest) {
       else if (r.status === "Excused") agg.excused++;
     }
 
+    // Exam records - optionally filtered by course
+    const examWhere: {
+      studentId: { in: number[] };
+      semester: string;
+      year: number;
+      courseId?: number;
+    } = {
+      studentId: { in: studentIds },
+      semester: cls.semester,
+      year: cls.year,
+    };
+    if (courseId) {
+      examWhere.courseId = Number(courseId);
+    }
+
+    const examRecords = await prisma.examRecord.findMany({
+      where: examWhere,
+      include: {
+        course: { select: { id: true, code: true, name: true } },
+      },
+    });
+
+    const examsByStudent = new Map<number, typeof examRecords>();
+    for (const er of examRecords) {
+      if (!examsByStudent.has(er.studentId)) {
+        examsByStudent.set(er.studentId, []);
+      }
+      examsByStudent.get(er.studentId)!.push(er);
+    }
+
+    const courses = courseId
+      ? await prisma.course.findMany({
+          where: { id: Number(courseId) },
+          select: { id: true, code: true, name: true },
+        })
+      : await prisma.course.findMany({
+          where: { departmentId: cls.departmentId },
+          select: { id: true, code: true, name: true },
+          orderBy: [{ code: "asc" }],
+        });
+
     const rows = students.map((s) => {
-      const exam = examByStudent.get(s.id);
       const agg = byStudent.get(s.id) ?? {
         present: 0,
         absent: 0,
@@ -152,30 +148,7 @@ export async function GET(req: NextRequest) {
         presentPlusExcused,
         totalSessions
       );
-
-      const record = exam
-        ? {
-            midExam: exam.midExam ?? 0,
-            finalExam: exam.finalExam ?? 0,
-            assessment: exam.assessment ?? 0,
-            project: exam.project ?? 0,
-            assignment: exam.assignment ?? 0,
-            presentation: exam.presentation ?? 0,
-            totalMarks: exam.totalMarks ?? 0,
-            grade: exam.grade ?? "",
-            gradePoints: exam.gradePoints ?? 0,
-          }
-        : {
-            midExam: 0,
-            finalExam: 0,
-            assessment: 0,
-            project: 0,
-            assignment: 0,
-            presentation: attendanceMarks,
-            totalMarks: attendanceMarks,
-            grade: "",
-            gradePoints: 0,
-          };
+      const exams = examsByStudent.get(s.id) ?? [];
 
       return {
         student: {
@@ -183,7 +156,6 @@ export async function GET(req: NextRequest) {
           studentId: s.studentId,
           firstName: s.firstName,
           lastName: s.lastName,
-          imageUrl: s.imageUrl,
         },
         attendance: {
           present: agg.present,
@@ -194,30 +166,36 @@ export async function GET(req: NextRequest) {
           attendancePercent,
           attendanceMarks,
         },
-        record,
+        examRecords: exams.map((e) => ({
+          courseId: e.courseId,
+          courseCode: e.course.code,
+          courseName: e.course.name,
+          midExam: e.midExam ?? 0,
+          finalExam: e.finalExam ?? 0,
+          assessment: e.assessment ?? 0,
+          project: e.project ?? 0,
+          assignment: e.assignment ?? 0,
+          presentation: e.presentation ?? 0,
+          totalMarks: e.totalMarks ?? 0,
+          grade: e.grade ?? "",
+          gradePoints: e.gradePoints ?? 0,
+        })),
       };
     });
 
     return NextResponse.json({
-      class: {
-        id: cls.id,
-        name: cls.name,
-        semester: cls.semester,
-        year: cls.year,
-        department: cls.department,
-      },
-      course: {
-        id: course.id,
-        name: course.name,
-        code: course.code,
-        creditHours: course.creditHours,
-        department: course.department,
-      },
+      class: cls,
+      semester: cls.semester,
+      year: cls.year,
       totalSessions,
+      courses,
       rows,
     });
   } catch (e) {
-    console.error("Record class error:", e);
-    return NextResponse.json({ error: "Something went wrong" }, { status: 500 });
+    console.error("Attendance-exam report error:", e);
+    return NextResponse.json(
+      { error: "Something went wrong" },
+      { status: 500 }
+    );
   }
 }

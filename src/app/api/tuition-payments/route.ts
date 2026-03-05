@@ -32,7 +32,7 @@ export async function GET(req: NextRequest) {
             firstName: true,
             lastName: true,
             department: { select: { id: true, name: true, code: true } },
-            class: { select: { id: true, name: true, semester: true, year: true, course: { select: { code: true } } } },
+            class: { select: { id: true, name: true, semester: true, year: true, department: { select: { code: true } } } },
           },
         },
         bank: { select: { id: true, name: true, code: true } },

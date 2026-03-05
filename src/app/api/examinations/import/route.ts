@@ -23,21 +23,32 @@ export async function POST(req: NextRequest) {
     const formData = await req.formData();
     const file = formData.get("file") as File | null;
     const classId = formData.get("classId") as string | null;
+    const courseId = formData.get("courseId") as string | null;
 
-    if (!file || !classId) {
+    if (!file || !classId || !courseId) {
       return NextResponse.json(
-        { error: "file and classId are required" },
+        { error: "file, classId, and courseId are required" },
         { status: 400 }
       );
     }
 
     const cls = await prisma.class.findUnique({
       where: { id: Number(classId) },
-      select: { id: true, courseId: true, semester: true, year: true, course: { select: { code: true, name: true } } },
+      select: { id: true, departmentId: true, semester: true, year: true },
     });
 
     if (!cls) {
       return NextResponse.json({ error: "Class not found" }, { status: 404 });
+    }
+
+    const course = await prisma.course.findUnique({
+      where: { id: Number(courseId) },
+    });
+    if (!course || course.departmentId !== cls.departmentId) {
+      return NextResponse.json(
+        { error: "Course not found or does not belong to the class's department" },
+        { status: 400 }
+      );
     }
 
     const buf = Buffer.from(await file.arrayBuffer());
@@ -158,7 +169,7 @@ export async function POST(req: NextRequest) {
         where: {
           studentId_courseId_semester_year: {
             studentId: student.id,
-            courseId: cls.courseId,
+            courseId: course.id,
             semester: cls.semester,
             year: cls.year,
           },
@@ -175,7 +186,7 @@ export async function POST(req: NextRequest) {
         const rec = await prisma.examRecord.create({
           data: {
             studentId: student.id,
-            courseId: cls.courseId,
+            courseId: course.id,
             semester: cls.semester,
             year: cls.year,
             ...marks,

@@ -13,7 +13,7 @@ type ClassItem = {
   name: string;
   semester: string;
   year: number;
-  course: { code: string; name: string; department?: { id: number } };
+  department: { code: string; name: string; id?: number };
 };
 type StudentItem = {
   id: number;
@@ -21,7 +21,7 @@ type StudentItem = {
   firstName: string;
   lastName: string;
   department: { id: number; name: string; code: string };
-  class?: { id: number; name: string; semester: string; year: number; course: { code: string } };
+  class?: { id: number; name: string; semester: string; year: number; department: { code: string } };
 };
 type ExamRecord = {
   id: number;
@@ -63,7 +63,7 @@ type TranscriptData = {
 };
 
 type ClassTranscriptData = {
-  class: { id: number; name: string; semester: string; year: number; course: { code: string; name: string } };
+  class: { id: number; name: string; semester: string; year: number; department: { code: string; name: string } };
   transcripts: TranscriptData[];
 };
 
@@ -165,7 +165,7 @@ export default function TranscriptPage() {
   }, [mode, fetchTranscript, fetchClassTranscript]);
 
   const filteredClasses = filterDept
-    ? classes.filter((c) => c.course?.department?.id === Number(filterDept))
+    ? classes.filter((c) => c.department?.id === Number(filterDept))
     : classes;
 
   const handlePrint = () => window.print();
@@ -285,7 +285,7 @@ export default function TranscriptPage() {
                 <option value="">Select Class</option>
                 {filteredClasses.map((c) => (
                   <option key={c.id} value={c.id}>
-                    {c.course?.code} - {c.name} ({c.semester} {c.year})
+                    {c.department?.code} - {c.name} ({c.semester} {c.year})
                   </option>
                 ))}
               </select>

@@ -39,7 +39,7 @@ type SearchStudent = {
   balance: number;
   paymentStatus: string;
   department: { name: string; code: string; tuitionFee: number | null };
-  class: { name: string; semester: string; year: number; course: { code: string } } | null;
+  class: { name: string; semester: string; year: number; department: { code: string } } | null;
   tuitionPayments: { semester: string; year: number; amount: number }[];
 };
 
@@ -214,7 +214,7 @@ export default function FinancePage() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `Unpaid_Students_${unpaidClassInfo?.course?.code || "class"}_${unpaidSemester}_${unpaidYear}.csv`;
+    a.download = `Unpaid_Students_${unpaidClassInfo?.department?.code || "class"}_${unpaidSemester}_${unpaidYear}.csv`;
     a.click();
     URL.revokeObjectURL(url);
   };
@@ -624,7 +624,7 @@ export default function FinancePage() {
                 <option value="">Select class</option>
                 {filteredClasses.map((c) => (
                   <option key={c.id} value={c.id}>
-                    {c.course.code} - {c.name} ({c.semester} {c.year})
+                    {c.department.code} - {c.name} ({c.semester} {c.year})
                   </option>
                 ))}
               </select>
@@ -644,7 +644,7 @@ export default function FinancePage() {
             <div className="mb-4 flex flex-wrap items-center justify-between gap-4">
               <div>
                 <p className="font-medium text-gray-800 dark:text-white/90">
-                  {unpaidClassInfo.course.code} - {unpaidClassInfo.name} ({unpaidClassInfo.semester} {unpaidClassInfo.year})
+                  {unpaidClassInfo.department.code} - {unpaidClassInfo.name} ({unpaidClassInfo.semester} {unpaidClassInfo.year})
                 </p>
                 <p className="text-sm text-gray-500 dark:text-gray-400">
                   {unpaidStudents.length} unpaid student{unpaidStudents.length !== 1 ? "s" : ""}

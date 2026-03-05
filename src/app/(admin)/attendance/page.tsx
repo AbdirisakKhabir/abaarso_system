@@ -21,7 +21,7 @@ import { PlusIcon, TrashBinIcon } from "@/icons";
 type ClassOption = {
   id: number;
   name: string;
-  course: { id: number; name: string; code: string };
+  department: { id: number; name: string; code: string };
 };
 
 type SessionRow = {
@@ -122,7 +122,7 @@ export default function AttendancePage() {
         data.map((c: ClassOption & Record<string, unknown>) => ({
           id: c.id,
           name: c.name,
-          course: c.course,
+          department: c.department,
         }))
       );
     }
@@ -303,7 +303,7 @@ export default function AttendancePage() {
             <option value="all">All Classes</option>
             {classes.map((c) => (
               <option key={c.id} value={String(c.id)}>
-                {c.name} ({c.course.code})
+                {c.name} ({c.department.code})
               </option>
             ))}
           </select>
@@ -351,7 +351,7 @@ export default function AttendancePage() {
                         {s.class.name}
                       </p>
                       <p className="text-xs text-gray-400 dark:text-gray-500">
-                        {s.class.course.code}
+                        {s.class.department.code}
                       </p>
                     </div>
                   </TableCell>
@@ -476,7 +476,7 @@ export default function AttendancePage() {
                       <option value="">Select class</option>
                       {classes.map((c) => (
                         <option key={c.id} value={String(c.id)}>
-                          {c.name} ({c.course.code})
+                          {c.name} ({c.department.code})
                         </option>
                       ))}
                     </select>
@@ -703,7 +703,7 @@ export default function AttendancePage() {
                   Attendance Details
                 </h2>
                 <p className="mt-0.5 text-xs text-gray-400 dark:text-gray-500">
-                  {viewSession.class.name} &middot; {viewSession.class.course.code} &middot;{" "}
+                  {viewSession.class.name} &middot; {viewSession.class.department.code} &middot;{" "}
                   {new Date(viewSession.date).toLocaleDateString("en-US", {
                     weekday: "long",
                     month: "long",

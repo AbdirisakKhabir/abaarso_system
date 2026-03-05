@@ -95,25 +95,25 @@ export function TranscriptDocument({
         >
           <tbody>
             <tr>
-              <td className="border border-gray-900 bg-gray-100 px-2 py-0.5 font-semibold w-24">
+              <td className="border border-gray-900 px-2 py-0.5 font-semibold w-24 text-white" style={{ backgroundColor: "#9d003b" }}>
                 College
               </td>
               <td className="border border-gray-900 px-2 py-0.5">{college}</td>
             </tr>
             <tr>
-              <td className="border border-gray-900 bg-gray-100 px-2 py-0.5 font-semibold">
+              <td className="border border-gray-900 px-2 py-0.5 font-semibold text-white" style={{ backgroundColor: "rgba(157, 0, 59, 0.85)" }}>
                 Department
               </td>
               <td className="border border-gray-900 px-2 py-0.5">{department}</td>
             </tr>
             <tr>
-              <td className="border border-gray-900 bg-gray-100 px-2 py-0.5 font-semibold">
+              <td className="border border-gray-900 px-2 py-0.5 font-semibold text-white" style={{ backgroundColor: "rgba(157, 0, 59, 0.7)" }}>
                 Student Name
               </td>
               <td className="border border-gray-900 px-2 py-0.5">{studentName}</td>
             </tr>
             <tr>
-              <td className="border border-gray-900 bg-gray-100 px-2 py-0.5 font-semibold">
+              <td className="border border-gray-900 px-2 py-0.5 font-semibold text-white" style={{ backgroundColor: "rgba(157, 0, 59, 0.65)" }}>
                 Student ID
               </td>
               <td className="border border-gray-900 px-2 py-0.5 font-mono">
@@ -121,7 +121,7 @@ export function TranscriptDocument({
               </td>
             </tr>
             <tr>
-              <td className="border border-gray-900 bg-gray-100 px-2 py-0.5 font-semibold">
+              <td className="border border-gray-900 px-2 py-0.5 font-semibold text-white" style={{ backgroundColor: "rgba(157, 0, 59, 0.4)" }}>
                 Entry Year
               </td>
               <td className="border border-gray-900 px-2 py-0.5">{entryYear}</td>
@@ -215,8 +215,8 @@ export function TranscriptDocument({
               style={{ borderCollapse: "collapse" }}
             >
               <thead>
-                <tr className="bg-gray-100">
-                  <th className="border border-gray-900 px-1.5 py-0.5 text-left font-semibold">
+                <tr>
+                  <th className="border border-gray-900 px-1.5 py-0.5 text-left font-semibold text-white" style={{ backgroundColor: "#9d003b" }}>
                     Course Code
                   </th>
                   <th className="border border-gray-900 px-1.5 py-0.5 text-left font-semibold">
@@ -333,6 +333,19 @@ export function TranscriptDocument({
         <p className="mt-1 text-[10px] text-gray-500 print:text-[9px]">
           Generated: {new Date().toLocaleDateString()}
         </p>
+      </div>
+
+      {/* Signature */}
+      <div className="mt-8 flex justify-end print:mt-8">
+        <div className="w-48 text-right">
+          <div className="mb-1 h-px border-t-2 border-gray-900" />
+          <p className="text-[10px] font-semibold text-gray-700 print:text-[9px]">
+            {TRANSCRIPT_BRAND.officeTitle}
+          </p>
+          <p className="text-[9px] text-gray-500 print:text-[8px]">
+            Authorized Signature
+          </p>
+        </div>
       </div>
     </div>
   );

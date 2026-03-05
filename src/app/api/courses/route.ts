@@ -14,7 +14,6 @@ export async function GET(req: NextRequest) {
         department: {
           select: { id: true, name: true, code: true },
         },
-        _count: { select: { classes: true } },
       },
       orderBy: { name: "asc" },
     });
@@ -29,7 +28,6 @@ export async function GET(req: NextRequest) {
         departmentId: c.departmentId,
         department: c.department,
         isActive: c.isActive,
-        classCount: c._count.classes,
         createdAt: c.createdAt,
       }))
     );

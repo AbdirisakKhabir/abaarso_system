@@ -12,14 +12,7 @@ export async function GET(req: NextRequest) {
 
     const classes = await prisma.class.findMany({
       include: {
-        course: {
-          select: {
-            id: true,
-            name: true,
-            code: true,
-            department: { select: { id: true, name: true, code: true } },
-          },
-        },
+        department: { select: { id: true, name: true, code: true } },
       },
       orderBy: [{ year: "desc" }, { semester: "asc" }, { name: "asc" }],
     });
@@ -42,13 +35,13 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json();
-    const { name, courseId, semester, year, room, schedule, capacity } = body;
-    const parsedCourseId = Number(courseId);
+    const { name, departmentId, semester, year, room, schedule, capacity } = body;
+    const parsedDepartmentId = Number(departmentId);
     const parsedYear = Number(year);
 
-    if (!name || !Number.isInteger(parsedCourseId) || !semester || !Number.isInteger(parsedYear)) {
+    if (!name || !Number.isInteger(parsedDepartmentId) || !semester || !Number.isInteger(parsedYear)) {
       return NextResponse.json(
-        { error: "Name, courseId, semester, and year are required" },
+        { error: "Name, departmentId, semester, and year are required" },
         { status: 400 }
       );
     }
@@ -63,7 +56,7 @@ export async function POST(req: NextRequest) {
     const cls = await prisma.class.create({
       data: {
         name: String(name).trim(),
-        courseId: parsedCourseId,
+        departmentId: parsedDepartmentId,
         semester: String(semester).trim(),
         year: parsedYear,
         room: room || null,
@@ -71,14 +64,7 @@ export async function POST(req: NextRequest) {
         capacity: Number(capacity) > 0 ? Number(capacity) : 40,
       },
       include: {
-        course: {
-          select: {
-            id: true,
-            name: true,
-            code: true,
-            department: { select: { id: true, name: true, code: true } },
-          },
-        },
+        department: { select: { id: true, name: true, code: true } },
       },
     });
 

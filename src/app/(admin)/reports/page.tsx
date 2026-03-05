@@ -12,7 +12,10 @@ export const metadata: Metadata = {
 const reportLinks = [
   { name: "Admission Report", path: "/reports/admission", icon: PageIcon, description: "View students by department and class with status breakdown" },
   { name: "Attendance Report", path: "/reports/attendance", icon: PieChartIcon, description: "View attendance sessions with present/absent/late/excused counts" },
+  { name: "Attendance & Exam Report", path: "/reports/attendance-exam", icon: PieChartIcon, description: "View attendance % and exam results by class with attendance as 10% of grade" },
   { name: "Exam Report", path: "/reports/exam", icon: ListIcon, description: "View exam records by department and class with grade distribution" },
+  { name: "Lecturer Report", path: "/reports/lecturers", icon: PageIcon, description: "View lecturers by department with courses and contact info" },
+  { name: "HR Report", path: "/reports/hr", icon: PageIcon, description: "View employees by position with hire dates and status" },
   { name: "Student Transactions", path: "/reports/student-transactions", icon: DollarLineIcon, description: "View student payment status by department and class" },
   { name: "Class Revenue", path: "/reports/class-revenue", icon: DollarLineIcon, description: "View class revenue with paid/unpaid counts" },
   { name: "Unpaid Students", path: "/reports/unpaid-students", icon: DollarLineIcon, description: "Generate list of students who have not paid for a specific semester and class" },

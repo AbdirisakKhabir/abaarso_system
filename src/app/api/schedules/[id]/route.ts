@@ -19,12 +19,10 @@ export async function PATCH(req: NextRequest, ctx: RouteContext) {
     const body = await req.json();
     const { classId, lecturerId, dayOfWeek, shift, startTime, endTime, room } = body;
 
-    const existing = await prisma.classSchedule.findUnique({ where: { id }, include: { class: { select: { courseId: true } } } });
+    const existing = await prisma.classSchedule.findUnique({ where: { id }, select: { courseId: true, classId: true } });
     if (!existing) return NextResponse.json({ error: "Schedule not found" }, { status: 404 });
 
-    const courseId = body.classId != null
-      ? (await prisma.class.findUnique({ where: { id: Number(body.classId) }, select: { courseId: true } }))?.courseId ?? existing.class.courseId
-      : existing.class.courseId;
+    const courseId = body.courseId != null ? Number(body.courseId) : existing.courseId;
     const finalClassId = body.classId != null ? Number(body.classId) : existing.classId;
     const finalLecturerId = body.lecturerId != null ? Number(body.lecturerId) : existing.lecturerId;
 
@@ -54,7 +52,8 @@ export async function PATCH(req: NextRequest, ctx: RouteContext) {
       where: { id },
       data,
       include: {
-        class: { include: { course: { select: { id: true, name: true, code: true } } } },
+        class: { select: { id: true, name: true } },
+        course: { select: { id: true, name: true, code: true } },
         lecturer: { select: { id: true, name: true, email: true } },
       },
     });

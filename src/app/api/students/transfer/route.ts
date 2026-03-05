@@ -33,7 +33,7 @@ export async function POST(req: NextRequest) {
       where: { id: sid },
       include: {
         department: { select: { id: true, name: true, code: true } },
-        class: { select: { id: true, name: true, semester: true, year: true, course: { select: { code: true } } } },
+        class: { select: { id: true, name: true, semester: true, year: true, department: { select: { code: true } } } },
       },
     });
 
@@ -72,14 +72,13 @@ export async function POST(req: NextRequest) {
         }
         const cls = await prisma.class.findUnique({
           where: { id: cid },
-          include: { course: { select: { departmentId: true } } },
+          include: { department: { select: { id: true } } },
         });
         if (!cls?.isActive) {
           return NextResponse.json({ error: "Class not found or inactive" }, { status: 404 });
         }
-        // Use the class's department if we're also changing department, or ensure student's dept matches
         const effectiveDeptId = data.departmentId ?? student.departmentId;
-        if (cls.course.departmentId !== effectiveDeptId) {
+        if (cls.department.id !== effectiveDeptId) {
           return NextResponse.json(
             { error: "Selected class must belong to the student's department" },
             { status: 400 }
@@ -102,7 +101,7 @@ export async function POST(req: NextRequest) {
             name: true,
             semester: true,
             year: true,
-            course: { select: { code: true, name: true } },
+            department: { select: { code: true, name: true } },
           },
         },
       },

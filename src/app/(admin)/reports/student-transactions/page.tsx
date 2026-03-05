@@ -35,7 +35,7 @@ export default function StudentTransactionsReportPage() {
       firstName: string;
       lastName: string;
       department: { name: string; code: string };
-      class: { course: { code: string }; name: string } | null;
+      class: { department: { code: string }; name: string } | null;
       paidCount: number;
       unpaidCount: number;
       paidSemesters: string[];
@@ -83,7 +83,7 @@ export default function StudentTransactionsReportPage() {
   }, [fetchTransactions]);
 
   const filteredClasses = filterDept
-    ? classes.filter((c) => c.course?.department?.id === Number(filterDept))
+    ? classes.filter((c) => c.department?.id === Number(filterDept))
     : classes;
 
   const handlePrint = () => window.print();
@@ -94,7 +94,7 @@ export default function StudentTransactionsReportPage() {
       t.studentId,
       `${t.firstName} ${t.lastName}`,
       `${t.department?.code} - ${t.department?.name}`,
-      t.class ? `${t.class.course?.code} ${t.class.name}` : "—",
+      t.class ? `${t.class.department?.code} ${t.class.name}` : "—",
       t.paidCount,
       t.unpaidCount,
       t.totalPaid,
@@ -239,7 +239,7 @@ export default function StudentTransactionsReportPage() {
                       </TableCell>
                       <TableCell>{t.firstName} {t.lastName}</TableCell>
                       <TableCell>{t.department?.name} ({t.department?.code})</TableCell>
-                      <TableCell>{t.class ? `${t.class.course?.code} ${t.class.name}` : "—"}</TableCell>
+                      <TableCell>{t.class ? `${t.class.department?.code} ${t.class.name}` : "—"}</TableCell>
                       <TableCell className="text-center">
                         <Badge color="success" size="sm">{t.paidCount}</Badge>
                         {t.paidSemesters.length > 0 && <span className="ml-1 text-xs text-gray-500">{t.paidSemesters.join(", ")}</span>}

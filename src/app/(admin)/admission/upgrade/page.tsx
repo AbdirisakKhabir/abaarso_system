@@ -13,7 +13,7 @@ type ClassOption = {
   name: string;
   semester: string;
   year: number;
-  course: { code: string; department?: { id: number } };
+  department: { code: string; id: number };
 };
 
 type SearchStudent = {
@@ -22,7 +22,7 @@ type SearchStudent = {
   firstName: string;
   lastName: string;
   department: { id: number; name: string; code: string };
-  class: { id: number; name: string; semester: string; year: number; course: { code: string } } | null;
+  class: { id: number; name: string; semester: string; year: number; department: { code: string } } | null;
 };
 
 export default function UpgradeStudentsPage() {
@@ -45,14 +45,14 @@ export default function UpgradeStudentsPage() {
   useEffect(() => {
     authFetch("/api/classes").then(async (r) => {
       if (r.ok) {
-        const d: ClassOption[] = await r.json();
+        const d = await r.json();
         setClasses(
-          d.map((c: ClassOption & { course?: { code?: string; department?: { id: number } } }) => ({
+          d.map((c: { id: number; name: string; semester: string; year: number; department?: { code: string; id: number } }) => ({
             id: c.id,
             name: c.name,
             semester: c.semester,
             year: c.year,
-            course: { code: c.course?.code ?? "", department: c.course?.department },
+            department: { code: c.department?.code ?? "", id: c.department?.id ?? 0 },
           }))
         );
       }
@@ -86,14 +86,14 @@ export default function UpgradeStudentsPage() {
   const targetClass = classes.find((c) => c.id === Number(targetClassId));
 
   // For class upgrade: filter target classes to same department
-  const sourceDeptId = sourceClass?.course?.department?.id;
+  const sourceDeptId = sourceClass?.department?.id;
   const targetClassOptions = sourceClass
-    ? classes.filter((c) => c.course?.department?.id === sourceDeptId && c.id !== Number(sourceClassId))
+    ? classes.filter((c) => c.department?.id === sourceDeptId && c.id !== Number(sourceClassId))
     : classes;
 
   // For single student: filter target classes to student's department
   const targetClassOptionsForStudent = selectedStudent
-    ? classes.filter((c) => c.course?.department?.id === selectedStudent.department.id)
+    ? classes.filter((c) => c.department?.id === selectedStudent.department.id)
     : classes;
 
   const handleUpgrade = async (e: React.FormEvent) => {
@@ -216,7 +216,7 @@ export default function UpgradeStudentsPage() {
                   <option value="">— Select class —</option>
                   {classes.map((c) => (
                     <option key={c.id} value={c.id}>
-                      {c.name} — {c.course.code} ({c.semester} {c.year})
+                      {c.name} — {c.department.code} ({c.semester} {c.year})
                     </option>
                   ))}
                 </select>
@@ -232,7 +232,7 @@ export default function UpgradeStudentsPage() {
                   <option value="">— Select target class —</option>
                   {targetClassOptions.map((c) => (
                     <option key={c.id} value={c.id}>
-                      {c.name} — {c.course.code} ({c.semester} {c.year})
+                      {c.name} — {c.department.code} ({c.semester} {c.year})
                     </option>
                   ))}
                   {sourceClassId && targetClassOptions.length === 0 && (
@@ -301,7 +301,7 @@ export default function UpgradeStudentsPage() {
                   <option value="">— Select target class —</option>
                   {targetClassOptionsForStudent.map((c) => (
                     <option key={c.id} value={c.id}>
-                      {c.name} — {c.course.code} ({c.semester} {c.year})
+                      {c.name} — {c.department.code} ({c.semester} {c.year})
                     </option>
                   ))}
                 </select>

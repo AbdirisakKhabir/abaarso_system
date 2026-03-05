@@ -37,7 +37,7 @@ export async function GET(req: NextRequest) {
             name: true,
             semester: true,
             year: true,
-            course: { select: { code: true, name: true } },
+            department: { select: { code: true, name: true } },
           },
         },
         tuitionPayments: {

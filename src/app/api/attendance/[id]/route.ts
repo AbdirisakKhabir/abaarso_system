@@ -24,7 +24,7 @@ export async function GET(req: NextRequest, ctx: RouteContext) {
           select: {
             id: true,
             name: true,
-            course: { select: { id: true, name: true, code: true } },
+            department: { select: { id: true, name: true, code: true } },
           },
         },
         takenBy: { select: { id: true, name: true, email: true } },
@@ -115,7 +115,7 @@ export async function PATCH(req: NextRequest, ctx: RouteContext) {
           select: {
             id: true,
             name: true,
-            course: { select: { id: true, name: true, code: true } },
+            department: { select: { id: true, name: true, code: true } },
           },
         },
         takenBy: { select: { id: true, name: true, email: true } },

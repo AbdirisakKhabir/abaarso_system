@@ -341,7 +341,7 @@ export default function StudentRegistrationForm({
               <select value={form.classId} onChange={(e) => setForm((f) => ({ ...f, classId: e.target.value }))} className={selectClass}>
                 <option value="">Select class (optional)</option>
                 {classes.filter((c) => !form.departmentId || c.departmentId === Number(form.departmentId)).map((c) => (
-                  <option key={c.id} value={String(c.id)}>{c.course?.code} - {c.name} ({c.semester} {c.year})</option>
+                  <option key={c.id} value={String(c.id)}>{c.department?.code} - {c.name} ({c.semester} {c.year})</option>
                 ))}
               </select>
             </div>

@@ -53,7 +53,7 @@ export async function GET(req: NextRequest) {
           class: {
             select: {
               name: true,
-              course: { select: { code: true, name: true } },
+              department: { select: { code: true, name: true } },
             },
           },
           takenBy: { select: { name: true } },

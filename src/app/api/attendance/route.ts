@@ -30,7 +30,7 @@ export async function GET(req: NextRequest) {
           select: {
             id: true,
             name: true,
-            course: { select: { id: true, name: true, code: true } },
+            department: { select: { id: true, name: true, code: true } },
           },
         },
         takenBy: { select: { id: true, name: true, email: true } },
@@ -147,7 +147,7 @@ export async function POST(req: NextRequest) {
           select: {
             id: true,
             name: true,
-            course: { select: { id: true, name: true, code: true } },
+            department: { select: { id: true, name: true, code: true } },
           },
         },
         takenBy: { select: { id: true, name: true, email: true } },

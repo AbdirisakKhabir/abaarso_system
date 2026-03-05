@@ -31,7 +31,7 @@ type StudentProfile = {
   address: string | null;
   imageUrl: string | null;
   department: { id: number; name: string; code: string; tuitionFee: number | null };
-  class: { id: number; name: string; semester: string; year: number; course: { code: string; name: string } } | null;
+  class: { id: number; name: string; semester: string; year: number; department: { code: string; name: string } } | null;
   program: string | null;
   status: string;
   paymentStatus: string;
@@ -90,7 +90,7 @@ export default function StudentProfilePage() {
                 <div class="id-id">${student?.studentId || ""}</div>
                 <div class="id-row"><strong>${student?.firstName || ""} ${student?.lastName || ""}</strong></div>
                 <div class="id-row">${student?.department?.name || ""} (${student?.department?.code || ""})</div>
-                <div class="id-row">${student?.program || "—"} | ${student?.class ? `${student.class.course.code} ${student.class.name}` : "—"}</div>
+                <div class="id-row">${student?.program || "—"} | ${student?.class ? `${student.class.department.code} ${student.class.name}` : "—"}</div>
               </div>
             </div>
           </div>
@@ -259,7 +259,7 @@ export default function StudentProfilePage() {
                 label="Class"
                 value={
                   student.class
-                    ? `${student.class.course.code} - ${student.class.name} (${student.class.semester} ${student.class.year})`
+                    ? `${student.class.department.code} - ${student.class.name} (${student.class.semester} ${student.class.year})`
                     : "—"
                 }
               />

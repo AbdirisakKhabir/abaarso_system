@@ -14,7 +14,7 @@ type ClassOption = {
   name: string;
   semester: string;
   year: number;
-  course: { code: string; department: { id: number } };
+  department: { code: string; id: number };
 };
 
 type SearchStudent = {
@@ -23,7 +23,7 @@ type SearchStudent = {
   firstName: string;
   lastName: string;
   department: { id: number; name: string; code: string };
-  class: { id: number; name: string; semester: string; year: number; course: { code: string } } | null;
+  class: { id: number; name: string; semester: string; year: number; department: { code: string } } | null;
 };
 
 export default function TransferStudentPage() {
@@ -54,14 +54,14 @@ export default function TransferStudentPage() {
       if (r.ok) {
         const d = await r.json();
         setClasses(
-          d.map((c: ClassOption & { course?: { department?: { id: number } } }) => ({
+          d.map((c: { id: number; name: string; semester: string; year: number; department?: { code: string; id: number } }) => ({
             id: c.id,
             name: c.name,
             semester: c.semester,
             year: c.year,
-            course: {
-              code: c.course?.code ?? "",
-              department: { id: c.course?.department?.id ?? 0 },
+            department: {
+              code: c.department?.code ?? "",
+              id: c.department?.id ?? 0,
             },
           }))
         );
@@ -94,7 +94,7 @@ export default function TransferStudentPage() {
 
   // Classes filtered by selected department (for transfer target)
   const effectiveDeptId = newDepartmentId ? Number(newDepartmentId) : selectedStudent?.department.id ?? 0;
-  const classOptionsForDept = classes.filter((c) => c.course.department.id === effectiveDeptId);
+  const classOptionsForDept = classes.filter((c) => c.department.id === effectiveDeptId);
 
   const handleTransfer = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -261,7 +261,7 @@ export default function TransferStudentPage() {
                   <option value="">— No class / Clear class —</option>
                   {classOptionsForDept.map((c) => (
                     <option key={c.id} value={c.id}>
-                      {c.name} — {c.course.code} ({c.semester} {c.year})
+                      {c.name} — {c.department.code} ({c.semester} {c.year})
                     </option>
                   ))}
                   {effectiveDeptId && classOptionsForDept.length === 0 && (

@@ -115,7 +115,7 @@ export default function UnpaidStudentsReportPage() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `Unpaid_Students_${unpaidClassInfo?.course?.code || "class"}_${unpaidSemester}_${unpaidYear}.csv`;
+    a.download = `Unpaid_Students_${unpaidClassInfo?.department?.code || "class"}_${unpaidSemester}_${unpaidYear}.csv`;
     a.click();
     URL.revokeObjectURL(url);
   };
@@ -175,7 +175,7 @@ export default function UnpaidStudentsReportPage() {
               <option value="">Select class</option>
               {filteredClasses.map((c) => (
                 <option key={c.id} value={c.id}>
-                  {c.course.code} - {c.name} ({c.semester} {c.year})
+                  {c.department.code} - {c.name} ({c.semester} {c.year})
                 </option>
               ))}
             </select>
@@ -190,7 +190,7 @@ export default function UnpaidStudentsReportPage() {
             <div className="mb-4 print:block hidden print:mb-2">
               <h1 className="text-xl font-bold text-gray-900">Unpaid Students Report</h1>
               <p className="text-sm text-gray-600">
-                {unpaidClassInfo.course.code} - {unpaidClassInfo.name} ({unpaidClassInfo.semester} {unpaidClassInfo.year})
+                {unpaidClassInfo.department.code} - {unpaidClassInfo.name} ({unpaidClassInfo.semester} {unpaidClassInfo.year})
               </p>
               <p className="text-sm text-gray-600">Generated: {new Date().toLocaleDateString()}</p>
             </div>

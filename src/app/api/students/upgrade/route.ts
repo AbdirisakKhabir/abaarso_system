@@ -30,9 +30,7 @@ export async function POST(req: NextRequest) {
 
     const targetClass = await prisma.class.findUnique({
       where: { id: targetId },
-      include: {
-        course: { select: { departmentId: true } },
-      },
+      include: { department: { select: { id: true } } },
     });
 
     if (!targetClass || !targetClass.isActive) {
@@ -61,7 +59,7 @@ export async function POST(req: NextRequest) {
       }
 
       // Target class must be in same department for class upgrade (same course track)
-      const deptMismatch = students.some((s) => s.departmentId !== targetClass.course.departmentId);
+      const deptMismatch = students.some((s) => s.departmentId !== targetClass.department.id);
       if (deptMismatch) {
         return NextResponse.json(
           { error: "Target class must be in the same department as the students" },
@@ -93,7 +91,7 @@ export async function POST(req: NextRequest) {
       }
 
       // For single student, allow cross-department if target class's department matches
-      if (student.departmentId !== targetClass.course.departmentId) {
+      if (student.departmentId !== targetClass.department.id) {
         return NextResponse.json(
           { error: "Target class must be in the student's department" },
           { status: 400 }

@@ -34,7 +34,7 @@ export async function GET(req: NextRequest) {
     const cls = await prisma.class.findUnique({
       where: { id: parsedClassId },
       include: {
-        course: { select: { code: true, name: true, department: { select: { name: true, code: true, tuitionFee: true } } } },
+        department: { select: { code: true, name: true, tuitionFee: true } },
       },
     });
 
@@ -104,7 +104,7 @@ export async function GET(req: NextRequest) {
         name: cls.name,
         semester: cls.semester,
         year: cls.year,
-        course: cls.course,
+        department: cls.department,
       },
       semester,
       year: parsedYear,

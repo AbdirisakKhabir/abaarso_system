@@ -15,7 +15,7 @@ import { CalenderIcon } from "@/icons";
 
 type AttendanceItem = {
   id: number;
-  class: { name: string; course: { code: string; name: string } };
+  class: { name: string; department: { code: string; name: string } };
   date: string;
   shift: string;
   takenBy: { name: string | null };
@@ -102,10 +102,10 @@ export default function RecentAttendance() {
                   <TableCell className="py-3">
                     <div>
                       <p className="font-medium text-gray-800 dark:text-white/90">
-                        {s.class?.course?.code} – {s.class?.name}
+                        {s.class?.department?.code} – {s.class?.name}
                       </p>
                       <span className="text-xs text-gray-500 dark:text-gray-400">
-                        {s.class?.course?.name}
+                        {s.class?.department?.name}
                       </span>
                     </div>
                   </TableCell>

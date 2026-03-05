@@ -26,7 +26,7 @@ export async function GET(req: NextRequest, ctx: RouteContext) {
             name: true,
             semester: true,
             year: true,
-            course: { select: { code: true, name: true } },
+            department: { select: { code: true, name: true } },
           },
         },
         tuitionPayments: {

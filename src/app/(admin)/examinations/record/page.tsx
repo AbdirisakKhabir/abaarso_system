@@ -20,11 +20,13 @@ type DepartmentInfo = { id: number; name: string; code: string; facultyId?: numb
 type ClassInfo = {
   id: number;
   name: string;
-  courseId: number;
+  departmentId: number;
+  department: { id: number; name: string; code: string };
   semester: string;
   year: number;
-  course: { id: number; name: string; code: string; department?: { id: number; name: string; code: string } };
 };
+
+type CourseInfo = { id: number; name: string; code: string; departmentId?: number };
 
 export default function RecordExamsPage() {
   const { hasPermission } = useAuth();
@@ -35,19 +37,25 @@ export default function RecordExamsPage() {
   const [templateFacultyId, setTemplateFacultyId] = useState("");
   const [templateDepartmentId, setTemplateDepartmentId] = useState("");
   const [templateClassId, setTemplateClassId] = useState("");
+  const [templateCourseId, setTemplateCourseId] = useState("");
   const [templateLoading, setTemplateLoading] = useState(false);
 
   const [importClassId, setImportClassId] = useState("");
+  const [importCourseId, setImportCourseId] = useState("");
   const [importFile, setImportFile] = useState<File | null>(null);
   const [importLoading, setImportLoading] = useState(false);
   const [importResult, setImportResult] = useState<{ created: number; updated: number; errors?: string[] } | null>(null);
 
   const [recordDepartmentId, setRecordDepartmentId] = useState("");
   const [recordClassId, setRecordClassId] = useState("");
+  const [recordCourseId, setRecordCourseId] = useState("");
   const [recordClassData, setRecordClassData] = useState<{
-    class: { id: number; name: string; semester: string; year: number; course: { id: number; name: string; code: string } };
+    class: { id: number; name: string; semester: string; year: number; department: { id: number; name: string; code: string } };
+    course?: { id: number; name: string; code: string };
+    totalSessions?: number;
     rows: {
       student: { id: number; studentId: string; firstName: string; lastName: string };
+      attendance?: { present: number; absent: number; excused: number; totalSessions: number; attendancePercent: number; attendanceMarks: number };
       record: {
         midExam: number;
         finalExam: number;
@@ -64,35 +72,50 @@ export default function RecordExamsPage() {
   const [recordSaving, setRecordSaving] = useState(false);
   const [recordSaveResult, setRecordSaveResult] = useState<string | null>(null);
 
+  const [courses, setCourses] = useState<CourseInfo[]>([]);
+
   useEffect(() => {
     authFetch("/api/faculties").then((r) => { if (r.ok) r.json().then(setFaculties); });
     authFetch("/api/departments").then((r) => { if (r.ok) r.json().then(setDepartments); });
     authFetch("/api/classes").then((r) => { if (r.ok) r.json().then(setClasses); });
+    authFetch("/api/courses").then((r) => { if (r.ok) r.json().then(setCourses); });
   }, []);
 
   useEffect(() => {
-    if (!recordClassId) {
+    if (!recordClassId || !recordCourseId) {
       setRecordClassData(null);
       return;
     }
     setRecordLoading(true);
     setRecordSaveResult(null);
-    authFetch(`/api/examinations/record-class?classId=${recordClassId}`)
+    authFetch(`/api/examinations/record-class?classId=${recordClassId}&courseId=${recordCourseId}`)
       .then((r) => (r.ok ? r.json() : null))
       .then((data) => setRecordClassData(data?.rows ? data : null))
       .catch(() => setRecordClassData(null))
       .finally(() => setRecordLoading(false));
-  }, [recordClassId]);
+  }, [recordClassId, recordCourseId]);
 
   const filteredDepartments = templateFacultyId
     ? departments.filter((d) => (d.facultyId ?? d.faculty?.id) === Number(templateFacultyId))
     : departments;
   const filteredClasses = templateDepartmentId
-    ? classes.filter((c) => c.course?.department?.id === Number(templateDepartmentId))
+    ? classes.filter((c) => c.department?.id === Number(templateDepartmentId))
     : classes;
   const recordClasses = recordDepartmentId
-    ? classes.filter((c) => c.course?.department?.id === Number(recordDepartmentId))
+    ? classes.filter((c) => c.department?.id === Number(recordDepartmentId))
     : classes;
+  const recordCourses = recordDepartmentId
+    ? courses.filter((c) => c.departmentId === Number(recordDepartmentId))
+    : courses;
+  const templateCourses = templateDepartmentId
+    ? courses.filter((c) => c.departmentId === Number(templateDepartmentId))
+    : courses;
+  const importCourses = importClassId
+    ? (() => {
+        const cls = classes.find((c) => String(c.id) === importClassId);
+        return cls ? courses.filter((c) => c.departmentId === cls.departmentId) : [];
+      })()
+    : [];
 
   const updateRecordRow = (
     idx: number,
@@ -125,12 +148,13 @@ export default function RecordExamsPage() {
   };
 
   const handleSaveDraft = async () => {
-    if (!recordClassId || !recordClassData) return;
+    if (!recordClassId || !recordCourseId || !recordClassData) return;
     setRecordSaving(true);
     setRecordSaveResult(null);
     try {
       const payload = {
         classId: Number(recordClassId),
+        courseId: Number(recordCourseId),
         status: "draft",
         records: recordClassData.rows.map((r) => ({
           studentId: r.student.id,
@@ -145,7 +169,7 @@ export default function RecordExamsPage() {
       const data = await res.json();
       if (res.ok) {
         setRecordSaveResult(`Saved as draft: ${data.created + data.updated} record(s) updated.`);
-        const r = await authFetch(`/api/examinations/record-class?classId=${recordClassId}`);
+        const r = await authFetch(`/api/examinations/record-class?classId=${recordClassId}&courseId=${recordCourseId}`);
         if (r.ok) setRecordClassData(await r.json());
       } else {
         setRecordSaveResult(data.error || "Failed to save");
@@ -157,13 +181,14 @@ export default function RecordExamsPage() {
   };
 
   const handleApprove = async () => {
-    if (!recordClassId || !recordClassData) return;
+    if (!recordClassId || !recordCourseId || !recordClassData) return;
     if (!confirm("Are you sure you want to approve these exam records?")) return;
     setRecordSaving(true);
     setRecordSaveResult(null);
     try {
       const payload = {
         classId: Number(recordClassId),
+        courseId: Number(recordCourseId),
         status: "approved",
         records: recordClassData.rows.map((r) => ({
           studentId: r.student.id,
@@ -178,7 +203,7 @@ export default function RecordExamsPage() {
       const data = await res.json();
       if (res.ok) {
         setRecordSaveResult(`Approved: ${data.created + data.updated} record(s) verified.`);
-        const r = await authFetch(`/api/examinations/record-class?classId=${recordClassId}`);
+        const r = await authFetch(`/api/examinations/record-class?classId=${recordClassId}&courseId=${recordCourseId}`);
         if (r.ok) setRecordClassData(await r.json());
       } else {
         setRecordSaveResult(data.error || "Failed to approve");
@@ -190,11 +215,11 @@ export default function RecordExamsPage() {
   };
 
   const handleDownloadTemplate = async () => {
-    if (!templateClassId) return;
+    if (!templateClassId || !templateCourseId) return;
     setTemplateLoading(true);
     setImportResult(null);
     try {
-      const params = new URLSearchParams({ classId: templateClassId });
+      const params = new URLSearchParams({ classId: templateClassId, courseId: templateCourseId });
       if (templateFacultyId) params.set("facultyId", templateFacultyId);
       if (templateDepartmentId) params.set("departmentId", templateDepartmentId);
       const res = await authFetch(`/api/examinations/template?${params.toString()}`);
@@ -279,7 +304,7 @@ export default function RecordExamsPage() {
               <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-brand-100 text-xs font-bold text-brand-600 dark:bg-brand-500/20 dark:text-brand-400">1</span>
               <span className="font-medium text-gray-800 dark:text-white/90">Download Template</span>
             </div>
-            <div className="grid gap-3 sm:grid-cols-3">
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
               <div>
                 <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400">Faculty</label>
                 <select value={templateFacultyId} onChange={(e) => { setTemplateFacultyId(e.target.value); setTemplateDepartmentId(""); setTemplateClassId(""); }} className="h-10 w-full rounded-lg border border-gray-200 bg-white px-3 text-sm outline-none focus:border-brand-400 focus:ring-1 focus:ring-brand-400 dark:border-gray-600 dark:bg-gray-800 dark:text-white/90">
@@ -296,13 +321,20 @@ export default function RecordExamsPage() {
               </div>
               <div>
                 <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400">Class</label>
-                <select value={templateClassId} onChange={(e) => setTemplateClassId(e.target.value)} className="h-10 w-full rounded-lg border border-gray-200 bg-white px-3 text-sm outline-none focus:border-brand-400 focus:ring-1 focus:ring-brand-400 dark:border-gray-600 dark:bg-gray-800 dark:text-white/90">
+                <select value={templateClassId} onChange={(e) => { setTemplateClassId(e.target.value); setTemplateCourseId(""); }} className="h-10 w-full rounded-lg border border-gray-200 bg-white px-3 text-sm outline-none focus:border-brand-400 focus:ring-1 focus:ring-brand-400 dark:border-gray-600 dark:bg-gray-800 dark:text-white/90">
                   <option value="">Select Class</option>
-                  {filteredClasses.map((c) => <option key={c.id} value={c.id}>{c.course?.code} - {c.name} ({c.semester} {c.year})</option>)}
+                  {filteredClasses.map((c) => <option key={c.id} value={c.id}>{c.department?.code} - {c.name} ({c.semester} {c.year})</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400">Course</label>
+                <select value={templateCourseId} onChange={(e) => setTemplateCourseId(e.target.value)} className="h-10 w-full rounded-lg border border-gray-200 bg-white px-3 text-sm outline-none focus:border-brand-400 focus:ring-1 focus:ring-brand-400 dark:border-gray-600 dark:bg-gray-800 dark:text-white/90">
+                  <option value="">Select Course</option>
+                  {templateCourses.map((c) => <option key={c.id} value={c.id}>{c.code} - {c.name}</option>)}
                 </select>
               </div>
             </div>
-            <Button size="sm" onClick={handleDownloadTemplate} disabled={!templateClassId || templateLoading}>
+            <Button size="sm" onClick={handleDownloadTemplate} disabled={!templateClassId || !templateCourseId || templateLoading}>
               <DownloadIcon className="mr-1.5 h-4 w-4" />
               {templateLoading ? "Downloading..." : "Download Template"}
             </Button>
@@ -312,12 +344,19 @@ export default function RecordExamsPage() {
               <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-brand-100 text-xs font-bold text-brand-600 dark:bg-brand-500/20 dark:text-brand-400">2</span>
               <span className="font-medium text-gray-800 dark:text-white/90">Import from Excel</span>
             </div>
-            <div className="grid gap-3 sm:grid-cols-2">
+            <div className="grid gap-3 sm:grid-cols-3">
               <div>
                 <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400">Class</label>
-                <select value={importClassId} onChange={(e) => setImportClassId(e.target.value)} className="h-10 w-full rounded-lg border border-gray-200 bg-white px-3 text-sm outline-none focus:border-brand-400 focus:ring-1 focus:ring-brand-400 dark:border-gray-600 dark:bg-gray-800 dark:text-white/90">
+                <select value={importClassId} onChange={(e) => { setImportClassId(e.target.value); setImportCourseId(""); }} className="h-10 w-full rounded-lg border border-gray-200 bg-white px-3 text-sm outline-none focus:border-brand-400 focus:ring-1 focus:ring-brand-400 dark:border-gray-600 dark:bg-gray-800 dark:text-white/90">
                   <option value="">Select Class</option>
-                  {classes.map((c) => <option key={c.id} value={c.id}>{c.course?.code} - {c.name} ({c.semester} {c.year})</option>)}
+                  {classes.map((c) => <option key={c.id} value={c.id}>{c.department?.code} - {c.name} ({c.semester} {c.year})</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400">Course</label>
+                <select value={importCourseId} onChange={(e) => setImportCourseId(e.target.value)} className="h-10 w-full rounded-lg border border-gray-200 bg-white px-3 text-sm outline-none focus:border-brand-400 focus:ring-1 focus:ring-brand-400 dark:border-gray-600 dark:bg-gray-800 dark:text-white/90">
+                  <option value="">Select Course</option>
+                  {importCourses.map((c) => <option key={c.id} value={c.id}>{c.code} - {c.name}</option>)}
                 </select>
               </div>
               <div>
@@ -358,16 +397,23 @@ export default function RecordExamsPage() {
           <div className="mb-4 flex flex-col gap-4 sm:flex-row sm:items-end sm:gap-6">
             <div className="w-full sm:w-48">
               <label className="mb-1.5 block text-xs font-medium text-gray-600 dark:text-gray-400">Department</label>
-              <select value={recordDepartmentId} onChange={(e) => { setRecordDepartmentId(e.target.value); setRecordClassId(""); setRecordClassData(null); }} className="h-10 w-full rounded-lg border border-gray-200 bg-white px-3 text-sm outline-none focus:border-brand-400 focus:ring-1 focus:ring-brand-400 dark:border-gray-600 dark:bg-gray-800 dark:text-white/90">
+              <select value={recordDepartmentId} onChange={(e) => { setRecordDepartmentId(e.target.value); setRecordClassId(""); setRecordCourseId(""); setRecordClassData(null); }} className="h-10 w-full rounded-lg border border-gray-200 bg-white px-3 text-sm outline-none focus:border-brand-400 focus:ring-1 focus:ring-brand-400 dark:border-gray-600 dark:bg-gray-800 dark:text-white/90">
                 <option value="">Select Department</option>
                 {departments.map((d) => <option key={d.id} value={d.id}>{d.code} - {d.name}</option>)}
               </select>
             </div>
             <div className="w-full sm:w-56">
               <label className="mb-1.5 block text-xs font-medium text-gray-600 dark:text-gray-400">Class</label>
-              <select value={recordClassId} onChange={(e) => setRecordClassId(e.target.value)} className="h-10 w-full rounded-lg border border-gray-200 bg-white px-3 text-sm outline-none focus:border-brand-400 focus:ring-1 focus:ring-brand-400 dark:border-gray-600 dark:bg-gray-800 dark:text-white/90">
+              <select value={recordClassId} onChange={(e) => { setRecordClassId(e.target.value); setRecordCourseId(""); setRecordClassData(null); }} className="h-10 w-full rounded-lg border border-gray-200 bg-white px-3 text-sm outline-none focus:border-brand-400 focus:ring-1 focus:ring-brand-400 dark:border-gray-600 dark:bg-gray-800 dark:text-white/90">
                 <option value="">Select Class</option>
-                {recordClasses.map((c) => <option key={c.id} value={c.id}>{c.course?.code} - {c.name} ({c.semester} {c.year})</option>)}
+                {recordClasses.map((c) => <option key={c.id} value={c.id}>{c.department?.code} - {c.name} ({c.semester} {c.year})</option>)}
+              </select>
+            </div>
+            <div className="w-full sm:w-56">
+              <label className="mb-1.5 block text-xs font-medium text-gray-600 dark:text-gray-400">Course</label>
+              <select value={recordCourseId} onChange={(e) => setRecordCourseId(e.target.value)} className="h-10 w-full rounded-lg border border-gray-200 bg-white px-3 text-sm outline-none focus:border-brand-400 focus:ring-1 focus:ring-brand-400 dark:border-gray-600 dark:bg-gray-800 dark:text-white/90">
+                <option value="">Select Course</option>
+                {recordCourses.map((c) => <option key={c.id} value={c.id}>{c.code} - {c.name}</option>)}
               </select>
             </div>
             {recordClassData && recordClassData.rows.length > 0 && (
@@ -394,6 +440,7 @@ export default function RecordExamsPage() {
                     <TableCell isHeader className="w-12 px-3 py-3 text-center text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-300">#</TableCell>
                     <TableCell isHeader className="min-w-[110px] px-3 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-300">ID Card</TableCell>
                     <TableCell isHeader className="min-w-[180px] px-3 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-300">Student</TableCell>
+                    <TableCell isHeader className="w-16 px-2 py-3 text-center text-xs font-semibold uppercase text-gray-600 dark:text-gray-300" title="Attendance % (Present+Excused)">Attend %</TableCell>
                     <TableCell isHeader className="w-20 px-2 py-3 text-center text-xs font-semibold uppercase text-gray-600 dark:text-gray-300">Mid</TableCell>
                     <TableCell isHeader className="w-20 px-2 py-3 text-center text-xs font-semibold uppercase text-gray-600 dark:text-gray-300">Asg2</TableCell>
                     <TableCell isHeader className="w-20 px-2 py-3 text-center text-xs font-semibold uppercase text-gray-600 dark:text-gray-300">Asg1</TableCell>
@@ -412,6 +459,9 @@ export default function RecordExamsPage() {
                         <TableCell className="px-3 py-2 text-center text-sm text-gray-500 dark:text-gray-400">{idx + 1}</TableCell>
                         <TableCell className="px-3 py-2 font-mono text-sm text-gray-800 dark:text-white/90">{r.student.studentId}</TableCell>
                         <TableCell className="px-3 py-2 text-sm font-medium text-gray-800 dark:text-white/90">{r.student.firstName} {r.student.lastName}</TableCell>
+                        <TableCell className="px-3 py-2 text-center text-sm text-gray-600 dark:text-gray-400" title="Attendance % (10% of grade)">
+                          {r.attendance != null ? `${r.attendance.attendancePercent}%` : "—"}
+                        </TableCell>
                         <TableCell className="p-2"><input type="number" min={0} max={20} step={0.5} value={rec.midExam || ""} onChange={(e) => updateRecordRow(idx, "midExam", e.target.value)} className={inputCellClass} /></TableCell>
                         <TableCell className="p-2"><input type="number" min={0} max={10} step={0.5} value={rec.project || ""} onChange={(e) => updateRecordRow(idx, "project", e.target.value)} className={inputCellClass} /></TableCell>
                         <TableCell className="p-2"><input type="number" min={0} max={10} step={0.5} value={rec.assignment || ""} onChange={(e) => updateRecordRow(idx, "assignment", e.target.value)} className={inputCellClass} /></TableCell>

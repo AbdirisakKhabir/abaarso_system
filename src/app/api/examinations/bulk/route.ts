@@ -30,15 +30,16 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json();
-    const { classId, records, status } = body as {
+    const { classId, courseId, records, status } = body as {
       classId: number;
+      courseId: number;
       records: RecordInput[];
       status: "draft" | "approved";
     };
 
-    if (!classId || !Array.isArray(records) || records.length === 0) {
+    if (!classId || !courseId || !Array.isArray(records) || records.length === 0) {
       return NextResponse.json(
-        { error: "classId and records array are required" },
+        { error: "classId, courseId, and records array are required" },
         { status: 400 }
       );
     }
@@ -52,12 +53,24 @@ export async function POST(req: NextRequest) {
 
     const cls = await prisma.class.findUnique({
       where: { id: Number(classId) },
-      select: { id: true, courseId: true, semester: true, year: true },
+      select: { id: true, departmentId: true, semester: true, year: true },
     });
 
     if (!cls) {
       return NextResponse.json({ error: "Class not found" }, { status: 404 });
     }
+
+    const course = await prisma.course.findUnique({
+      where: { id: Number(courseId) },
+    });
+    if (!course || course.departmentId !== cls.departmentId) {
+      return NextResponse.json(
+        { error: "Course not found or does not belong to the class's department" },
+        { status: 400 }
+      );
+    }
+
+    const effectiveCourseId = course.id;
 
     if (!(await isValidSemester(cls.semester))) {
       return NextResponse.json(
@@ -119,7 +132,7 @@ export async function POST(req: NextRequest) {
         where: {
           studentId_courseId_semester_year: {
             studentId,
-            courseId: cls.courseId,
+            courseId: effectiveCourseId,
             semester: cls.semester,
             year: cls.year,
           },
@@ -144,7 +157,7 @@ export async function POST(req: NextRequest) {
         const rec = await prisma.examRecord.create({
           data: {
             studentId,
-            courseId: cls.courseId,
+            courseId: effectiveCourseId,
             semester: cls.semester,
             year: cls.year,
             ...data,
