@@ -83,6 +83,8 @@ export default function StudentRegistrationForm({
     ...initialData,
     departmentId: initialData?.departmentId ?? (departments[0] ? String(departments[0].id) : ""),
   });
+  const initialFullName = `${initialData?.firstName ?? ""} ${initialData?.lastName ?? ""}`.trim();
+  const [fullName, setFullName] = useState(initialFullName);
   const [submitError, setSubmitError] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -250,15 +252,25 @@ export default function StudentRegistrationForm({
                 </label>
                 <input type="text" value={form.studentId} onChange={(e) => setForm((f) => ({ ...f, studentId: e.target.value }))} placeholder="e.g. STD-2026-0001" className={inputClass} />
               </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">First Name <span className="text-error-500">*</span></label>
-                  <input type="text" required value={form.firstName} onChange={(e) => setForm((f) => ({ ...f, firstName: e.target.value }))} placeholder="First name" className={inputClass} />
-                </div>
-                <div>
-                  <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">Last Name <span className="text-error-500">*</span></label>
-                  <input type="text" required value={form.lastName} onChange={(e) => setForm((f) => ({ ...f, lastName: e.target.value }))} placeholder="Last name" className={inputClass} />
-                </div>
+              <div>
+                <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">
+                  Full Name <span className="text-error-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={fullName}
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    setFullName(value);
+                    const parts = value.trim().split(/\s+/);
+                    const first = parts[0] ?? "";
+                    const last = parts.length > 1 ? parts.slice(1).join(" ") : "";
+                    setForm((f) => ({ ...f, firstName: first, lastName: last }));
+                  }}
+                  placeholder="Full name"
+                  className={inputClass}
+                />
               </div>
             </div>
           </div>
