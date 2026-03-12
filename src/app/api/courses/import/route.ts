@@ -96,10 +96,10 @@ export async function POST(req: NextRequest) {
         descriptionIdx >= 0 ? String(row[descriptionIdx] ?? "").trim() || null : null;
 
       const existing = await prisma.course.findFirst({
-        where: { OR: [{ name }, { code }] },
+        where: { departmentId, OR: [{ name }, { code }] },
       });
       if (existing) {
-        errors.push(`Row ${i + 1}: Course "${code}" or "${name}" already exists`);
+        errors.push(`Row ${i + 1}: Course "${code}" or "${name}" already exists in this department`);
         continue;
       }
 

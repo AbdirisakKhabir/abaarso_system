@@ -87,7 +87,7 @@ export async function PATCH(req: NextRequest, ctx: RouteContext) {
       (e as { code: string }).code === "P2002"
     ) {
       return NextResponse.json(
-        { error: "A course with this name or code already exists" },
+        { error: "A course with this name or code already exists in this department" },
         { status: 400 }
       );
     }

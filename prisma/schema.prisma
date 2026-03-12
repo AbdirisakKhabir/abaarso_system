@@ -138,8 +138,8 @@ model Department {
 
 model Course {
   id             Int             @id @default(autoincrement())
-  name           String          @unique
-  code           String          @unique // e.g. "CS101", "ENG201"
+  name           String
+  code           String          // e.g. "CS101", "ENG201" - unique per department
   description    String?
   creditHours    Int             @default(3)
   departmentId   Int
@@ -151,6 +151,8 @@ model Course {
   createdAt      DateTime        @default(now())
   updatedAt      DateTime        @updatedAt
 
+  @@unique([code, departmentId])
+  @@unique([name, departmentId])
   @@map("courses")
 }
 
