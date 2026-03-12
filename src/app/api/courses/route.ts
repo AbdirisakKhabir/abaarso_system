@@ -14,6 +14,7 @@ export async function GET(req: NextRequest) {
         department: {
           select: { id: true, name: true, code: true },
         },
+        _count: { select: { classSchedules: true } },
       },
       orderBy: { name: "asc" },
     });
@@ -29,6 +30,7 @@ export async function GET(req: NextRequest) {
         department: c.department,
         isActive: c.isActive,
         createdAt: c.createdAt,
+        classCount: c._count?.classSchedules ?? 0,
       }))
     );
   } catch (e) {

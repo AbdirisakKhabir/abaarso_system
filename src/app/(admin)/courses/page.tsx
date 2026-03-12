@@ -13,7 +13,7 @@ import {
 import Badge from "@/components/ui/badge/Badge";
 import { authFetch } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
-import { PencilIcon, PlusIcon, TrashBinIcon } from "@/icons";
+import { DownloadIcon, PencilIcon, PlusIcon, TrashBinIcon } from "@/icons";
 
 type Department = { id: number; name: string; code: string };
 
@@ -37,7 +37,11 @@ export default function CoursesPage() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [filterDeptId, setFilterDeptId] = useState<string>("all");
-  const [modal, setModal] = useState<"add" | "edit" | null>(null);
+  const [modal, setModal] = useState<"add" | "edit" | "import" | null>(null);
+  const [importFile, setImportFile] = useState<File | null>(null);
+  const [importDepartmentId, setImportDepartmentId] = useState("");
+  const [importLoading, setImportLoading] = useState(false);
+  const [importResult, setImportResult] = useState<{ created: number; errors?: string[] } | null>(null);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [form, setForm] = useState({
     name: "",
@@ -159,6 +163,64 @@ export default function CoursesPage() {
     }
   }
 
+  function openImport() {
+    setModal("import");
+    setImportFile(null);
+    setImportDepartmentId(departments[0] ? String(departments[0].id) : "");
+    setImportResult(null);
+  }
+
+  async function handleDownloadTemplate() {
+    try {
+      const res = await authFetch("/api/courses/template");
+      if (!res.ok) {
+        const data = await res.json();
+        alert(data.error || "Failed to download template");
+        return;
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "Course_Import_Template.xlsx";
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      alert("Failed to download template");
+    }
+  }
+
+  async function handleImport() {
+    if (!importFile || !importDepartmentId) {
+      alert("Please select a department and an Excel file.");
+      return;
+    }
+    setImportLoading(true);
+    setImportResult(null);
+    try {
+      const fd = new FormData();
+      fd.append("file", importFile);
+      fd.append("departmentId", importDepartmentId);
+      const res = await authFetch("/api/courses/import", { method: "POST", body: fd });
+      const data = await res.json();
+      if (res.ok) {
+        setImportResult({ created: data.created, errors: data.errors });
+        if (data.created > 0) {
+          await loadCourses();
+        }
+        if (!data.errors?.length && data.created > 0) {
+          setModal(null);
+          setImportFile(null);
+        }
+      } else {
+        alert(data.error || "Import failed");
+      }
+    } catch {
+      alert("Import failed");
+    }
+    setImportLoading(false);
+  }
+
   const filtered = courses.filter((c) => {
     if (filterDeptId !== "all" && String(c.departmentId) !== filterDeptId)
       return false;
@@ -194,11 +256,18 @@ export default function CoursesPage() {
       {/* Header */}
       <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <PageBreadCrumb pageTitle="Courses" />
-        {canCreate && (
-          <Button startIcon={<PlusIcon />} onClick={openAdd} size="sm">
-            Add Course
-          </Button>
-        )}
+        <div className="flex gap-2">
+          {canCreate && (
+            <>
+              <Button startIcon={<PlusIcon />} onClick={openAdd} size="sm">
+                Add Course
+              </Button>
+              <Button variant="outline" startIcon={<DownloadIcon />} onClick={openImport} size="sm">
+                Import
+              </Button>
+            </>
+          )}
+        </div>
       </div>
 
       {/* Card */}
@@ -329,11 +398,13 @@ export default function CoursesPage() {
                           <PencilIcon className="h-4 w-4" />
                         </button>
                       )}
-                      {canDelete && c.classCount === 0 && (
+                      {canDelete && (
                         <button
                           type="button"
                           onClick={() => handleDelete(c.id)}
-                          className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-gray-400 transition-colors hover:bg-error-50 hover:text-error-500 dark:hover:bg-error-500/10"
+                          disabled={c.classCount > 0}
+                          title={c.classCount > 0 ? "Remove schedule slots first" : "Delete course"}
+                          className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-gray-400 transition-colors hover:bg-error-50 hover:text-error-500 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-transparent dark:hover:bg-error-500/10"
                           aria-label="Delete"
                         >
                           <TrashBinIcon className="h-4 w-4" />
@@ -348,8 +419,93 @@ export default function CoursesPage() {
         )}
       </div>
 
-      {/* Modal */}
-      {modal && (
+      {/* Import Modal */}
+      {modal === "import" && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-md rounded-2xl border border-gray-200 bg-white shadow-xl dark:border-gray-700 dark:bg-gray-900">
+            <div className="flex items-center justify-between border-b border-gray-200 px-6 py-4 dark:border-gray-700">
+              <h2 className="text-lg font-semibold text-gray-800 dark:text-white/90">
+                Import Courses
+              </h2>
+              <button
+                type="button"
+                onClick={() => { setModal(null); setImportFile(null); setImportResult(null); }}
+                className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-gray-800 dark:hover:text-gray-300"
+              >
+                <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <div className="px-6 py-5 space-y-4">
+              <p className="text-sm text-gray-500 dark:text-gray-400">
+                Download the template, fill in course data, then select the department and upload.
+              </p>
+              <Button variant="outline" size="sm" startIcon={<DownloadIcon />} onClick={handleDownloadTemplate} className="w-full sm:w-auto">
+                Download Template
+              </Button>
+              <div>
+                <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">
+                  Department <span className="text-error-500">*</span>
+                </label>
+                <select
+                  required
+                  value={importDepartmentId}
+                  onChange={(e) => setImportDepartmentId(e.target.value)}
+                  className="h-11 w-full appearance-none rounded-lg border border-gray-200 bg-transparent px-4 py-2.5 text-sm text-gray-800 outline-none focus:border-brand-300 focus:ring-2 focus:ring-brand-500/20 dark:border-gray-700 dark:text-white dark:focus:border-brand-500/40"
+                >
+                  <option value="">Select department</option>
+                  {departments.map((d) => (
+                    <option key={d.id} value={String(d.id)}>
+                      {d.name} ({d.code})
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">
+                  Excel File <span className="text-error-500">*</span>
+                </label>
+                <input
+                  type="file"
+                  accept=".xlsx,.xls"
+                  onChange={(e) => setImportFile(e.target.files?.[0] ?? null)}
+                  className="block w-full rounded-lg border border-gray-200 bg-transparent px-3 py-2.5 text-sm file:mr-3 file:rounded-md file:border-0 file:bg-brand-50 file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-brand-600 dark:border-gray-700 dark:file:bg-brand-500/20 dark:file:text-brand-400"
+                />
+              </div>
+              {importResult && (
+                <div className={`rounded-lg px-4 py-3 text-sm ${importResult.errors?.length ? "border border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-500/10" : "border border-green-200 bg-green-50 dark:border-green-800 dark:bg-green-500/10"}`}>
+                  <p className={`font-medium ${importResult.errors?.length ? "text-amber-800 dark:text-amber-400" : "text-green-800 dark:text-green-400"}`}>
+                    {importResult.errors?.length
+                      ? `Imported ${importResult.created} course(s). ${importResult.errors.length} error(s).`
+                      : `Imported ${importResult.created} course(s) successfully.`}
+                  </p>
+                  {importResult.errors && importResult.errors.length > 0 && (
+                    <details className="mt-2">
+                      <summary className="cursor-pointer text-xs text-amber-700 dark:text-amber-300">View errors</summary>
+                      <ul className="mt-1 list-inside list-disc text-xs">
+                        {importResult.errors.slice(0, 5).map((err, i) => <li key={i}>{err}</li>)}
+                        {importResult.errors.length > 5 && <li>... and {importResult.errors.length - 5} more</li>}
+                      </ul>
+                    </details>
+                  )}
+                </div>
+              )}
+              <div className="flex items-center justify-end gap-3 pt-2">
+                <Button type="button" variant="outline" onClick={() => { setModal(null); setImportFile(null); setImportResult(null); }} size="sm">
+                  Cancel
+                </Button>
+                <Button onClick={handleImport} disabled={!importDepartmentId || !importFile || importLoading} size="sm">
+                  {importLoading ? "Importing..." : "Import"}
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Add/Edit Modal */}
+      {modal && modal !== "import" && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
           <div className="w-full max-w-md rounded-2xl border border-gray-200 bg-white shadow-xl dark:border-gray-700 dark:bg-gray-900">
             <div className="flex items-center justify-between border-b border-gray-200 px-6 py-4 dark:border-gray-700">
