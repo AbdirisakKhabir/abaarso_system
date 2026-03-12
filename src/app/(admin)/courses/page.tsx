@@ -52,6 +52,8 @@ export default function CoursesPage() {
   });
   const [submitError, setSubmitError] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+  const [bulkDeleting, setBulkDeleting] = useState(false);
 
   const canCreate = hasPermission("courses.create");
   const canEdit = hasPermission("courses.edit");
@@ -163,6 +165,80 @@ export default function CoursesPage() {
     }
   }
 
+  function toggleSelect(id: number) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  function toggleSelectAll() {
+    if (selectedIds.size === deletableFiltered.length) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(deletableFiltered.map((c) => c.id)));
+    }
+  }
+
+  async function handleBulkDelete() {
+    const ids = Array.from(selectedIds);
+    if (ids.length === 0) return;
+    if (!confirm(`Delete ${ids.length} selected course(s)? Courses with schedule slots will be skipped.`)) return;
+    setBulkDeleting(true);
+    try {
+      const res = await authFetch("/api/courses/bulk-delete", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ids }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setSelectedIds(new Set());
+        await loadCourses();
+        if (data.errors?.length) {
+          alert(`Deleted ${data.deleted}. ${data.skipped} skipped:\n${data.errors.slice(0, 5).join("\n")}${data.errors.length > 5 ? `\n... and ${data.errors.length - 5} more` : ""}`);
+        }
+      } else {
+        alert(data.error || "Bulk delete failed");
+      }
+    } catch {
+      alert("Bulk delete failed");
+    }
+    setBulkDeleting(false);
+  }
+
+  async function handleDeleteByDepartment() {
+    if (filterDeptId === "all") {
+      alert("Select a department first to delete all its courses.");
+      return;
+    }
+    const deptName = departments.find((d) => String(d.id) === filterDeptId)?.name ?? "this department";
+    if (!confirm(`Delete ALL courses in ${deptName}? Only courses without schedule slots will be deleted.`)) return;
+    setBulkDeleting(true);
+    try {
+      const res = await authFetch("/api/courses/bulk-delete", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ departmentId: Number(filterDeptId) }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setSelectedIds(new Set());
+        await loadCourses();
+        if (data.errors?.length) {
+          alert(`Deleted ${data.deleted}. ${data.skipped} skipped (have schedule slots).`);
+        }
+      } else {
+        alert(data.error || "Bulk delete failed");
+      }
+    } catch {
+      alert("Bulk delete failed");
+    }
+    setBulkDeleting(false);
+  }
+
   function openImport() {
     setModal("import");
     setImportFile(null);
@@ -233,6 +309,8 @@ export default function CoursesPage() {
     );
   });
 
+  const deletableFiltered = filtered.filter((c) => c.classCount === 0);
+
   if (!hasPermission("courses.view")) {
     return (
       <div>
@@ -282,7 +360,31 @@ export default function CoursesPage() {
               {filtered.length}
             </span>
           </div>
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
+            {canDelete && deletableFiltered.length > 0 && (
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleBulkDelete}
+                  disabled={selectedIds.size === 0 || bulkDeleting}
+                  className="text-error-600 border-error-200 hover:bg-error-50 dark:border-error-800 dark:text-error-400 dark:hover:bg-error-500/10"
+                >
+                  {bulkDeleting ? "Deleting..." : `Delete ${selectedIds.size} selected`}
+                </Button>
+                {filterDeptId !== "all" && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleDeleteByDepartment}
+                    disabled={bulkDeleting}
+                    className="text-error-600 border-error-200 hover:bg-error-50 dark:border-error-800 dark:text-error-400 dark:hover:bg-error-500/10"
+                  >
+                    Delete all in department
+                  </Button>
+                )}
+              </div>
+            )}
             <select
               value={filterDeptId}
               onChange={(e) => setFilterDeptId(e.target.value)}
@@ -332,6 +434,17 @@ export default function CoursesPage() {
           <Table>
             <TableHeader>
               <TableRow className="bg-transparent! hover:bg-transparent!">
+                {canDelete && deletableFiltered.length > 0 && (
+                  <TableCell isHeader className="w-12 px-3">
+                    <input
+                      type="checkbox"
+                      checked={selectedIds.size === deletableFiltered.length && deletableFiltered.length > 0}
+                      onChange={toggleSelectAll}
+                      className="h-4 w-4 rounded border-gray-300 text-brand-500 focus:ring-brand-500 dark:border-gray-600 dark:bg-gray-700"
+                      aria-label="Select all"
+                    />
+                  </TableCell>
+                )}
                 <TableCell isHeader>#</TableCell>
                 <TableCell isHeader>Course</TableCell>
                 <TableCell isHeader>Code</TableCell>
@@ -345,6 +458,21 @@ export default function CoursesPage() {
             <TableBody>
               {filtered.map((c, idx) => (
                 <TableRow key={c.id}>
+                  {canDelete && deletableFiltered.length > 0 && (
+                    <TableCell className="w-12 px-3">
+                      {c.classCount === 0 ? (
+                        <input
+                          type="checkbox"
+                          checked={selectedIds.has(c.id)}
+                          onChange={() => toggleSelect(c.id)}
+                          className="h-4 w-4 rounded border-gray-300 text-brand-500 focus:ring-brand-500 dark:border-gray-600 dark:bg-gray-700"
+                          aria-label={`Select ${c.code}`}
+                        />
+                      ) : (
+                        <span className="inline-block w-4" aria-hidden />
+                      )}
+                    </TableCell>
+                  )}
                   <TableCell className="font-medium text-gray-400 dark:text-gray-500">
                     {idx + 1}
                   </TableCell>
