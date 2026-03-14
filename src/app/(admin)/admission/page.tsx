@@ -81,6 +81,7 @@ export default function AdmissionPage() {
   const [filterStatus, setFilterStatus] = useState<string>("all");
   const [modal, setModal] = useState<"import" | null>(null);
   const [importFile, setImportFile] = useState<File | null>(null);
+  const [importDepartmentId, setImportDepartmentId] = useState("");
   const [importLoading, setImportLoading] = useState(false);
   const [importResult, setImportResult] = useState<{ created: number; errors?: string[] } | null>(null);
 
@@ -157,12 +158,16 @@ export default function AdmissionPage() {
   }
 
   async function handleImportExcel() {
-    if (!importFile) return;
+    if (!importFile || !importDepartmentId) {
+      alert("Please select a department and choose an Excel file.");
+      return;
+    }
     setImportLoading(true);
     setImportResult(null);
     try {
       const fd = new FormData();
       fd.append("file", importFile);
+      fd.append("departmentId", importDepartmentId);
       const res = await authFetch("/api/students/import", { method: "POST", body: fd });
       const data = await res.json();
       if (!res.ok) {
@@ -241,7 +246,12 @@ export default function AdmissionPage() {
               <Button
                 variant="outline"
                 startIcon={<ArrowUpIcon />}
-                onClick={() => { setModal("import"); setImportResult(null); setImportFile(null); }}
+                onClick={() => {
+                  setModal("import");
+                  setImportResult(null);
+                  setImportFile(null);
+                  setImportDepartmentId(departments[0] ? String(departments[0].id) : "");
+                }}
                 size="sm"
               >
                 Import Excel
@@ -464,8 +474,25 @@ export default function AdmissionPage() {
             </div>
             <div className="space-y-4 px-6 py-5">
               <p className="text-sm text-gray-600 dark:text-gray-400">
-                Download the template, fill in student data with Full Name (Student ID is optional—leave empty to auto-generate), then upload the file.
+                Select a department, then upload an Excel file. The file should have a name column (Full Name, Name, or First Name + Last Name). Names are split by space: first word = First Name, rest = Last Name.
               </p>
+              <div>
+                <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">
+                  Department
+                </label>
+                <select
+                  value={importDepartmentId}
+                  onChange={(e) => setImportDepartmentId(e.target.value)}
+                  className="h-10 w-full rounded-lg border border-gray-200 bg-transparent px-3 text-sm text-gray-700 outline-none focus:border-brand-300 focus:ring-2 focus:ring-brand-500/20 dark:border-gray-700 dark:text-gray-300 dark:focus:border-brand-500/40"
+                >
+                  <option value="">Select department...</option>
+                  {departments.map((d) => (
+                    <option key={d.id} value={d.id}>
+                      {d.name} ({d.code})
+                    </option>
+                  ))}
+                </select>
+              </div>
               <Button variant="outline" startIcon={<DownloadIcon />} onClick={handleDownloadTemplate} disabled={importLoading} size="sm">
                 Download Template
               </Button>
@@ -506,7 +533,7 @@ export default function AdmissionPage() {
                 </Button>
                 <Button
                   onClick={handleImportExcel}
-                  disabled={!importFile || importLoading}
+                  disabled={!importDepartmentId || !importFile || importLoading}
                   size="sm"
                 >
                   {importLoading ? "Importing..." : "Import"}

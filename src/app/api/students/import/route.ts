@@ -54,10 +54,20 @@ export async function POST(req: NextRequest) {
 
     const formData = await req.formData();
     const file = formData.get("file") as File | null;
+    const departmentIdStr = formData.get("departmentId") as string | null;
 
     if (!file) {
       return NextResponse.json(
         { error: "file is required" },
+        { status: 400 }
+      );
+    }
+
+    const selectedDepartmentId = departmentIdStr ? Number(departmentIdStr) : NaN;
+    const useSelectedDept = Number.isInteger(selectedDepartmentId) && selectedDepartmentId > 0;
+    if (!useSelectedDept) {
+      return NextResponse.json(
+        { error: "Please select a department for the import" },
         { status: 400 }
       );
     }
@@ -75,7 +85,19 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const headerRow = (data[0] as string[]).map((h) => String(h ?? "").trim());
+    // Try row 0 as headers; if no name column found, try row 1 (some files have a title row)
+    let headerRow = (data[0] as string[]).map((h) => String(h ?? "").trim());
+    let dataStartRow = 1;
+    const hasNameCol = (row: string[]) =>
+      findCol(row, [/^full\s*name$/i, /^fullname$/i, /^name$/i, /^student\s*name$/i]) >= 0 ||
+      (findCol(row, [/^first\s*name$/i]) >= 0 && findCol(row, [/^last\s*name$/i]) >= 0);
+    if (!hasNameCol(headerRow) && data.length > 2) {
+      const row1 = (data[1] as string[]).map((h) => String(h ?? "").trim());
+      if (hasNameCol(row1)) {
+        headerRow = row1;
+        dataStartRow = 2;
+      }
+    }
 
     const studentIdIdx = findCol(headerRow, [
       /^student\s*id$/i,
@@ -98,9 +120,11 @@ export async function POST(req: NextRequest) {
 
     const hasFullName = fullNameIdx >= 0;
     const hasFirstLast = firstNameIdx >= 0 && lastNameIdx >= 0;
-    if (!hasFullName && !hasFirstLast) {
+    // Fallback: use column index 1 as Full Name when template order is Student ID, Full Name, ...
+    const fallbackNameIdx = !hasFullName && !hasFirstLast && headerRow.length > 1 ? 1 : -1;
+    if (!hasFullName && !hasFirstLast && fallbackNameIdx < 0) {
       return NextResponse.json(
-        { error: "Excel must contain 'Full Name' or both 'First Name' and 'Last Name' columns" },
+        { error: "Excel must contain a name column (e.g. 'Full Name', 'Name', or 'First Name' + 'Last Name')" },
         { status: 400 }
       );
     }
@@ -144,7 +168,7 @@ export async function POST(req: NextRequest) {
     const created: number[] = [];
     const errors: string[] = [];
 
-    for (let i = 1; i < data.length; i++) {
+    for (let i = dataStartRow; i < data.length; i++) {
       const row = data[i] as (string | number)[];
       if (!row || row.length === 0) continue;
 
@@ -153,19 +177,28 @@ export async function POST(req: NextRequest) {
       if (hasFullName) {
         const fullName = String(row[fullNameIdx] ?? "").trim();
         if (!fullName) {
-          errors.push(`Row ${i + 1}: Full name is required`);
+          errors.push(`Row ${i + 1}: Name is required`);
           continue;
         }
-        const parts = fullName.split(/\s+/);
+        const parts = fullName.split(/\s+/).filter(Boolean);
         firstName = parts[0] ?? "";
         lastName = parts.length > 1 ? parts.slice(1).join(" ") : "";
-      } else {
+      } else if (hasFirstLast) {
         firstName = String(row[firstNameIdx] ?? "").trim();
         lastName = String(row[lastNameIdx] ?? "").trim();
         if (!firstName || !lastName) {
           errors.push(`Row ${i + 1}: First name and last name are required`);
           continue;
         }
+      } else {
+        const fullName = String(row[fallbackNameIdx] ?? "").trim();
+        if (!fullName) {
+          errors.push(`Row ${i + 1}: Name is required`);
+          continue;
+        }
+        const parts = fullName.split(/\s+/).filter(Boolean);
+        firstName = parts[0] ?? "";
+        lastName = parts.length > 1 ? parts.slice(1).join(" ") : "";
       }
 
       let studentId: string;
@@ -185,23 +218,34 @@ export async function POST(req: NextRequest) {
         studentId = `${prefix}${String(nextNum++).padStart(4, "0")}`;
       }
 
-      const deptCode = deptCodeIdx >= 0 ? String(row[deptCodeIdx] ?? "").trim().toUpperCase() : "";
-      let dept: { id: number; tuitionFee: number | null } | null = deptCode
-        ? deptByCode[deptCode] ?? null
-        : departments[0] ?? null;
-      if (!dept && deptCode) {
-        dept = await getOrCreateDepartment(deptCode, deptByCode, departments);
+      let departmentId: number;
+      if (useSelectedDept) {
+        const dept = departments.find((d) => d.id === selectedDepartmentId);
+        if (!dept) {
+          errors.push(`Row ${i + 1}: Selected department not found`);
+          continue;
+        }
+        departmentId = dept.id;
+      } else {
+        const deptCode = deptCodeIdx >= 0 ? String(row[deptCodeIdx] ?? "").trim().toUpperCase() : "";
+        let dept: { id: number; tuitionFee: number | null } | null = deptCode
+          ? deptByCode[deptCode] ?? null
+          : departments[0] ?? null;
+        if (!dept && deptCode) {
+          dept = await getOrCreateDepartment(deptCode, deptByCode, departments);
+        }
+        if (!dept) {
+          dept = departments[0] ?? null;
+        }
+        if (!dept?.id) {
+          errors.push(
+            `Row ${i + 1}: No department found. Select a department above or add Department Code column.`
+          );
+          continue;
+        }
+        departmentId = dept.id;
       }
-      if (!dept) {
-        dept = departments[0] ?? null;
-      }
-      const departmentId = dept?.id;
-      if (!departmentId) {
-        errors.push(
-          `Row ${i + 1}: No department found. Add at least one department (e.g. ACC, ICT, HRM) in the system.`
-        );
-        continue;
-      }
+      const dept = departments.find((d) => d.id === departmentId) ?? Object.values(deptByCode).find((d) => d.id === departmentId);
 
       const emailVal = emailIdx >= 0 ? String(row[emailIdx] ?? "").trim().toLowerCase() : null;
       if (emailVal) {
@@ -232,7 +276,7 @@ export async function POST(req: NextRequest) {
         paymentStatusMap[paymentStatusRaw.toLowerCase()] ??
         (["Full Scholarship", "Half Scholar", "Fully Paid"].includes(paymentStatusRaw) ? paymentStatusRaw : "Fully Paid");
 
-      const tuitionFee = dept?.tuitionFee ?? 0;
+      const tuitionFee = (dept ?? departments.find((d) => d.id === departmentId))?.tuitionFee ?? 0;
       const initialBalance =
         paymentStatus === "Full Scholarship" ? 0
         : paymentStatus === "Half Scholar" ? tuitionFee * 0.5
