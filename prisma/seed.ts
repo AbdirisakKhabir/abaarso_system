@@ -280,6 +280,28 @@ async function main() {
     });
   }
 
+  // Create default faculty and departments for student import (ACC, ICT, HRM, LAB, SWE)
+  const defaultFaculty = await prisma.faculty.upsert({
+    where: { code: "MAIN" },
+    create: { name: "Main Faculty", code: "MAIN", description: "Default faculty" },
+    update: {},
+  });
+
+  const defaultDepartments = [
+    { code: "ACC", name: "Accounting" },
+    { code: "ICT", name: "Information and Communication Technology" },
+    { code: "HRM", name: "Human Resource Management" },
+    { code: "LAB", name: "Laboratory Science" },
+    { code: "SWE", name: "Software Engineering" },
+  ];
+  for (const d of defaultDepartments) {
+    await prisma.department.upsert({
+      where: { code: d.code },
+      create: { ...d, facultyId: defaultFaculty.id, tuitionFee: 0 },
+      update: { name: d.name },
+    });
+  }
+
   console.log("Seed completed. Admin: admin@abaarsotech.edu / admin123");
   console.log("Roles: Admin, Finance, President, Dean, Lecturer, HR, Admission created/updated.");
 }

@@ -11,6 +11,40 @@ function findCol(headerRow: string[], patterns: RegExp[]): number {
   return -1;
 }
 
+/** Get or create department by code; auto-creates if missing (for ACC, ICT, HRM, LAB, SWE, etc.) */
+async function getOrCreateDepartment(
+  code: string,
+  deptByCode: Record<string, { id: number; code: string; tuitionFee: number | null }>,
+  departments: { id: number; code: string; tuitionFee: number | null }[]
+): Promise<{ id: number; tuitionFee: number | null } | null> {
+  const upper = code.toUpperCase();
+  const existing = deptByCode[upper];
+  if (existing) return existing;
+
+  // Auto-create department if code is valid (e.g. ACC, ICT, HRM, LAB, SWE)
+  const deptNames: Record<string, string> = {
+    ACC: "Accounting",
+    ICT: "Information and Communication Technology",
+    HRM: "Human Resource Management",
+    LAB: "Laboratory Science",
+    SWE: "Software Engineering",
+    CS: "Computer Science",
+    IT: "Information Technology",
+  };
+  const name = deptNames[upper] ?? `${upper} Department`;
+
+  const faculty = await prisma.faculty.findFirst({ orderBy: { id: "asc" } });
+  if (!faculty) return null;
+
+  const created = await prisma.department.create({
+    data: { code: upper, name, facultyId: faculty.id, tuitionFee: 0 },
+    select: { id: true, tuitionFee: true },
+  });
+  deptByCode[upper] = { id: created.id, code: upper, tuitionFee: created.tuitionFee };
+  departments.push(deptByCode[upper]);
+  return created;
+}
+
 export async function POST(req: NextRequest) {
   try {
     const auth = await getAuthUser(req);
@@ -47,8 +81,18 @@ export async function POST(req: NextRequest) {
       /^student\s*id$/i,
       /^studentid$/i,
       /^id\s*card$/i,
+      /^id\s*card\s*no/i,
+      /^registration\s*(no|number)$/i,
+      /^reg\s*no$/i,
+      /^student\s*no$/i,
+      /^id$/i,
     ]);
-    const fullNameIdx = findCol(headerRow, [/^full\s*name$/i, /^fullname$/i]);
+    const fullNameIdx = findCol(headerRow, [
+      /^full\s*name$/i,
+      /^fullname$/i,
+      /^name$/i,
+      /^student\s*name$/i,
+    ]);
     const firstNameIdx = findCol(headerRow, [/^first\s*name$/i, /^firstname$/i]);
     const lastNameIdx = findCol(headerRow, [/^last\s*name$/i, /^lastname$/i]);
 
@@ -68,7 +112,13 @@ export async function POST(req: NextRequest) {
     const dobIdx = findCol(headerRow, [/^date\s*of\s*birth$/i, /^dob$/i, /^birth/i]);
     const genderIdx = findCol(headerRow, [/^gender$/i]);
     const addressIdx = findCol(headerRow, [/^address$/i]);
-    const deptCodeIdx = findCol(headerRow, [/^department\s*code$/i, /^department$/i, /^dept/i]);
+    const deptCodeIdx = findCol(headerRow, [
+      /^department\s*code$/i,
+      /^department$/i,
+      /^dept\s*code$/i,
+      /^dept$/i,
+      /^department\s*name$/i,
+    ]);
     const programIdx = findCol(headerRow, [/^program$/i]);
     const statusIdx = findCol(headerRow, [/^status$/i]);
     const paymentStatusIdx = findCol(headerRow, [/^payment\s*status$/i, /^paymentstatus$/i]);
@@ -76,9 +126,8 @@ export async function POST(req: NextRequest) {
     const departments = await prisma.department.findMany({
       select: { id: true, code: true, tuitionFee: true },
     });
-    const deptByCode = Object.fromEntries(
-      departments.map((d) => [d.code.toUpperCase(), d])
-    );
+    const deptByCode: Record<string, { id: number; code: string; tuitionFee: number | null }> =
+      Object.fromEntries(departments.map((d) => [d.code.toUpperCase(), { ...d }]));
 
     const year = new Date().getFullYear();
     const prefix = `STD-${year}-`;
@@ -137,10 +186,20 @@ export async function POST(req: NextRequest) {
       }
 
       const deptCode = deptCodeIdx >= 0 ? String(row[deptCodeIdx] ?? "").trim().toUpperCase() : "";
-      const dept = deptCode ? deptByCode[deptCode] : departments[0];
+      let dept: { id: number; tuitionFee: number | null } | null = deptCode
+        ? deptByCode[deptCode] ?? null
+        : departments[0] ?? null;
+      if (!dept && deptCode) {
+        dept = await getOrCreateDepartment(deptCode, deptByCode, departments);
+      }
+      if (!dept) {
+        dept = departments[0] ?? null;
+      }
       const departmentId = dept?.id;
       if (!departmentId) {
-        errors.push(`Row ${i + 1}: Invalid or missing department code "${deptCode}"`);
+        errors.push(
+          `Row ${i + 1}: No department found. Add at least one department (e.g. ACC, ICT, HRM) in the system.`
+        );
         continue;
       }
 
@@ -160,9 +219,18 @@ export async function POST(req: NextRequest) {
         : null;
       const status = statusIdx >= 0 ? String(row[statusIdx] ?? "Admitted").trim() || "Admitted" : "Admitted";
       const paymentStatusRaw = paymentStatusIdx >= 0 ? String(row[paymentStatusIdx] ?? "Fully Paid").trim() : "Fully Paid";
-      const paymentStatus = ["Full Scholarship", "Half Scholar", "Fully Paid"].includes(paymentStatusRaw)
-        ? paymentStatusRaw
-        : "Fully Paid";
+      const paymentStatusMap: Record<string, string> = {
+        "full scholarship": "Full Scholarship",
+        "half scholar": "Half Scholar",
+        "fully paid": "Fully Paid",
+        paid: "Fully Paid",
+        unpaid: "Fully Paid",
+        half: "Half Scholar",
+        full: "Full Scholarship",
+      };
+      const paymentStatus =
+        paymentStatusMap[paymentStatusRaw.toLowerCase()] ??
+        (["Full Scholarship", "Half Scholar", "Fully Paid"].includes(paymentStatusRaw) ? paymentStatusRaw : "Fully Paid");
 
       const tuitionFee = dept?.tuitionFee ?? 0;
       const initialBalance =
