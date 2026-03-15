@@ -64,14 +64,27 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const headerRow = (data[0] as string[]).map((h) => String(h ?? "").trim());
+    // Auto-detect header row (some files have title rows before headers)
+    let headerRow: string[] = [];
+    let dataStartRow = 1;
+    const studentIdPatterns = [/^id\s*card$/i, /^student\s*id$/i, /^studentid$/i];
+    for (let r = 0; r < Math.min(15, data.length); r++) {
+      const row = (data[r] as string[]).map((h) => String(h ?? "").trim());
+      if (findCol(row, studentIdPatterns) >= 0) {
+        headerRow = row;
+        dataStartRow = r + 1;
+        break;
+      }
+    }
+    if (headerRow.length === 0) {
+      return NextResponse.json(
+        { error: "Excel must contain an 'ID Card' or 'Student ID' column" },
+        { status: 400 }
+      );
+    }
 
     // Student ID: "ID Card", "Student ID", etc.
-    const studentIdIdx = findCol(headerRow, [
-      /^id\s*card$/i,
-      /^student\s*id$/i,
-      /^studentid$/i,
-    ]);
+    const studentIdIdx = findCol(headerRow, studentIdPatterns);
     if (studentIdIdx < 0) {
       return NextResponse.json(
         { error: "Excel must contain an 'ID Card' or 'Student ID' column" },
@@ -79,12 +92,13 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Assessment columns - all optional (empty = 0). No Quiz - Assignment1, Assignment2 only.
+    // Assessment columns - all optional (empty = 0). Flexible matching for various formats.
     const midIdx = findCol(headerRow, [/^mid\s*term$/i, /^mid\s*exam/i, /^mid$/i]);
     const finalIdx = findCol(headerRow, [/^final$/i, /^final\s*exam/i]);
-    const assign2Idx = findCol(headerRow, [/^assignment2$/i, /^assign2$/i]);
+    const quizIdx = findCol(headerRow, [/^quiz$/i]);
+    const assign2Idx = findCol(headerRow, [/^assignment2$/i, /^assign2$/i, /^group\s*presentation$/i]);
     const assign1Idx = findCol(headerRow, [/^assignment1$/i, /^assignment$/i, /^assign1$/i]);
-    const attendanceIdx = findCol(headerRow, [/^attendance$/i]);
+    const attendanceIdx = findCol(headerRow, [/^attendance$/i, /^attedance$/i]);
 
     // Pre-computed values from file - use when provided
     const totalIdx = findCol(headerRow, [/^total$/i]);
@@ -95,7 +109,7 @@ export async function POST(req: NextRequest) {
     const updated: number[] = [];
     const errors: string[] = [];
 
-    for (let i = 1; i < data.length; i++) {
+    for (let i = dataStartRow; i < data.length; i++) {
       const row = data[i] as (string | number)[];
       if (!row || row.length === 0) continue;
 
@@ -112,9 +126,10 @@ export async function POST(req: NextRequest) {
         continue;
       }
 
-      // Parse optional assessment columns - empty or missing = 0. No Quiz.
+      // Parse optional assessment columns - empty or missing = 0. No mark validations - allow any values.
       const mid = parseNum(row[midIdx]);
       const final = parseNum(row[finalIdx]);
+      const quiz = parseNum(row[quizIdx]);
       const assign2 = parseNum(row[assign2Idx]);
       const assign1 = parseNum(row[assign1Idx]);
       const attendance = parseNum(row[attendanceIdx]);
@@ -122,26 +137,11 @@ export async function POST(req: NextRequest) {
       const marks = {
         midExam: mid,
         finalExam: final,
-        assessment: 0, // No Quiz
+        assessment: quiz,
         project: assign2,
         assignment: assign1,
         presentation: attendance,
       };
-
-      // Validate only when value is provided and column exists
-      if (midIdx >= 0 && (marks.midExam < 0 || marks.midExam > 20)) {
-        errors.push(`Row ${i + 1}: Mid Term must be 0-20`);
-        continue;
-      }
-      if (finalIdx >= 0 && (marks.finalExam < 0 || marks.finalExam > 40)) {
-        errors.push(`Row ${i + 1}: Final must be 0-40`);
-        continue;
-      }
-      const max10 = [marks.assessment, marks.project, marks.assignment, marks.presentation];
-      if (max10.some((v) => v < 0 || v > 10)) {
-        errors.push(`Row ${i + 1}: Assignment1, Assignment2, Attendance must be 0-10`);
-        continue;
-      }
 
       let totalMarks: number;
       let grade: string;
