@@ -13,6 +13,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { authFetch } from "@/lib/api";
+import { ModalOverlayGate } from "@/context/ModalOverlayContext";
 import { useAuth } from "@/context/AuthContext";
 import { ChevronLeftIcon, PlusIcon } from "@/icons";
 
@@ -294,6 +295,7 @@ export default function PayrollPage() {
 
       {/* Add Payroll Modal */}
       {modal === "add" && (
+        <ModalOverlayGate>
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
           <div className="w-full max-w-md rounded-2xl bg-white p-6 dark:bg-gray-800">
             <h3 className="mb-4 text-lg font-semibold">Request Payroll</h3>
@@ -369,10 +371,12 @@ export default function PayrollPage() {
             </form>
           </div>
         </div>
+        </ModalOverlayGate>
       )}
 
       {/* Reject Modal */}
       {modal === "reject" && rejectPayrollId && (
+        <ModalOverlayGate>
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
           <div className="w-full max-w-md rounded-2xl bg-white p-6 dark:bg-gray-800">
             <h3 className="mb-4 text-lg font-semibold">Reject Payroll</h3>
@@ -398,6 +402,7 @@ export default function PayrollPage() {
             </form>
           </div>
         </div>
+        </ModalOverlayGate>
       )}
     </div>
   );

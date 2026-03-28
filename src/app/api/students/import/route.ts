@@ -11,6 +11,45 @@ function findCol(headerRow: string[], patterns: RegExp[]): number {
   return -1;
 }
 
+type AcademicYearRow = { id: number; name: string; startYear: number; endYear: number };
+
+function resolveAdmissionYear(
+  raw: string,
+  years: AcademicYearRow[],
+  yearByNameLower: Map<string, AcademicYearRow>
+): AcademicYearRow | null {
+  const s = raw.trim();
+  if (!s) return null;
+  const fromMap = yearByNameLower.get(s.toLowerCase());
+  if (fromMap) return fromMap;
+  const m = s.match(/(\d{4})\s*[-–]\s*(\d{4})/);
+  if (m) {
+    const name = `${m[1]}-${m[2]}`;
+    const ay = years.find((y) => y.name === name);
+    if (ay) return ay;
+  }
+  return null;
+}
+
+function resolveClassByName(
+  classNameRaw: string,
+  deptClasses: { id: number; name: string; semester: string; year: number }[],
+  admissionYear: AcademicYearRow | null
+): number | null {
+  const name = classNameRaw.trim();
+  if (!name) return null;
+  const candidates = deptClasses.filter((c) => c.name.toLowerCase() === name.toLowerCase());
+  if (candidates.length === 0) return null;
+  if (candidates.length === 1) return candidates[0].id;
+  if (admissionYear) {
+    const match = candidates.find(
+      (c) => c.year === admissionYear.endYear || c.year === admissionYear.startYear
+    );
+    if (match) return match.id;
+  }
+  return candidates[0].id;
+}
+
 /** Get or create department by code; auto-creates if missing (for ACC, ICT, HRM, LAB, SWE, etc.) */
 async function getOrCreateDepartment(
   code: string,
@@ -146,12 +185,30 @@ export async function POST(req: NextRequest) {
     const programIdx = findCol(headerRow, [/^program$/i]);
     const statusIdx = findCol(headerRow, [/^status$/i]);
     const paymentStatusIdx = findCol(headerRow, [/^payment\s*status$/i, /^paymentstatus$/i]);
+    const admissionYearIdx = findCol(headerRow, [
+      /^admission\s*academic\s*year$/i,
+      /^admission\s*year$/i,
+      /^academic\s*year$/i,
+    ]);
+    const classIdx = findCol(headerRow, [/^class$/i, /^class\s*name$/i]);
 
     const departments = await prisma.department.findMany({
       select: { id: true, code: true, tuitionFee: true },
     });
     const deptByCode: Record<string, { id: number; code: string; tuitionFee: number | null }> =
       Object.fromEntries(departments.map((d) => [d.code.toUpperCase(), { ...d }]));
+
+    const academicYears = await prisma.academicYear.findMany({
+      orderBy: { startYear: "asc" },
+    });
+    const yearByNameLower = new Map<string, AcademicYearRow>(
+      academicYears.map((y) => [y.name.toLowerCase().trim(), y])
+    );
+
+    const deptClasses = await prisma.class.findMany({
+      where: { departmentId: selectedDepartmentId },
+      select: { id: true, name: true, semester: true, year: true },
+    });
 
     const year = new Date().getFullYear();
     const prefix = `STD-${year}-`;
@@ -283,6 +340,34 @@ export async function POST(req: NextRequest) {
         : paymentStatus === "Half Scholar" ? tuitionFee * 0.5
         : tuitionFee;
 
+      const admissionYearRaw =
+        admissionYearIdx >= 0 ? String(row[admissionYearIdx] ?? "").trim() : "";
+      let admissionAcademicYearId: number | null = null;
+      let admissionYearRow: AcademicYearRow | null = null;
+      if (admissionYearRaw) {
+        const resolved = resolveAdmissionYear(admissionYearRaw, academicYears, yearByNameLower);
+        if (!resolved) {
+          errors.push(
+            `Row ${i + 1}: Academic year "${admissionYearRaw}" not found (use format like 2024-2025)`
+          );
+          continue;
+        }
+        admissionAcademicYearId = resolved.id;
+        admissionYearRow = resolved;
+      }
+
+      const classNameRaw = classIdx >= 0 ? String(row[classIdx] ?? "").trim() : "";
+      let resolvedClassId: number | null = null;
+      if (classNameRaw) {
+        resolvedClassId = resolveClassByName(classNameRaw, deptClasses, admissionYearRow);
+        if (!resolvedClassId) {
+          errors.push(
+            `Row ${i + 1}: Class "${classNameRaw}" not found in the selected department`
+          );
+          continue;
+        }
+      }
+
       const student = await prisma.student.create({
         data: {
           studentId,
@@ -296,6 +381,8 @@ export async function POST(req: NextRequest) {
           gender: genderIdx >= 0 ? String(row[genderIdx] ?? "").trim() || null : null,
           address: addressIdx >= 0 ? String(row[addressIdx] ?? "").trim() || null : null,
           departmentId,
+          admissionAcademicYearId,
+          classId: resolvedClassId,
           program: programIdx >= 0 ? String(row[programIdx] ?? "").trim() || null : null,
           status: ["Pending", "Admitted", "Rejected", "Graduated"].includes(status) ? status : "Admitted",
           paymentStatus,

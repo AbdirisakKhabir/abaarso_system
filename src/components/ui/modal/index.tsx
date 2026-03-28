@@ -1,5 +1,6 @@
 "use client";
 import React, { useRef, useEffect } from "react";
+import { useModalOverlay } from "@/context/ModalOverlayContext";
 
 interface ModalProps {
   isOpen: boolean;
@@ -19,6 +20,12 @@ export const Modal: React.FC<ModalProps> = ({
   isFullscreen = false,
 }) => {
   const modalRef = useRef<HTMLDivElement>(null);
+  const { registerModal } = useModalOverlay();
+
+  useEffect(() => {
+    if (!isOpen) return;
+    return registerModal();
+  }, [isOpen, registerModal]);
 
   useEffect(() => {
     const handleEscape = (event: KeyboardEvent) => {
@@ -51,11 +58,11 @@ export const Modal: React.FC<ModalProps> = ({
   if (!isOpen) return null;
 
   const contentClasses = isFullscreen
-    ? "w-full h-full"
-    : "relative w-full rounded-3xl bg-white  dark:bg-gray-900";
+    ? "h-full w-full"
+    : "relative max-h-[min(100dvh-2rem,920px)] w-full max-w-[calc(100vw-2rem)] overflow-y-auto rounded-3xl bg-white dark:bg-gray-900 sm:max-w-[min(100vw-3rem,920px)]";
 
   return (
-    <div className="fixed inset-0 flex items-center justify-center overflow-y-auto modal z-99999">
+    <div className="modal fixed inset-0 z-99999 flex items-center justify-center overflow-y-auto overscroll-contain p-4 sm:p-6">
       {!isFullscreen && (
         <div
           className="fixed inset-0 h-full w-full bg-gray-400/50 backdrop-blur-[32px]"

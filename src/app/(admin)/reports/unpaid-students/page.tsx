@@ -149,7 +149,7 @@ export default function UnpaidStudentsReportPage() {
             <select
               value={unpaidSemester}
               onChange={(e) => setUnpaidSemester(e.target.value)}
-              className="h-10 min-w-[120px] rounded-lg border border-gray-200 bg-transparent px-3 text-sm text-gray-800 outline-none focus:border-brand-300 dark:border-gray-700 dark:text-white dark:focus:border-brand-500/40"
+              className="h-10 w-full min-w-0 sm:w-auto sm:min-w-[120px] rounded-lg border border-gray-200 bg-transparent px-3 text-sm text-gray-800 outline-none focus:border-brand-300 dark:border-gray-700 dark:text-white dark:focus:border-brand-500/40"
             >
               {semesters.map((s) => (
                 <option key={s.id} value={s.name}>{s.name}</option>
@@ -162,7 +162,7 @@ export default function UnpaidStudentsReportPage() {
               type="number"
               value={unpaidYear}
               onChange={(e) => setUnpaidYear(e.target.value)}
-              className="h-10 min-w-[100px] rounded-lg border border-gray-200 bg-transparent px-3 text-sm text-gray-800 outline-none focus:border-brand-300 dark:border-gray-700 dark:text-white dark:focus:border-brand-500/40"
+              className="h-10 w-full min-w-0 sm:w-auto sm:min-w-[100px] rounded-lg border border-gray-200 bg-transparent px-3 text-sm text-gray-800 outline-none focus:border-brand-300 dark:border-gray-700 dark:text-white dark:focus:border-brand-500/40"
             />
           </div>
           <div>
@@ -170,7 +170,7 @@ export default function UnpaidStudentsReportPage() {
             <select
               value={unpaidClassId}
               onChange={(e) => setUnpaidClassId(e.target.value)}
-              className="h-10 min-w-[200px] rounded-lg border border-gray-200 bg-transparent px-3 text-sm text-gray-800 outline-none focus:border-brand-300 dark:border-gray-700 dark:text-white dark:focus:border-brand-500/40"
+              className="h-10 w-full min-w-0 sm:w-auto sm:min-w-[200px] rounded-lg border border-gray-200 bg-transparent px-3 text-sm text-gray-800 outline-none focus:border-brand-300 dark:border-gray-700 dark:text-white dark:focus:border-brand-500/40"
             >
               <option value="">Select class</option>
               {filteredClasses.map((c) => (

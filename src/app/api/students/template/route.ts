@@ -26,6 +26,8 @@ export async function GET(req: NextRequest) {
       "Gender",
       "Address",
       "Department Code",
+      "Admission Academic Year",
+      "Class",
       "Program",
       "Status",
       "Payment Status",
@@ -42,6 +44,8 @@ export async function GET(req: NextRequest) {
       "Male",
       "Hargeisa, Somaliland",
       departments[0]?.code ?? "CS",
+      "2024-2025",
+      "Level 1-A",
       "Bachelor",
       "Admitted",
       "Fully Paid",
@@ -50,7 +54,12 @@ export async function GET(req: NextRequest) {
     const wsData = [headers, sampleRow];
     const ws = XLSX.utils.aoa_to_sheet(wsData);
 
-    ws["!cols"] = headers.map((_, i) => ({ wch: i === 9 ? 20 : 14 }));
+    ws["!cols"] = headers.map((_, i) => {
+      if (i === 9) return { wch: 18 }; // Department Code
+      if (i === 10) return { wch: 22 }; // Admission Academic Year
+      if (i === 11) return { wch: 20 }; // Class
+      return { wch: 14 };
+    });
 
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Students");

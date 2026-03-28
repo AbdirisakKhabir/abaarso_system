@@ -12,6 +12,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { authFetch } from "@/lib/api";
+import { ModalOverlayGate } from "@/context/ModalOverlayContext";
 import { useAuth } from "@/context/AuthContext";
 import { ChevronLeftIcon, PlusIcon } from "@/icons";
 
@@ -281,6 +282,7 @@ export default function BanksPage() {
 
       {/* Add Bank Modal */}
       {modal === "add" && (
+        <ModalOverlayGate>
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
           <div className="w-full max-w-md rounded-2xl border border-gray-200 bg-white px-6 py-5 shadow-xl dark:border-gray-700 dark:bg-gray-900">
             <h2 className="mb-4 text-lg font-semibold text-gray-800 dark:text-white/90">Add Bank</h2>
@@ -333,10 +335,12 @@ export default function BanksPage() {
             </form>
           </div>
         </div>
+        </ModalOverlayGate>
       )}
 
       {/* Withdraw Modal */}
       {modal === "withdraw" && selectedBankId && (
+        <ModalOverlayGate>
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
           <div className="w-full max-w-md rounded-2xl border border-gray-200 bg-white px-6 py-5 shadow-xl dark:border-gray-700 dark:bg-gray-900">
             <h2 className="mb-4 text-lg font-semibold text-gray-800 dark:text-white/90">Withdraw from Bank</h2>
@@ -392,10 +396,12 @@ export default function BanksPage() {
             </form>
           </div>
         </div>
+        </ModalOverlayGate>
       )}
 
       {/* Transfer Modal */}
       {modal === "transfer" && (
+        <ModalOverlayGate>
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
           <div className="w-full max-w-md rounded-2xl border border-gray-200 bg-white px-6 py-5 shadow-xl dark:border-gray-700 dark:bg-gray-900">
             <h2 className="mb-4 text-lg font-semibold text-gray-800 dark:text-white/90">Transfer Between Banks</h2>
@@ -463,6 +469,7 @@ export default function BanksPage() {
             </form>
           </div>
         </div>
+        </ModalOverlayGate>
       )}
     </div>
   );

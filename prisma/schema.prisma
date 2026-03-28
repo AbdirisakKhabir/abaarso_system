@@ -175,6 +175,7 @@ model AcademicYear {
   isActive  Boolean  @default(true)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+  students  Student[]
 
   @@map("academic_years")
 }
@@ -238,6 +239,8 @@ model Student {
   imagePublicId      String? // Cloudinary public_id for deletion
   departmentId       Int
   department         Department           @relation(fields: [departmentId], references: [id], onDelete: Restrict)
+  admissionAcademicYearId Int?
+  admissionAcademicYear   AcademicYear?   @relation(fields: [admissionAcademicYearId], references: [id], onDelete: SetNull)
   classId            Int?
   class              Class?               @relation(fields: [classId], references: [id], onDelete: SetNull)
   program            String? // "Bachelor", "Masters"

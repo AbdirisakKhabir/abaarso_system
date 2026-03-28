@@ -8,6 +8,7 @@ import { authFetch } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 
 type Department = { id: number; name: string; code: string };
+type AcademicYearInfo = { id: number; name: string; startYear: number; endYear: number };
 type ClassInfo = {
   id: number;
   name: string;
@@ -21,18 +22,31 @@ export default function NewStudentPage() {
   const router = useRouter();
   const { hasPermission } = useAuth();
   const [departments, setDepartments] = useState<Department[]>([]);
+  const [academicYears, setAcademicYears] = useState<AcademicYearInfo[]>([]);
   const [classes, setClasses] = useState<ClassInfo[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     (async () => {
-      const [deptRes, classRes] = await Promise.all([
+      const [deptRes, yearsRes, classRes] = await Promise.all([
         authFetch("/api/departments"),
+        authFetch("/api/academic-years"),
         authFetch("/api/classes"),
       ]);
       if (deptRes.ok) {
         const data = await deptRes.json();
         setDepartments(data.map((d: Department & Record<string, unknown>) => ({ id: d.id, name: d.name, code: d.code })));
+      }
+      if (yearsRes.ok) {
+        const data = await yearsRes.json();
+        setAcademicYears(
+          data.map((y: AcademicYearInfo) => ({
+            id: y.id,
+            name: y.name,
+            startYear: y.startYear,
+            endYear: y.endYear,
+          }))
+        );
       }
       if (classRes.ok) {
         const data = await classRes.json();
@@ -79,6 +93,7 @@ export default function NewStudentPage() {
       <StudentRegistrationForm
         mode="add"
         departments={departments}
+        academicYears={academicYears}
         classes={classes}
         onSuccess={() => router.push("/admission")}
       />

@@ -69,7 +69,7 @@ export default function BankTransactionsReportPage() {
             <select
               value={bankId}
               onChange={(e) => setBankId(e.target.value)}
-              className="h-10 min-w-[180px] rounded-lg border border-gray-200 px-3 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-white"
+              className="h-10 w-full min-w-0 sm:w-auto sm:min-w-[180px] rounded-lg border border-gray-200 px-3 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-white"
             >
               <option value="">All Banks</option>
               {banks.map((b) => (

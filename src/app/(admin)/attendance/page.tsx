@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/table";
 import Badge from "@/components/ui/badge/Badge";
 import { authFetch } from "@/lib/api";
+import { ModalOverlayGate } from "@/context/ModalOverlayContext";
 import { useAuth } from "@/context/AuthContext";
 import { PlusIcon, TrashBinIcon } from "@/icons";
 
@@ -431,6 +432,7 @@ export default function AttendancePage() {
 
       {/* ───── Take Attendance Modal ───── */}
       {showTake && (
+        <ModalOverlayGate>
         <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/60 p-4 pt-10 backdrop-blur-sm">
           <div className="w-full max-w-3xl rounded-2xl border border-gray-200 bg-white shadow-xl dark:border-gray-700 dark:bg-gray-900">
             {/* Header */}
@@ -690,10 +692,12 @@ export default function AttendancePage() {
             </form>
           </div>
         </div>
+        </ModalOverlayGate>
       )}
 
       {/* ───── View Session Detail Modal ───── */}
       {viewSession && (
+        <ModalOverlayGate>
         <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/60 p-4 pt-10 backdrop-blur-sm">
           <div className="w-full max-w-2xl rounded-2xl border border-gray-200 bg-white shadow-xl dark:border-gray-700 dark:bg-gray-900">
             {/* Header */}
@@ -839,6 +843,7 @@ export default function AttendancePage() {
             </div>
           </div>
         </div>
+        </ModalOverlayGate>
       )}
     </>
   );

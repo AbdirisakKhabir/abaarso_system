@@ -598,7 +598,7 @@ export default function FinancePage() {
               <select
                 value={unpaidSemester}
                 onChange={(e) => setUnpaidSemester(e.target.value)}
-                className="h-10 min-w-[120px] rounded-xl border border-gray-200 bg-gray-50/50 px-3 text-sm outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-500/15 dark:border-gray-600 dark:bg-gray-800/50 dark:text-white"
+                className="h-10 w-full min-w-0 sm:w-auto sm:min-w-[120px] rounded-xl border border-gray-200 bg-gray-50/50 px-3 text-sm outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-500/15 dark:border-gray-600 dark:bg-gray-800/50 dark:text-white"
               >
                 {semesters.map((s) => (
                   <option key={s.id} value={s.name}>{s.name}</option>
@@ -611,7 +611,7 @@ export default function FinancePage() {
                 type="number"
                 value={unpaidYear}
                 onChange={(e) => setUnpaidYear(e.target.value)}
-                className="h-10 min-w-[100px] rounded-xl border border-gray-200 bg-gray-50/50 px-3 text-sm outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-500/15 dark:border-gray-600 dark:bg-gray-800/50 dark:text-white"
+                className="h-10 w-full min-w-0 sm:w-auto sm:min-w-[100px] rounded-xl border border-gray-200 bg-gray-50/50 px-3 text-sm outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-500/15 dark:border-gray-600 dark:bg-gray-800/50 dark:text-white"
               />
             </div>
             <div>
@@ -619,7 +619,7 @@ export default function FinancePage() {
               <select
                 value={unpaidClassId}
                 onChange={(e) => setUnpaidClassId(e.target.value)}
-                className="h-10 min-w-[200px] rounded-xl border border-gray-200 bg-gray-50/50 px-3 text-sm outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-500/15 dark:border-gray-600 dark:bg-gray-800/50 dark:text-white"
+                className="h-10 w-full min-w-0 sm:w-auto sm:min-w-[200px] rounded-xl border border-gray-200 bg-gray-50/50 px-3 text-sm outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-500/15 dark:border-gray-600 dark:bg-gray-800/50 dark:text-white"
               >
                 <option value="">Select class</option>
                 {filteredClasses.map((c) => (

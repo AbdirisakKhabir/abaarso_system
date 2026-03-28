@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/table";
 import Badge from "@/components/ui/badge/Badge";
 import { authFetch } from "@/lib/api";
+import { ModalOverlayGate } from "@/context/ModalOverlayContext";
 import { useAuth } from "@/context/AuthContext";
 import { PencilIcon, PlusIcon, TrashBinIcon } from "@/icons";
 
@@ -309,6 +310,7 @@ export default function RolesPage() {
 
       {/* Modal */}
       {modal && (
+        <ModalOverlayGate>
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
           <div className="w-full max-w-lg animate-in fade-in zoom-in-95 rounded-2xl border border-gray-200 bg-white shadow-xl dark:border-gray-700 dark:bg-gray-900">
             {/* Modal Header */}
@@ -443,6 +445,7 @@ export default function RolesPage() {
             </form>
           </div>
         </div>
+        </ModalOverlayGate>
       )}
     </>
   );

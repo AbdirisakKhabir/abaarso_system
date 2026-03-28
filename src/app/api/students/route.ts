@@ -33,6 +33,9 @@ export async function GET(req: NextRequest) {
         department: {
           select: { id: true, name: true, code: true },
         },
+        admissionAcademicYear: {
+          select: { id: true, name: true, startYear: true, endYear: true },
+        },
         class: {
           select: { id: true, name: true, semester: true, year: true, department: { select: { code: true } } },
         },
@@ -70,6 +73,7 @@ export async function POST(req: NextRequest) {
       gender,
       address,
       departmentId,
+      admissionAcademicYearId,
       classId,
       program,
       imageUrl,
@@ -79,6 +83,18 @@ export async function POST(req: NextRequest) {
     } = body;
 
     const parsedDeptId = Number(departmentId);
+    let parsedAyId: number | null = null;
+    if (
+      admissionAcademicYearId !== undefined &&
+      admissionAcademicYearId !== null &&
+      String(admissionAcademicYearId).trim() !== ""
+    ) {
+      const n = Number(admissionAcademicYearId);
+      if (!Number.isInteger(n) || n <= 0) {
+        return NextResponse.json({ error: "Invalid admission academic year" }, { status: 400 });
+      }
+      parsedAyId = n;
+    }
     const parsedClassId = classId ? Number(classId) : null;
 
     if (!firstName || !lastName || !Number.isInteger(parsedDeptId)) {
@@ -86,6 +102,16 @@ export async function POST(req: NextRequest) {
         { error: "First name, last name, and department are required" },
         { status: 400 }
       );
+    }
+
+    if (parsedAyId !== null) {
+      const ay = await prisma.academicYear.findUnique({
+        where: { id: parsedAyId },
+        select: { id: true },
+      });
+      if (!ay) {
+        return NextResponse.json({ error: "Invalid admission academic year" }, { status: 400 });
+      }
     }
 
     // Check duplicate email only when email is provided
@@ -145,6 +171,7 @@ export async function POST(req: NextRequest) {
         gender: gender || null,
         address: address || null,
         departmentId: parsedDeptId,
+        admissionAcademicYearId: parsedAyId,
         classId: Number.isInteger(parsedClassId) ? parsedClassId : null,
         program: program || null,
         imageUrl: imageUrl || null,
@@ -155,6 +182,12 @@ export async function POST(req: NextRequest) {
       },
       include: {
         department: { select: { id: true, name: true, code: true } },
+        admissionAcademicYear: {
+          select: { id: true, name: true, startYear: true, endYear: true },
+        },
+        class: {
+          select: { id: true, name: true, semester: true, year: true, department: { select: { code: true } } },
+        },
       },
     });
 

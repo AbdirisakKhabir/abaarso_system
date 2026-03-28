@@ -22,6 +22,9 @@ export async function GET(req: NextRequest, ctx: RouteContext) {
       where: { id },
       include: {
         department: { select: { id: true, name: true, code: true } },
+        admissionAcademicYear: {
+          select: { id: true, name: true, startYear: true, endYear: true },
+        },
         class: { select: { id: true, name: true, semester: true, year: true, department: { select: { code: true } } } },
       },
     });
@@ -88,6 +91,13 @@ export async function PATCH(req: NextRequest, ctx: RouteContext) {
       }
       data.departmentId = did;
     }
+    if (body.admissionAcademicYearId !== undefined) {
+      const ay = body.admissionAcademicYearId ? Number(body.admissionAcademicYearId) : null;
+      if (ay !== null && (!Number.isInteger(ay) || !(await prisma.academicYear.findUnique({ where: { id: ay }, select: { id: true } })))) {
+        return NextResponse.json({ error: "Invalid admission academic year" }, { status: 400 });
+      }
+      data.admissionAcademicYearId = ay;
+    }
     if (body.classId !== undefined) {
       data.classId = body.classId ? Number(body.classId) : null;
     }
@@ -125,6 +135,9 @@ export async function PATCH(req: NextRequest, ctx: RouteContext) {
       data,
       include: {
         department: { select: { id: true, name: true, code: true } },
+        admissionAcademicYear: {
+          select: { id: true, name: true, startYear: true, endYear: true },
+        },
         class: { select: { id: true, name: true, semester: true, year: true, department: { select: { code: true } } } },
       },
     });

@@ -14,6 +14,7 @@ import {
 import Badge from "@/components/ui/badge/Badge";
 import Link from "next/link";
 import { authFetch } from "@/lib/api";
+import { ModalOverlayGate } from "@/context/ModalOverlayContext";
 import { useAuth } from "@/context/AuthContext";
 import { ArrowUpIcon, DownloadIcon, PencilIcon, PlusIcon, TrashBinIcon, UserCircleIcon } from "@/icons";
 
@@ -44,6 +45,8 @@ type StudentRow = {
   imagePublicId: string | null;
   departmentId: number;
   department: Department;
+  admissionAcademicYearId: number | null;
+  admissionAcademicYear: { id: number; name: string } | null;
   classId: number | null;
   class: ClassInfo | null;
   program: string | null;
@@ -475,6 +478,8 @@ export default function AdmissionPage() {
                 <TableCell isHeader>Student</TableCell>
                 <TableCell isHeader>Student ID</TableCell>
                 <TableCell isHeader>Department</TableCell>
+                <TableCell isHeader>Adm. year</TableCell>
+                <TableCell isHeader>Class</TableCell>
                 <TableCell isHeader>Status</TableCell>
                 <TableCell isHeader>Payment</TableCell>
                 <TableCell isHeader className="text-right">Balance</TableCell>
@@ -539,6 +544,14 @@ export default function AdmissionPage() {
                   <TableCell>
                     <Badge color="info" size="sm">{s.department.name}</Badge>
                   </TableCell>
+                  <TableCell className="text-sm text-gray-600 dark:text-gray-400">
+                    {s.admissionAcademicYear?.name ?? "—"}
+                  </TableCell>
+                  <TableCell className="max-w-[140px] text-sm text-gray-700 dark:text-gray-300">
+                    <span className="block truncate" title={s.class ? `${s.class.name} (${s.class.semester} ${s.class.year})` : undefined}>
+                      {s.class ? `${s.class.name} (${s.class.semester} ${s.class.year})` : "—"}
+                    </span>
+                  </TableCell>
                   <TableCell>
                     <Badge color={STATUS_COLOR[s.status] || "light"} size="sm">
                       {s.status}
@@ -592,6 +605,7 @@ export default function AdmissionPage() {
 
       {/* Import Modal */}
       {modal === "import" && (
+        <ModalOverlayGate>
         <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/60 p-4 backdrop-blur-sm">
           <div className="w-full max-w-lg rounded-2xl border border-gray-200 bg-white shadow-xl dark:border-gray-700 dark:bg-gray-900">
             <div className="flex items-center justify-between border-b border-gray-200 px-6 py-4 dark:border-gray-700">
@@ -678,6 +692,7 @@ export default function AdmissionPage() {
             </div>
           </div>
         </div>
+        </ModalOverlayGate>
       )}
     </>
   );

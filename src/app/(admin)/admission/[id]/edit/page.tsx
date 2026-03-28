@@ -9,6 +9,7 @@ import { authFetch } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 
 type Department = { id: number; name: string; code: string };
+type AcademicYearInfo = { id: number; name: string; startYear: number; endYear: number };
 type ClassInfo = {
   id: number;
   name: string;
@@ -31,6 +32,7 @@ type Student = {
   gender: string | null;
   address: string | null;
   departmentId: number;
+  admissionAcademicYearId: number | null;
   classId: number | null;
   program: string | null;
   status: string;
@@ -46,6 +48,7 @@ export default function EditStudentPage() {
   const id = Number(params.id);
   const [student, setStudent] = useState<Student | null>(null);
   const [departments, setDepartments] = useState<Department[]>([]);
+  const [academicYears, setAcademicYears] = useState<AcademicYearInfo[]>([]);
   const [classes, setClasses] = useState<ClassInfo[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -58,9 +61,10 @@ export default function EditStudentPage() {
     }
     (async () => {
       try {
-        const [studentRes, deptRes, classRes] = await Promise.all([
+        const [studentRes, deptRes, yearsRes, classRes] = await Promise.all([
           authFetch(`/api/students/${id}`),
           authFetch("/api/departments"),
+          authFetch("/api/academic-years"),
           authFetch("/api/classes"),
         ]);
         if (!studentRes.ok) {
@@ -73,6 +77,17 @@ export default function EditStudentPage() {
         if (deptRes.ok) {
           const data = await deptRes.json();
           setDepartments(data.map((d: Department & Record<string, unknown>) => ({ id: d.id, name: d.name, code: d.code })));
+        }
+        if (yearsRes.ok) {
+          const data = await yearsRes.json();
+          setAcademicYears(
+            data.map((y: AcademicYearInfo) => ({
+              id: y.id,
+              name: y.name,
+              startYear: y.startYear,
+              endYear: y.endYear,
+            }))
+          );
         }
         if (classRes.ok) {
           const data = await classRes.json();
@@ -135,6 +150,7 @@ export default function EditStudentPage() {
         gender: student.gender ?? "",
         address: student.address ?? "",
         departmentId: String(student.departmentId),
+        admissionAcademicYearId: student.admissionAcademicYearId ? String(student.admissionAcademicYearId) : "",
         classId: student.classId ? String(student.classId) : "",
         program: student.program ?? "",
         status: student.status,
@@ -151,6 +167,7 @@ export default function EditStudentPage() {
         editingId={id}
         initialData={initialData}
         departments={departments}
+        academicYears={academicYears}
         classes={classes}
         onSuccess={() => router.push("/admission")}
       />

@@ -1,6 +1,7 @@
 "use client";
 
 import { useSidebar } from "@/context/SidebarContext";
+import { ModalOverlayProvider } from "@/context/ModalOverlayContext";
 import AppHeader from "@/layout/AppHeader";
 import AppSidebar from "@/layout/AppSidebar";
 import Backdrop from "@/layout/Backdrop";
@@ -23,20 +24,24 @@ export default function AdminLayout({
 
   return (
     <AdminAuthGuard>
-      <div className="min-h-screen xl:flex">
+      <ModalOverlayProvider>
+      <div className="min-h-screen w-full min-w-0 overflow-x-clip xl:flex">
         {/* Sidebar and Backdrop */}
         <AppSidebar />
         <Backdrop />
         {/* Main Content Area */}
         <div
-          className={`flex-1 transition-all  duration-300 ease-in-out ${mainContentMargin}`}
+          className={`flex min-h-0 min-w-0 flex-1 flex-col transition-all duration-300 ease-in-out ${mainContentMargin}`}
         >
           {/* Header */}
           <AppHeader />
           {/* Page Content */}
-          <div className="p-4 mx-auto max-w-(--breakpoint-2xl) md:p-6">{children}</div>
+          <div className="mx-auto w-full min-w-0 max-w-(--breakpoint-2xl) p-4 pb-[max(1rem,env(safe-area-inset-bottom))] md:p-6">
+            {children}
+          </div>
         </div>
       </div>
+      </ModalOverlayProvider>
     </AdminAuthGuard>
   );
 }

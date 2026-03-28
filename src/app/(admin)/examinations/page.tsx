@@ -13,6 +13,7 @@ import {
 import Badge from "@/components/ui/badge/Badge";
 import Link from "next/link";
 import { authFetch } from "@/lib/api";
+import { ModalOverlayGate } from "@/context/ModalOverlayContext";
 import { useAuth } from "@/context/AuthContext";
 import { PencilIcon, PlusIcon, TrashBinIcon } from "@/icons";
 
@@ -538,6 +539,7 @@ export default function ExaminationsPage() {
 
       {/* ======= Add/Edit Modal ======= */}
       {showModal && (
+        <ModalOverlayGate>
         <div className="fixed inset-0 z-9999 flex items-center justify-center bg-black/40 p-4">
           <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-2xl bg-white p-6 shadow-2xl dark:bg-gray-900">
             <h3 className="mb-4 text-lg font-semibold text-gray-800 dark:text-white/90">
@@ -711,10 +713,12 @@ export default function ExaminationsPage() {
             </div>
           </div>
         </div>
+        </ModalOverlayGate>
       )}
 
       {/* ======= GPA Modal ======= */}
       {showGPAModal && (
+        <ModalOverlayGate>
         <div className="fixed inset-0 z-9999 flex items-center justify-center bg-black/40 p-4">
           <div className="max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-2xl bg-white p-6 shadow-2xl dark:bg-gray-900">
             {gpaLoading ? (
@@ -810,6 +814,7 @@ export default function ExaminationsPage() {
             </div>
           </div>
         </div>
+        </ModalOverlayGate>
       )}
     </div>
   );

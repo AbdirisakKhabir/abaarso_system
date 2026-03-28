@@ -418,14 +418,16 @@ const AppSidebar: React.FC = () => {
 
   return (
     <aside
-      className={`no-print fixed mt-16 flex flex-col lg:mt-0 top-0 px-5 left-0 bg-white dark:bg-gray-900 dark:border-gray-800 text-gray-900 h-screen transition-all duration-300 ease-in-out z-50 border-r border-gray-200 
+      className={`no-print fixed left-0 top-0 z-50 flex h-screen min-h-0 flex-col border-r border-gray-200 bg-white text-gray-900 transition-all duration-300 ease-in-out dark:border-gray-800 dark:bg-gray-900 
         ${isExpanded || isMobileOpen || isHovered ? "w-[290px]" : "w-[90px]"}
         ${isMobileOpen ? "translate-x-0" : "-translate-x-full"}
-        lg:translate-x-0`}
+        mt-16 lg:mt-0 lg:translate-x-0`}
       onMouseEnter={() => !isExpanded && setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
     >
-      <div className={`py-8 flex ${!isExpanded && !isHovered && !isMobileOpen ? "lg:justify-center" : ""}`}>
+      <div
+        className={`shrink-0 px-5 py-8 ${!isExpanded && !isHovered && !isMobileOpen ? "lg:justify-center" : ""} flex`}
+      >
         <Link href="/" className={`flex items-center gap-2 ${!isExpanded && !isHovered && !isMobileOpen ? "lg:justify-center" : ""}`}>
           <Image
             src="/logo/logo%20abaarso.png"
@@ -443,8 +445,8 @@ const AppSidebar: React.FC = () => {
         </Link>
       </div>
 
-      <div className="flex flex-col overflow-y-auto duration-300 ease-linear no-scrollbar">
-        <nav className="mb-6">
+      <div className="sidebar-scrollbar min-h-0 flex-1 overflow-x-hidden overflow-y-auto pl-5 pr-2 pb-6 sm:pr-3 [-webkit-overflow-scrolling:touch]">
+        <nav className="pb-2">
           <div className="flex flex-col gap-4">
             {/* Academics Section (top) */}
             {academicsNav.length > 0 && (

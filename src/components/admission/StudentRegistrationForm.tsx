@@ -9,6 +9,7 @@ import { authFetch } from "@/lib/api";
 import { ChevronLeftIcon, UserCircleIcon, MailIcon, GroupIcon, UserIcon } from "@/icons";
 
 type Department = { id: number; name: string; code: string };
+type AcademicYearInfo = { id: number; name: string; startYear: number; endYear: number };
 type ClassInfo = {
   id: number;
   name: string;
@@ -30,6 +31,7 @@ export type StudentFormData = {
   gender: string;
   address: string;
   departmentId: string;
+  admissionAcademicYearId: string;
   classId: string;
   program: string;
   status: string;
@@ -53,6 +55,7 @@ const defaultForm: StudentFormData = {
   gender: "",
   address: "",
   departmentId: "",
+  admissionAcademicYearId: "",
   classId: "",
   program: "",
   status: "Admitted",
@@ -66,6 +69,7 @@ type Props = {
   editingId?: number;
   initialData?: Partial<StudentFormData>;
   departments: Department[];
+  academicYears: AcademicYearInfo[];
   classes: ClassInfo[];
   onSuccess: () => void;
 };
@@ -75,6 +79,7 @@ export default function StudentRegistrationForm({
   editingId,
   initialData,
   departments,
+  academicYears,
   classes,
   onSuccess,
 }: Props) {
@@ -140,6 +145,10 @@ export default function StudentRegistrationForm({
         gender: form.gender || undefined,
         address: form.address || undefined,
         departmentId: Number(form.departmentId),
+        admissionAcademicYearId:
+          form.admissionAcademicYearId && String(form.admissionAcademicYearId).trim() !== ""
+            ? Number(form.admissionAcademicYearId)
+            : null,
         classId: form.classId || undefined,
         program: form.program || undefined,
         status: form.status,
@@ -339,8 +348,8 @@ export default function StudentRegistrationForm({
 
         {/* Academic Info */}
         <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm dark:border-gray-700 dark:bg-gray-900">
-          <SectionHeader icon={GroupIcon} title="Academic Information" subtitle="Department, class, and program" />
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+          <SectionHeader icon={GroupIcon} title="Academic Information" subtitle="Department, admission year, class, and program" />
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <div>
               <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">Department <span className="text-error-500">*</span></label>
               <select required value={form.departmentId} onChange={(e) => setForm((f) => ({ ...f, departmentId: e.target.value, classId: "" }))} className={selectClass}>
@@ -349,9 +358,22 @@ export default function StudentRegistrationForm({
               </select>
             </div>
             <div>
+              <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">Admission academic year</label>
+              <select
+                value={form.admissionAcademicYearId}
+                onChange={(e) => setForm((f) => ({ ...f, admissionAcademicYearId: e.target.value }))}
+                className={selectClass}
+              >
+                <option value="">Optional</option>
+                {academicYears.map((y) => (
+                  <option key={y.id} value={String(y.id)}>{y.name}</option>
+                ))}
+              </select>
+            </div>
+            <div>
               <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">Class</label>
               <select value={form.classId} onChange={(e) => setForm((f) => ({ ...f, classId: e.target.value }))} className={selectClass}>
-                <option value="">Select class (optional)</option>
+                <option value="">Optional</option>
                 {classes.filter((c) => !form.departmentId || (c.departmentId ?? c.department?.id) === Number(form.departmentId)).map((c) => (
                   <option key={c.id} value={String(c.id)}>{c.department?.code ?? "—"} - {c.name} ({c.semester} {c.year})</option>
                 ))}

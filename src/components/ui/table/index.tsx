@@ -35,7 +35,7 @@ interface TableCellProps {
 // Table Component
 const Table: React.FC<TableProps> = ({ children, className }) => {
   return (
-    <div className="overflow-x-auto">
+    <div className="w-full min-w-0 overflow-x-auto [-webkit-overflow-scrolling:touch] touch-pan-x">
       <table className={`min-w-full divide-y divide-gray-200 dark:divide-gray-700 ${className ?? ""}`}>
         {children}
       </table>
@@ -81,7 +81,7 @@ const TableCell: React.FC<TableCellProps> = ({
     return (
       <th
         colSpan={colSpan}
-        className={`px-5 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400 ${className ?? ""}`}
+        className={`px-3 py-2.5 text-left text-xs font-semibold uppercase tracking-wider text-gray-500 sm:px-5 sm:py-3 dark:text-gray-400 ${className ?? ""}`}
       >
         {children}
       </th>
@@ -90,7 +90,7 @@ const TableCell: React.FC<TableCellProps> = ({
   return (
     <td
       colSpan={colSpan}
-      className={`px-5 py-4 text-sm text-gray-700 dark:text-gray-300 ${className ?? ""}`}
+      className={`px-3 py-3 text-sm text-gray-700 sm:px-5 sm:py-4 dark:text-gray-300 ${className ?? ""}`}
     >
       {children}
     </td>

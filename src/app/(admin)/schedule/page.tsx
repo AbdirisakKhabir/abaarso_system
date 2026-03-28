@@ -11,6 +11,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { authFetch } from "@/lib/api";
+import { ModalOverlayGate } from "@/context/ModalOverlayContext";
 import { useAuth } from "@/context/AuthContext";
 import { PlusIcon, TrashBinIcon, PencilIcon, DownloadIcon } from "@/icons";
 
@@ -406,7 +407,7 @@ export default function SchedulePage() {
             value={departmentId}
             onChange={(e) => { setDepartmentId(e.target.value); setClassId(""); }}
             disabled={loading}
-            className="h-10 min-w-[160px] rounded-lg border border-gray-200 bg-transparent px-4 text-sm outline-none focus:border-brand-500 dark:border-gray-700 dark:bg-gray-800/50"
+            className="h-10 w-full min-w-0 sm:w-auto sm:min-w-[160px] rounded-lg border border-gray-200 bg-transparent px-4 text-sm outline-none focus:border-brand-500 dark:border-gray-700 dark:bg-gray-800/50"
           >
             <option value="">All Departments</option>
             {departments.map((d) => (
@@ -420,7 +421,7 @@ export default function SchedulePage() {
             value={classId}
             onChange={(e) => setClassId(e.target.value)}
             disabled={loading}
-            className="h-10 min-w-[180px] rounded-lg border border-gray-200 bg-transparent px-4 text-sm outline-none focus:border-brand-500 dark:border-gray-700 dark:bg-gray-800/50"
+            className="h-10 w-full min-w-0 sm:w-auto sm:min-w-[180px] rounded-lg border border-gray-200 bg-transparent px-4 text-sm outline-none focus:border-brand-500 dark:border-gray-700 dark:bg-gray-800/50"
           >
             <option value="">All Classes</option>
             {filteredClasses.map((c) => (
@@ -447,7 +448,7 @@ export default function SchedulePage() {
             value={academicYearId}
             onChange={(e) => setAcademicYearId(e.target.value)}
             disabled={loading}
-            className="h-10 min-w-[140px] rounded-lg border border-gray-200 bg-transparent px-4 text-sm outline-none focus:border-brand-500 dark:border-gray-700 dark:bg-gray-800/50"
+            className="h-10 w-full min-w-0 sm:w-auto sm:min-w-[140px] rounded-lg border border-gray-200 bg-transparent px-4 text-sm outline-none focus:border-brand-500 dark:border-gray-700 dark:bg-gray-800/50"
           >
             <option value="">Select year</option>
             {academicYears.map((ay) => (
@@ -593,6 +594,7 @@ export default function SchedulePage() {
 
       {/* Add/Edit Modal */}
       {modal && (
+        <ModalOverlayGate>
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
           <div className="w-full max-w-md rounded-2xl border border-gray-200 bg-white shadow-xl dark:border-gray-700 dark:bg-gray-900">
             <div className="flex items-center justify-between border-b border-gray-200 px-6 py-4 dark:border-gray-700">
@@ -754,6 +756,7 @@ export default function SchedulePage() {
             </form>
           </div>
         </div>
+        </ModalOverlayGate>
       )}
     </div>
   );
