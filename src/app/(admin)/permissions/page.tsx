@@ -121,7 +121,7 @@ export default function PermissionsPage() {
             return (
               <div
                 key={module}
-                className="overflow-hidden rounded-2xl border border-gray-200 bg-white dark:border-gray-800 dark:bg-white/3"
+                className="min-w-0 overflow-hidden rounded-2xl border border-gray-200 bg-white dark:border-gray-800 dark:bg-white/3"
               >
                 {/* Module Header */}
                 <div className="flex items-center gap-3 border-b border-gray-200 px-5 py-4 dark:border-gray-800">

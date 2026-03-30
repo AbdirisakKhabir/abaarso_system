@@ -239,7 +239,7 @@ export default function BanksPage() {
         </div>
       </div>
 
-      <div className="mt-6 overflow-hidden rounded-2xl border border-gray-200 bg-white dark:border-gray-800 dark:bg-white/5">
+      <div className="mt-6 min-w-0 overflow-hidden rounded-2xl border border-gray-200 bg-white dark:border-gray-800 dark:bg-white/5">
         <div className="border-b border-gray-200 px-5 py-4 dark:border-gray-800">
           <h3 className="text-lg font-semibold text-gray-800 dark:text-white/90">Bank Accounts</h3>
         </div>

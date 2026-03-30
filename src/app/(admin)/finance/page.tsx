@@ -4,16 +4,7 @@ import React, { useCallback, useEffect, useState, useRef } from "react";
 import Link from "next/link";
 import PageBreadCrumb from "@/components/common/PageBreadCrumb";
 import Button from "@/components/ui/button/Button";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHeader,
-  TablePagination,
-  TableRow,
-} from "@/components/ui/table";
 import { DateInput } from "@/components/form/DateInput";
-import { DEFAULT_PAGE_SIZE, PAGE_SIZE_OPTIONS } from "@/hooks/usePagination";
 import { authFetch } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import {
@@ -23,32 +14,10 @@ import {
   InfoIcon,
   CalenderIcon,
   AlertIcon,
-  ListIcon,
 } from "@/icons";
 
 type Bank = { id: number; name: string; code: string; balance: number; accountNumber?: string | null };
 type SemesterOption = { id: number; name: string; sortOrder: number; isActive: boolean };
-type FinancePaymentRow = {
-  id: number;
-  amount: number;
-  semester: string;
-  year: number;
-  paymentMethod: string;
-  receiptNumber: string | null;
-  transactionId: string | null;
-  paymentDate: string;
-  paidAt: string;
-  note: string | null;
-  bank: { id: number; name: string; code: string } | null;
-  student: {
-    studentId: string;
-    firstName: string;
-    lastName: string;
-    department: { name: string; code: string };
-  };
-  recordedBy: { id: number; name: string; email: string } | null;
-};
-
 type SearchStudent = {
   id: number;
   studentId: string;
@@ -64,24 +33,6 @@ type SearchStudent = {
 };
 
 const CURRENT_YEAR = new Date().getFullYear();
-
-function paymentMethodLabel(method: string) {
-  switch (method) {
-    case "electronic":
-      return "Electronic";
-    case "cash_on_hand":
-      return "Cash on Hand";
-    default:
-      return "Bank Receipt";
-  }
-}
-
-function paymentReference(p: FinancePaymentRow) {
-  if (p.paymentMethod === "bank_receipt" && p.receiptNumber) return p.receiptNumber;
-  if (p.paymentMethod === "electronic" && p.transactionId) return p.transactionId;
-  if (p.note?.trim()) return p.note.trim();
-  return "—";
-}
 
 export default function FinancePage() {
   const { hasPermission } = useAuth();
@@ -109,13 +60,6 @@ export default function FinancePage() {
   const [payError, setPayError] = useState("");
   const [paySuccess, setPaySuccess] = useState(false);
   const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  // Finance list (paginated tuition payments)
-  const [financePayments, setFinancePayments] = useState<FinancePaymentRow[]>([]);
-  const [financeTotal, setFinanceTotal] = useState(0);
-  const [financePage, setFinancePage] = useState(1);
-  const [financePageSize, setFinancePageSize] = useState(DEFAULT_PAGE_SIZE);
-  const [financeLoading, setFinanceLoading] = useState(false);
 
   const canRecordPayment = hasPermission("finance.create") || hasPermission("finance.view");
 
@@ -164,39 +108,6 @@ export default function FinancePage() {
       if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
     };
   }, [searchQuery]);
-
-  const fetchFinancePayments = useCallback(
-    async (opts?: { page?: number; pageSize?: number }) => {
-      const page = opts?.page ?? financePage;
-      const ps = opts?.pageSize ?? financePageSize;
-      setFinanceLoading(true);
-      try {
-        const params = new URLSearchParams({
-          page: String(page),
-          pageSize: String(ps),
-        });
-        const res = await authFetch(`/api/tuition-payments?${params}`);
-        if (res.ok) {
-          const data = await res.json();
-          setFinancePayments(Array.isArray(data.items) ? data.items : []);
-          setFinanceTotal(typeof data.total === "number" ? data.total : 0);
-        } else {
-          setFinancePayments([]);
-          setFinanceTotal(0);
-        }
-      } catch {
-        setFinancePayments([]);
-        setFinanceTotal(0);
-      } finally {
-        setFinanceLoading(false);
-      }
-    },
-    [financePage, financePageSize]
-  );
-
-  useEffect(() => {
-    void fetchFinancePayments();
-  }, [fetchFinancePayments]);
 
   const tuitionFee = selectedStudent?.department?.tuitionFee ?? 0;
   const expectedFull = selectedStudent?.paymentStatus === "Full Scholarship" ? 0
@@ -271,8 +182,6 @@ export default function FinancePage() {
       setReceiptNumber("");
       setTransactionId("");
       setPayNote("");
-      setFinancePage(1);
-      void fetchFinancePayments({ page: 1 });
       authFetch("/api/banks").then((r) => { if (r.ok) r.json().then(setBanks); });
     } catch {
       setPayError("Network error");
@@ -280,17 +189,6 @@ export default function FinancePage() {
       setPaySubmitting(false);
     }
   };
-
-  const financeTotalPages = Math.max(1, Math.ceil(financeTotal / financePageSize) || 1);
-  const financeFrom =
-    financeTotal === 0 ? 0 : (financePage - 1) * financePageSize + 1;
-  const financeTo = Math.min(financePage * financePageSize, financeTotal);
-
-  useEffect(() => {
-    if (financeTotal > 0 && financePage > financeTotalPages) {
-      setFinancePage(financeTotalPages);
-    }
-  }, [financeTotal, financePage, financeTotalPages]);
 
   if (!hasPermission("finance.view") && !hasPermission("admission.view") && !hasPermission("dashboard.view")) {
     return (
@@ -317,6 +215,12 @@ export default function FinancePage() {
       <PageBreadCrumb pageTitle="Finance" />
 
       <div className="mb-8 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-gray-500 dark:text-gray-400">
+        <Link href="/finance/payments" className="font-medium text-brand-600 hover:underline dark:text-brand-400">
+          Payments
+        </Link>
+        <span className="text-gray-300 dark:text-gray-600" aria-hidden>
+          ·
+        </span>
         <Link href="/finance/banks" className="font-medium text-brand-600 hover:underline dark:text-brand-400">
           Manage banks
         </Link>
@@ -328,9 +232,8 @@ export default function FinancePage() {
         </Link>
       </div>
 
-      <div className="grid gap-8 lg:grid-cols-2 lg:items-start">
-        {/* Payment form */}
-        <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm dark:border-gray-800 dark:bg-white/3">
+      <div className="mx-auto max-w-3xl min-w-0">
+        <div className="min-w-0 overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm dark:border-gray-800 dark:bg-white/3">
           <div className="border-b border-gray-200 px-5 py-4 dark:border-gray-800">
             <h2 className="flex items-center gap-2 text-lg font-semibold text-gray-900 dark:text-white">
               <DollarLineIcon className="h-5 w-5 shrink-0 text-brand-500" />
@@ -356,6 +259,14 @@ export default function FinancePage() {
                   <p className="font-semibold text-emerald-900 dark:text-emerald-200">Payment saved</p>
                   <p className="mt-0.5 text-emerald-800/90 dark:text-emerald-300/90">
                     The student&apos;s balance and the bank account balance have been updated.
+                  </p>
+                  <p className="mt-2">
+                    <Link
+                      href="/finance/payments"
+                      className="font-medium text-emerald-800 underline decoration-emerald-600/50 underline-offset-2 hover:text-emerald-900 dark:text-emerald-200 dark:decoration-emerald-400/50"
+                    >
+                      View payment history
+                    </Link>
                   </p>
                 </div>
               </div>
@@ -679,96 +590,6 @@ export default function FinancePage() {
             </div>
           </div>
         </form>
-        </div>
-
-        {/* Payments list */}
-        <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm dark:border-gray-800 dark:bg-white/3">
-        <div className="border-b border-gray-200 px-5 py-4 dark:border-gray-800">
-          <h2 className="flex items-center gap-2 text-lg font-semibold text-gray-900 dark:text-white">
-            <ListIcon className="h-5 w-5 shrink-0 text-brand-500" />
-            Payments
-          </h2>
-          <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">Newest first.</p>
-        </div>
-        <div className="p-0">
-          {financeLoading ? (
-            <div className="flex justify-center py-16">
-              <div className="h-8 w-8 animate-spin rounded-full border-4 border-gray-200 border-t-brand-500" />
-            </div>
-          ) : financeTotal === 0 ? (
-            <div className="px-6 py-12 text-center text-sm text-gray-500 dark:text-gray-400">
-              No tuition payments recorded yet.
-            </div>
-          ) : (
-            <>
-              <div className="overflow-x-auto">
-                <Table>
-                  <TableHeader>
-                    <TableRow className="bg-transparent! hover:bg-transparent!">
-                      <TableCell isHeader>Date</TableCell>
-                      <TableCell isHeader>Student</TableCell>
-                      <TableCell isHeader>Semester</TableCell>
-                      <TableCell isHeader className="text-right">Amount</TableCell>
-                      <TableCell isHeader>Method</TableCell>
-                      <TableCell isHeader>Bank</TableCell>
-                      <TableCell isHeader>Reference</TableCell>
-                      <TableCell isHeader>Recorded by</TableCell>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {financePayments.map((p) => (
-                      <TableRow key={p.id}>
-                        <TableCell className="whitespace-nowrap">
-                          {new Date(p.paymentDate).toLocaleDateString()}
-                        </TableCell>
-                        <TableCell>
-                          <Link
-                            href={`/students/${encodeURIComponent(p.student.studentId)}`}
-                            className="font-medium text-brand-600 hover:underline dark:text-brand-400"
-                          >
-                            {p.student.firstName} {p.student.lastName}
-                          </Link>
-                          <span className="ml-1 font-mono text-xs text-gray-500 dark:text-gray-400">
-                            {p.student.studentId}
-                          </span>
-                        </TableCell>
-                        <TableCell>
-                          {p.semester} {p.year}
-                        </TableCell>
-                        <TableCell className="text-right font-semibold text-green-600 dark:text-green-400">
-                          ${Number(p.amount).toLocaleString()}
-                        </TableCell>
-                        <TableCell>{paymentMethodLabel(p.paymentMethod)}</TableCell>
-                        <TableCell>
-                          {p.bank ? `${p.bank.code} · ${p.bank.name}` : "—"}
-                        </TableCell>
-                        <TableCell className="max-w-[140px] text-gray-600 dark:text-gray-300">
-                          <span className="block truncate" title={paymentReference(p)}>
-                            {paymentReference(p)}
-                          </span>
-                        </TableCell>
-                        <TableCell className="text-sm text-gray-600 dark:text-gray-400">
-                          {p.recordedBy?.name || "—"}
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
-              <TablePagination
-                page={financePage}
-                totalPages={financeTotalPages}
-                total={financeTotal}
-                from={financeFrom}
-                to={financeTo}
-                pageSize={financePageSize}
-                onPageChange={setFinancePage}
-                onPageSizeChange={setFinancePageSize}
-                pageSizeOptions={PAGE_SIZE_OPTIONS}
-              />
-            </>
-          )}
-        </div>
         </div>
       </div>
     </div>

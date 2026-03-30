@@ -150,7 +150,7 @@ export default function UnpaidStudentsReportPage() {
         )}
       </div>
 
-      <div className="rounded-2xl border border-gray-200 bg-white p-6 dark:border-gray-800 dark:bg-white/5">
+      <div className="min-w-0 overflow-hidden rounded-2xl border border-gray-200 bg-white p-6 dark:border-gray-800 dark:bg-white/5">
         <h3 className="mb-4 text-lg font-semibold text-gray-800 dark:text-white/90">
           Unpaid Students by Semester & Class
         </h3>

@@ -156,7 +156,7 @@ export default function AttendanceExamReportPage() {
         </p>
       </div>
 
-      <div className="rounded-2xl border border-gray-200 bg-white dark:border-gray-800 dark:bg-white/5">
+      <div className="min-w-0 overflow-hidden rounded-2xl border border-gray-200 bg-white dark:border-gray-800 dark:bg-white/5">
         <div className="no-print border-b border-gray-100 px-5 py-4 dark:border-gray-800">
           <h3 className="mb-4 text-lg font-semibold text-gray-800 dark:text-white/90">
             Filters

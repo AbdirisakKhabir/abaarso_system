@@ -32,11 +32,17 @@ interface TableCellProps {
   colSpan?: number;
 }
 
-// Table Component
+// Table Component — horizontal scroll inside wide layouts (grid/flex) without overflow
 const Table: React.FC<TableProps> = ({ children, className }) => {
   return (
-    <div className="w-full min-w-0 overflow-x-auto [-webkit-overflow-scrolling:touch] touch-pan-x">
-      <table className={`min-w-full divide-y divide-gray-200 dark:divide-gray-700 ${className ?? ""}`}>
+    <div
+      className="relative isolate w-full min-w-0 max-w-full overflow-x-auto overscroll-x-contain [-webkit-overflow-scrolling:touch]"
+      role="region"
+      aria-label="Scrollable table"
+    >
+      <table
+        className={`min-w-full border-collapse divide-y divide-gray-200 text-left dark:divide-gray-700 ${className ?? ""}`}
+      >
         {children}
       </table>
     </div>
@@ -81,7 +87,7 @@ const TableCell: React.FC<TableCellProps> = ({
     return (
       <th
         colSpan={colSpan}
-        className={`px-3 py-2.5 text-left text-xs font-semibold uppercase tracking-wider text-gray-500 sm:px-5 sm:py-3 dark:text-gray-400 ${className ?? ""}`}
+        className={`px-3 py-2.5 text-left align-top text-xs font-semibold uppercase tracking-wider wrap-break-word text-gray-500 sm:px-5 sm:py-3 dark:text-gray-400 ${className ?? ""}`}
       >
         {children}
       </th>
@@ -90,7 +96,7 @@ const TableCell: React.FC<TableCellProps> = ({
   return (
     <td
       colSpan={colSpan}
-      className={`px-3 py-3 text-sm text-gray-700 sm:px-5 sm:py-4 dark:text-gray-300 ${className ?? ""}`}
+      className={`px-3 py-3 text-sm align-top wrap-break-word text-gray-700 sm:px-5 sm:py-4 dark:text-gray-300 ${className ?? ""}`}
     >
       {children}
     </td>

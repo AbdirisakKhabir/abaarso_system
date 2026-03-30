@@ -300,7 +300,7 @@ export default function AttendancePage() {
       </div>
 
       {/* Card */}
-      <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white dark:border-gray-800 dark:bg-white/3">
+      <div className="min-w-0 overflow-hidden rounded-2xl border border-gray-200 bg-white dark:border-gray-800 dark:bg-white/3">
         {/* Toolbar */}
         <div className="flex flex-col gap-3 border-b border-gray-200 px-5 py-4 dark:border-gray-800 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-2">
@@ -584,7 +584,7 @@ export default function AttendancePage() {
                 )}
 
                 {/* Students List */}
-                <div className="max-h-[45vh] overflow-y-auto rounded-xl border border-gray-200 dark:border-gray-700">
+                <div className="max-h-[45vh] min-w-0 overflow-auto rounded-xl border border-gray-200 dark:border-gray-700">
                   {loadingStudents ? (
                     <div className="flex items-center justify-center py-12">
                       <div className="h-6 w-6 animate-spin rounded-full border-2 border-gray-200 border-t-brand-500" />
@@ -725,7 +725,7 @@ export default function AttendancePage() {
       {viewSession && (
         <ModalOverlayGate>
         <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/60 p-4 pt-10 backdrop-blur-sm">
-          <div className="w-full max-w-2xl rounded-2xl border border-gray-200 bg-white shadow-xl dark:border-gray-700 dark:bg-gray-900">
+          <div className="w-full min-w-0 max-w-2xl rounded-2xl border border-gray-200 bg-white shadow-xl dark:border-gray-700 dark:bg-gray-900">
             {/* Header */}
             <div className="flex items-center justify-between border-b border-gray-200 px-6 py-4 dark:border-gray-700">
               <div>
@@ -780,8 +780,8 @@ export default function AttendancePage() {
             </div>
 
             {/* Records */}
-            <div className="max-h-[50vh] overflow-y-auto">
-              <table className="min-w-full divide-y divide-gray-100 dark:divide-gray-800">
+            <div className="max-h-[50vh] min-w-0 overflow-auto">
+              <table className="min-w-full border-collapse divide-y divide-gray-100 dark:divide-gray-800">
                 <thead className="bg-gray-50 dark:bg-white/3">
                   <tr>
                     <th className="px-5 py-2.5 text-left text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">

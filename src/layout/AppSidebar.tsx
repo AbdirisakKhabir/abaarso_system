@@ -128,6 +128,7 @@ const academicsItems: NavItem[] = [
     permission: "finance.view",
     subItems: [
       { name: "Record Payment", path: "/finance", permission: "finance.view" },
+      { name: "Payments", path: "/finance/payments", permission: "finance.view" },
       { name: "Banks", path: "/finance/banks", permission: "banks.view" },
       { name: "Expenses", path: "/finance/expenses", permission: "expenses.view" },
     ],

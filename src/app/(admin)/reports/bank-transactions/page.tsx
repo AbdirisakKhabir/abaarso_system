@@ -174,7 +174,7 @@ export default function BankTransactionsReportPage() {
       <div className="space-y-6">
         {data && (
           <>
-            <div className="rounded-2xl border border-gray-200 bg-white dark:border-gray-800 dark:bg-white/5">
+            <div className="min-w-0 overflow-hidden rounded-2xl border border-gray-200 bg-white dark:border-gray-800 dark:bg-white/5">
               <div className="flex flex-wrap items-center justify-between gap-4 border-b border-gray-200 px-6 py-4 dark:border-gray-800">
                 <h3 className="font-semibold text-gray-800 dark:text-white/90">Deposits (Tuition Payments)</h3>
                 {data.deposits.length > 0 && (
@@ -232,7 +232,7 @@ export default function BankTransactionsReportPage() {
               )}
             </div>
 
-            <div className="rounded-2xl border border-gray-200 bg-white dark:border-gray-800 dark:bg-white/5">
+            <div className="min-w-0 overflow-hidden rounded-2xl border border-gray-200 bg-white dark:border-gray-800 dark:bg-white/5">
               <div className="flex flex-wrap items-center justify-between gap-4 border-b border-gray-200 px-6 py-4 dark:border-gray-800">
                 <h3 className="font-semibold text-gray-800 dark:text-white/90">Withdrawals</h3>
                 {data.withdrawals.length > 0 && (
@@ -286,7 +286,7 @@ export default function BankTransactionsReportPage() {
               )}
             </div>
 
-            <div className="rounded-2xl border border-gray-200 bg-white dark:border-gray-800 dark:bg-white/5">
+            <div className="min-w-0 overflow-hidden rounded-2xl border border-gray-200 bg-white dark:border-gray-800 dark:bg-white/5">
               <div className="border-b border-gray-200 px-6 py-4 dark:border-gray-800">
                 <h3 className="font-semibold text-gray-800 dark:text-white/90">Transfers</h3>
               </div>

@@ -116,7 +116,7 @@ export default function ExamReportPage() {
         <p className="text-sm text-gray-600">Generated: {new Date().toLocaleDateString()}</p>
       </div>
 
-      <div className="rounded-2xl border border-gray-200 bg-white dark:border-gray-800 dark:bg-white/5">
+      <div className="min-w-0 overflow-hidden rounded-2xl border border-gray-200 bg-white dark:border-gray-800 dark:bg-white/5">
         <div className="no-print border-b border-gray-100 px-5 py-4 dark:border-gray-800">
           <h3 className="mb-4 text-lg font-semibold text-gray-800 dark:text-white/90">Filters</h3>
           <div className="flex flex-wrap gap-4">

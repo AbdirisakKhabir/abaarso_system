@@ -359,7 +359,7 @@ export default function ExaminationsPage() {
         )}
       </div>
 
-      <div className="rounded-2xl border border-gray-200 bg-white dark:border-gray-800 dark:bg-white/5">
+      <div className="min-w-0 overflow-hidden rounded-2xl border border-gray-200 bg-white dark:border-gray-800 dark:bg-white/5">
         {/* Header */}
         <div className="flex flex-col gap-4 px-5 py-5 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-3">
@@ -762,8 +762,8 @@ export default function ExaminationsPage() {
                 )}
 
                 {/* Detailed Records */}
-                <div className="overflow-x-auto">
-                  <table className="min-w-full text-sm">
+                <div className="min-w-0 max-w-full overflow-x-auto">
+                  <table className="min-w-full border-collapse text-sm">
                     <thead>
                       <tr className="border-b border-gray-100 dark:border-gray-800">
                         <th className="px-3 py-2 text-left text-xs font-medium uppercase text-gray-500">Course</th>
