@@ -39,7 +39,7 @@ export default function RevenueChart() {
 
   const options: ApexOptions = {
     chart: {
-      fontFamily: "Outfit, sans-serif",
+      fontFamily: "Roboto, sans-serif",
       toolbar: { show: false },
       zoom: { enabled: false },
     },

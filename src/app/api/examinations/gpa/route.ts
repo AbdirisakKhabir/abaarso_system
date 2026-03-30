@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getAuthUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { calculateGPA } from "@/lib/grades";
+import { sortExamRecordsBySemesterChronologically } from "@/lib/semester-sort";
 
 export async function GET(req: NextRequest) {
   try {
@@ -41,14 +42,13 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: "Student not found" }, { status: 404 });
     }
 
-    const records = await prisma.examRecord.findMany({
+    const recordsRaw = await prisma.examRecord.findMany({
       where: { studentId: Number(studentId) },
       include: {
         course: {
           select: { id: true, name: true, code: true, creditHours: true },
         },
       },
-      orderBy: [{ year: "desc" }, { semester: "asc" }],
     });
 
     const semesters = await prisma.semester.findMany({
@@ -60,6 +60,8 @@ export async function GET(req: NextRequest) {
       acc[s.name] = s.sortOrder ?? i;
       return acc;
     }, {});
+
+    const records = sortExamRecordsBySemesterChronologically(recordsRaw, semOrderMap);
 
     const gpaData = calculateGPA(
       records.map((r) => ({
@@ -75,6 +77,7 @@ export async function GET(req: NextRequest) {
       student,
       records,
       gpa: gpaData,
+      semesterSortMap: semOrderMap,
     });
   } catch (e) {
     console.error("GPA calculation error:", e);

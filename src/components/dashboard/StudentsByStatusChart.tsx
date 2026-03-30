@@ -46,7 +46,7 @@ export default function StudentsByStatusChart() {
 
   const options: ApexOptions = {
     chart: {
-      fontFamily: "Outfit, sans-serif",
+      fontFamily: "Roboto, sans-serif",
       type: "donut",
       toolbar: { show: false },
     },

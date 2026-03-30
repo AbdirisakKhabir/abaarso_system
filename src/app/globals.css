@@ -4,7 +4,7 @@
 
 @theme {
   --font-*: initial;
-  --font-outfit: Outfit, sans-serif;
+  --font-sans: var(--font-roboto), ui-sans-serif, system-ui, sans-serif;
 
   --breakpoint-*: initial;
   --breakpoint-2xsm: 375px;
@@ -26,12 +26,12 @@
   --text-title-md--line-height: 44px;
   --text-title-sm: 30px;
   --text-title-sm--line-height: 38px;
-  --text-theme-xl: 20px;
-  --text-theme-xl--line-height: 30px;
-  --text-theme-sm: 14px;
-  --text-theme-sm--line-height: 20px;
-  --text-theme-xs: 12px;
-  --text-theme-xs--line-height: 18px;
+  --text-theme-xl: 21px;
+  --text-theme-xl--line-height: 31px;
+  --text-theme-sm: 15px;
+  --text-theme-sm--line-height: 21px;
+  --text-theme-xs: 13px;
+  --text-theme-xs--line-height: 19px;
 
   --color-current: currentColor;
   --color-transparent: transparent;
@@ -176,6 +176,10 @@
   color utility to any element that depends on these defaults.
 */
 @layer base {
+  html {
+    /* Slight global scale-up for rem-based text (≈5% over browser default) */
+    font-size: 105%;
+  }
   *,
   ::after,
   ::before,
@@ -188,7 +192,7 @@
     cursor: pointer;
   }
   body {
-    @apply relative font-normal font-outfit z-1 bg-gray-50;
+    @apply relative z-1 bg-gray-50 font-normal font-sans;
   }
 }
 

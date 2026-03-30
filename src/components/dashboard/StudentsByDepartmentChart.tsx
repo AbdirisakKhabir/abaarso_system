@@ -42,7 +42,7 @@ export default function StudentsByDepartmentChart() {
 
   const options: ApexOptions = {
     chart: {
-      fontFamily: "Outfit, sans-serif",
+      fontFamily: "Roboto, sans-serif",
       toolbar: { show: false },
       type: "bar",
     },

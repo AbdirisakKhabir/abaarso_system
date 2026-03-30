@@ -8,6 +8,8 @@
 //   Presentation:  /10
 //   Total:         /100
 
+import { semesterOrdinal } from "./semester-sort";
+
 export interface GradeInfo {
   grade: string;
   gradePoints: number;
@@ -111,11 +113,10 @@ export function calculateGPA(
   let cumulativeTotalCredits = 0;
   let cumulativeTotalGradePoints = 0;
 
-  // Sort semesters by year then semester (use semOrderMap from DB, or fallback)
-  const semOrder: Record<string, number> = semOrderMap ?? { Spring: 1, Summer: 2, Fall: 3 };
+  // Sort semesters by year then semester (DB order map + "Semester N" / Fall / Spring, etc.)
   const sorted = [...semMap.values()].sort((a, b) => {
     if (a.year !== b.year) return a.year - b.year;
-    return (semOrder[a.semester] || 0) - (semOrder[b.semester] || 0);
+    return semesterOrdinal(a.semester, semOrderMap) - semesterOrdinal(b.semester, semOrderMap);
   });
 
   for (const sem of sorted) {

@@ -6,6 +6,7 @@ import Button from "@/components/ui/button/Button";
 import { authFetch } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import { TranscriptDocument } from "@/components/transcript/TranscriptDocument";
+import { compareTranscriptSemesterKeys } from "@/lib/semester-sort";
 
 type Department = { id: number; name: string; code: string };
 type ClassItem = {
@@ -60,11 +61,13 @@ type TranscriptData = {
     totalCredits: number;
     semesters: SemesterGPA[];
   };
+  semesterSortMap?: Record<string, number>;
 };
 
 type ClassTranscriptData = {
   class: { id: number; name: string; semester: string; year: number; department: { code: string; name: string } };
   transcripts: TranscriptData[];
+  semesterSortMap?: Record<string, number>;
 };
 
 type TranscriptMode = "student" | "class";
@@ -180,15 +183,13 @@ export default function TranscriptPage() {
       }, {})
     : {};
 
-  // Sort semester keys chronologically (oldest first: year asc, then Spring→Summer→Fall)
-  const semOrder: Record<string, number> = { Spring: 1, Summer: 2, Fall: 3 };
-  const semesterKeys = Object.keys(recordsBySemester).sort((a, b) => {
-    const [ay, as] = a.split("-");
-    const [by, bs] = b.split("-");
-    const yearDiff = Number(ay) - Number(by);
-    if (yearDiff !== 0) return yearDiff;
-    return (semOrder[as] ?? 0) - (semOrder[bs] ?? 0);
-  });
+  const semesterSortMap =
+    transcript?.semesterSortMap ?? classTranscript?.semesterSortMap ?? undefined;
+
+  // Sort keys like "2024-Semester 1" (year first; do not split on every "-")
+  const semesterKeys = Object.keys(recordsBySemester).sort((a, b) =>
+    compareTranscriptSemesterKeys(a, b, semesterSortMap)
+  );
 
   const canView =
     hasPermission("examinations.view") ||
@@ -346,13 +347,9 @@ export default function TranscriptPage() {
                   acc[key].push(r);
                   return acc;
                 }, {});
-                const keys = Object.keys(recBySem).sort((a, b) => {
-                  const [ay, as] = a.split("-");
-                  const [by, bs] = b.split("-");
-                  const yd = Number(ay) - Number(by);
-                  if (yd !== 0) return yd;
-                  return (semOrder[as] ?? 0) - (semOrder[bs] ?? 0);
-                });
+                const keys = Object.keys(recBySem).sort((a, b) =>
+                  compareTranscriptSemesterKeys(a, b, classTranscript.semesterSortMap)
+                );
                 const semGpaMap = t.gpa.semesters.reduce<Record<string, SemesterGPA>>(
                   (acc, s) => {
                     acc[`${s.year}-${s.semester}`] = s;
