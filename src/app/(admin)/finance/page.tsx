@@ -13,33 +13,21 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { DateInput } from "@/components/form/DateInput";
-import { usePagination, DEFAULT_PAGE_SIZE, PAGE_SIZE_OPTIONS } from "@/hooks/usePagination";
+import { DEFAULT_PAGE_SIZE, PAGE_SIZE_OPTIONS } from "@/hooks/usePagination";
 import { authFetch } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import {
-  DownloadIcon,
   DollarLineIcon,
   UserCircleIcon,
   CheckCircleIcon,
   InfoIcon,
   CalenderIcon,
   AlertIcon,
+  ListIcon,
 } from "@/icons";
 
 type Bank = { id: number; name: string; code: string; balance: number; accountNumber?: string | null };
 type SemesterOption = { id: number; name: string; sortOrder: number; isActive: boolean };
-type ClassOption = { id: number; name: string; semester: string; year: number; department: { id: number; code: string; name: string } };
-type UnpaidStudent = {
-  id: number;
-  studentId: string;
-  firstName: string;
-  lastName: string;
-  email: string | null;
-  phone: string | null;
-  department: { name: string; code: string; tuitionFee: number | null };
-  tuitionFee: number | null;
-  paymentStatus?: string;
-};
 type FinancePaymentRow = {
   id: number;
   amount: number;
@@ -99,7 +87,6 @@ export default function FinancePage() {
   const { hasPermission } = useAuth();
   const [banks, setBanks] = useState<Bank[]>([]);
   const [semesters, setSemesters] = useState<SemesterOption[]>([]);
-  const [classes, setClasses] = useState<ClassOption[]>([]);
 
   // Record Payment Form
   const [searchQuery, setSearchQuery] = useState("");
@@ -130,14 +117,6 @@ export default function FinancePage() {
   const [financePageSize, setFinancePageSize] = useState(DEFAULT_PAGE_SIZE);
   const [financeLoading, setFinanceLoading] = useState(false);
 
-  // Unpaid students
-  const [unpaidSemester, setUnpaidSemester] = useState("");
-  const [unpaidYear, setUnpaidYear] = useState(String(CURRENT_YEAR));
-  const [unpaidClassId, setUnpaidClassId] = useState("");
-  const [unpaidStudents, setUnpaidStudents] = useState<UnpaidStudent[]>([]);
-  const [unpaidClassInfo, setUnpaidClassInfo] = useState<{ name: string; semester: string; year: number; department: { code: string; name: string } } | null>(null);
-  const [unpaidLoading, setUnpaidLoading] = useState(false);
-
   const canRecordPayment = hasPermission("finance.create") || hasPermission("finance.view");
 
   useEffect(() => {
@@ -151,11 +130,7 @@ export default function FinancePage() {
       if (r.ok) r.json().then((d: SemesterOption[]) => {
         setSemesters(d);
         if (d.length > 0 && !paySemester) setPaySemester(d[0].name);
-        if (d.length > 0 && !unpaidSemester) setUnpaidSemester(d[0].name);
       });
-    });
-    authFetch("/api/classes").then((r) => {
-      if (r.ok) r.json().then((d: ClassOption[]) => setClasses(d));
     });
   }, []);
 
@@ -166,10 +141,6 @@ export default function FinancePage() {
   useEffect(() => {
     if (semesters.length > 0 && !paySemester) setPaySemester(semesters[0].name);
   }, [semesters, paySemester]);
-
-  useEffect(() => {
-    if (semesters.length > 0 && !unpaidSemester) setUnpaidSemester(semesters[0].name);
-  }, [semesters, unpaidSemester]);
 
   useEffect(() => {
     const q = searchQuery.trim();
@@ -227,16 +198,6 @@ export default function FinancePage() {
     void fetchFinancePayments();
   }, [fetchFinancePayments]);
 
-  const filteredClasses = classes.filter(
-    (c) => c.semester === unpaidSemester && c.year === Number(unpaidYear)
-  );
-
-  useEffect(() => {
-    if (unpaidClassId && !filteredClasses.some((c) => c.id === Number(unpaidClassId))) {
-      setUnpaidClassId("");
-    }
-  }, [filteredClasses, unpaidClassId]);
-
   const tuitionFee = selectedStudent?.department?.tuitionFee ?? 0;
   const expectedFull = selectedStudent?.paymentStatus === "Full Scholarship" ? 0
     : selectedStudent?.paymentStatus === "Half Scholar" ? tuitionFee * 0.5
@@ -261,54 +222,6 @@ export default function FinancePage() {
   const handleClearStudent = () => {
     setSelectedStudent(null);
     setSearchQuery("");
-  };
-
-  const handleGenerateUnpaid = async () => {
-    if (!unpaidSemester || !unpaidYear || !unpaidClassId) return;
-    setUnpaidLoading(true);
-    setUnpaidClassInfo(null);
-    setUnpaidStudents([]);
-    try {
-      const params = new URLSearchParams({
-        semester: unpaidSemester,
-        year: unpaidYear,
-        classId: unpaidClassId,
-      });
-      const res = await authFetch(`/api/finance/unpaid-students?${params}`);
-      const data = await res.json();
-      if (!res.ok) {
-        alert(data.error || "Failed to load unpaid students");
-        return;
-      }
-      setUnpaidClassInfo(data.class);
-      setUnpaidStudents(data.unpaidStudents || []);
-    } catch {
-      alert("Network error");
-    } finally {
-      setUnpaidLoading(false);
-    }
-  };
-
-  const handleExportUnpaidCSV = () => {
-    if (unpaidStudents.length === 0) return;
-    const headers = ["Student ID", "First Name", "Last Name", "Email", "Phone", "Department", "Tuition Fee"];
-    const rows = unpaidStudents.map((s) => [
-      s.studentId,
-      s.firstName,
-      s.lastName,
-      s.email || "",
-      s.phone || "",
-      `${s.department.code} - ${s.department.name}`,
-      s.tuitionFee != null ? String(s.tuitionFee) : "",
-    ]);
-    const csv = [headers.join(","), ...rows.map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(","))].join("\n");
-    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `Unpaid_Students_${unpaidClassInfo?.department?.code || "class"}_${unpaidSemester}_${unpaidYear}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
   };
 
   const handleRecordPayment = async (e: React.FormEvent) => {
@@ -368,18 +281,6 @@ export default function FinancePage() {
     }
   };
 
-  const {
-    paginatedItems: paginatedUnpaidStudents,
-    page: unpaidPage,
-    setPage: setUnpaidPage,
-    pageSize: unpaidPageSize,
-    setPageSize: setUnpaidPageSize,
-    totalPages: unpaidTotalPages,
-    total: unpaidTotal,
-    from: unpaidFrom,
-    to: unpaidTo,
-  } = usePagination(unpaidStudents, [unpaidClassId, unpaidSemester, unpaidYear]);
-
   const financeTotalPages = Math.max(1, Math.ceil(financeTotal / financePageSize) || 1);
   const financeFrom =
     financeTotal === 0 ? 0 : (financePage - 1) * financePageSize + 1;
@@ -415,55 +316,30 @@ export default function FinancePage() {
     <div>
       <PageBreadCrumb pageTitle="Finance" />
 
-      <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
-        <p className="text-sm text-gray-500 dark:text-gray-400">
-          Record bank deposits and tuition payments.{" "}
-          <Link href="/finance/banks" className="font-medium text-brand-600 hover:underline dark:text-brand-400">
-            Manage Banks
-          </Link>
-          {" · "}
-          <Link href="/reports/payment" className="font-medium text-brand-600 hover:underline dark:text-brand-400">
-            Finance Reports
-          </Link>
-        </p>
+      <div className="mb-8 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-gray-500 dark:text-gray-400">
+        <Link href="/finance/banks" className="font-medium text-brand-600 hover:underline dark:text-brand-400">
+          Manage banks
+        </Link>
+        <span className="text-gray-300 dark:text-gray-600" aria-hidden>
+          ·
+        </span>
+        <Link href="/reports/payment" className="font-medium text-brand-600 hover:underline dark:text-brand-400">
+          Finance reports
+        </Link>
       </div>
 
-      {/* Record tuition payment — stepped form */}
-      <div className="mb-8 overflow-hidden rounded-2xl border border-gray-200/90 bg-white shadow-xl shadow-gray-200/40 ring-1 ring-black/[0.03] dark:border-gray-800 dark:bg-white/[0.03] dark:shadow-none dark:ring-white/5">
-        <div className="relative overflow-hidden bg-gradient-to-br from-brand-600 via-brand-600 to-brand-800 px-6 py-5 sm:px-8 sm:py-6">
-          <div className="pointer-events-none absolute -right-10 -top-10 h-40 w-40 rounded-full bg-white/10 blur-2xl" />
-          <div className="pointer-events-none absolute -bottom-8 left-1/4 h-24 w-48 rounded-full bg-brand-400/20 blur-xl" />
-          <div className="relative flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex items-start gap-4">
-              <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-white/15 shadow-inner ring-1 ring-white/20">
-                <DollarLineIcon className="h-7 w-7 text-white" />
-              </div>
-              <div>
-                <h3 className="text-xl font-bold tracking-tight text-white sm:text-2xl">
-                  Record a tuition payment
-                </h3>
-                <p className="mt-1 max-w-xl text-sm leading-relaxed text-white/85">
-                  Match the student, choose the semester you are paying for, then enter how they paid and
-                  any proof. The student&apos;s balance and the selected bank&apos;s balance will update.
-                </p>
-              </div>
-            </div>
-            <div className="mt-2 flex shrink-0 flex-wrap gap-2 text-xs text-white/80 sm:mt-0 sm:flex-col sm:text-right">
-              <span className="inline-flex items-center gap-1.5 rounded-full bg-white/10 px-3 py-1 ring-1 ring-white/15">
-                <span className="text-sm font-semibold text-white">1</span> Student
-              </span>
-              <span className="inline-flex items-center gap-1.5 rounded-full bg-white/10 px-3 py-1 ring-1 ring-white/15">
-                <span className="text-sm font-semibold text-white">2</span> Period &amp; bank
-              </span>
-              <span className="inline-flex items-center gap-1.5 rounded-full bg-white/10 px-3 py-1 ring-1 ring-white/15">
-                <span className="text-sm font-semibold text-white">3</span> Amount &amp; method
-              </span>
-            </div>
+      <div className="grid gap-8 lg:grid-cols-2 lg:items-start">
+        {/* Payment form */}
+        <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm dark:border-gray-800 dark:bg-white/3">
+          <div className="border-b border-gray-200 px-5 py-4 dark:border-gray-800">
+            <h2 className="flex items-center gap-2 text-lg font-semibold text-gray-900 dark:text-white">
+              <DollarLineIcon className="h-5 w-5 shrink-0 text-brand-500" />
+              Payment form
+            </h2>
           </div>
-        </div>
 
-        <form onSubmit={handleRecordPayment} className="p-6 sm:p-8">
-          <div className="mx-auto max-w-3xl space-y-8">
+        <form onSubmit={handleRecordPayment} className="p-5 sm:p-6">
+          <div className="space-y-8">
             {payError && (
               <div
                 role="alert"
@@ -485,18 +361,12 @@ export default function FinancePage() {
               </div>
             )}
 
-            {/* Step 1 — Student */}
             <section className="rounded-2xl border border-gray-100 bg-gray-50/60 p-5 shadow-sm dark:border-gray-800 dark:bg-gray-900/50">
-              <div className="mb-4 flex flex-wrap items-center gap-3">
-                <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand-500 text-sm font-bold text-white shadow-sm">
-                  1
-                </span>
-                <div>
-                  <h4 className="text-base font-semibold text-gray-900 dark:text-white">Which student?</h4>
-                  <p className="text-sm text-gray-500 dark:text-gray-400">
-                    Type at least two characters to search by name, phone, or student ID.
-                  </p>
-                </div>
+              <div className="mb-4">
+                <h4 className="text-base font-semibold text-gray-900 dark:text-white">Student</h4>
+                <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                  Type at least two characters to search by name, phone, or student ID.
+                </p>
               </div>
               <div className="relative">
                 <label className="mb-2 flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-300">
@@ -575,18 +445,12 @@ export default function FinancePage() {
               )}
             </section>
 
-            {/* Step 2 — Period & bank */}
             <section className="rounded-2xl border border-gray-100 bg-gray-50/60 p-5 shadow-sm dark:border-gray-800 dark:bg-gray-900/50">
-              <div className="mb-4 flex flex-wrap items-center gap-3">
-                <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand-500 text-sm font-bold text-white shadow-sm">
-                  2
-                </span>
-                <div>
-                  <h4 className="text-base font-semibold text-gray-900 dark:text-white">Payment period &amp; deposit account</h4>
-                  <p className="text-sm text-gray-500 dark:text-gray-400">
-                    This payment applies to one semester and year. Money is credited to the bank you choose.
-                  </p>
-                </div>
+              <div className="mb-4">
+                <h4 className="text-base font-semibold text-gray-900 dark:text-white">Period &amp; bank</h4>
+                <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                  Semester, year, and the account this deposit is credited to.
+                </p>
               </div>
               <div className="space-y-4">
                 <div>
@@ -648,18 +512,12 @@ export default function FinancePage() {
               </div>
             </section>
 
-            {/* Step 3 — Amount & method */}
             <section className="rounded-2xl border border-gray-100 bg-gray-50/60 p-5 shadow-sm dark:border-gray-800 dark:bg-gray-900/50">
-              <div className="mb-4 flex flex-wrap items-center gap-3">
-                <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand-500 text-sm font-bold text-white shadow-sm">
-                  3
-                </span>
-                <div>
-                  <h4 className="text-base font-semibold text-gray-900 dark:text-white">How much &amp; how they paid</h4>
-                  <p className="text-sm text-gray-500 dark:text-gray-400">
-                    Amounts follow the student&apos;s tuition and scholarship rules. Pick how the money was received.
-                  </p>
-                </div>
+              <div className="mb-4">
+                <h4 className="text-base font-semibold text-gray-900 dark:text-white">Amount &amp; method</h4>
+                <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                  Tuition amount and how the payment was received.
+                </p>
               </div>
 
               {selectedStudent && expectedFull === 0 && (
@@ -821,18 +679,16 @@ export default function FinancePage() {
             </div>
           </div>
         </form>
-      </div>
+        </div>
 
-      {/* Finance list — recent tuition payments */}
-      <div className="mb-8 overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm dark:border-gray-800 dark:bg-white/[0.03]">
-        <div className="border-b border-gray-200 px-6 py-4 dark:border-gray-800">
-          <h3 className="flex items-center gap-2 text-lg font-semibold text-gray-800 dark:text-white/90">
-            <DollarLineIcon className="h-5 w-5 text-brand-500" />
-            Finance — Recent Payments
-          </h3>
-          <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-            Tuition payments recorded in the system (newest first).
-          </p>
+        {/* Payments list */}
+        <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm dark:border-gray-800 dark:bg-white/3">
+        <div className="border-b border-gray-200 px-5 py-4 dark:border-gray-800">
+          <h2 className="flex items-center gap-2 text-lg font-semibold text-gray-900 dark:text-white">
+            <ListIcon className="h-5 w-5 shrink-0 text-brand-500" />
+            Payments
+          </h2>
+          <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">Newest first.</p>
         </div>
         <div className="p-0">
           {financeLoading ? (
@@ -913,180 +769,7 @@ export default function FinancePage() {
             </>
           )}
         </div>
-      </div>
-
-      {/* Bank Balances Summary */}
-      {banks.length > 0 && (
-        <div className="mb-8 overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm dark:border-gray-800 dark:bg-white/[0.03]">
-          <div className="border-b border-gray-200 px-6 py-4 dark:border-gray-800">
-            <h3 className="flex items-center gap-2 text-lg font-semibold text-gray-800 dark:text-white/90">
-              <DollarLineIcon className="h-5 w-5 text-brand-500" />
-              Bank Balances
-            </h3>
-          </div>
-          <div className="flex flex-wrap gap-4 p-6">
-            {banks.map((b) => (
-              <div
-                key={b.id}
-                className="flex flex-1 min-w-[200px] items-center justify-between gap-4 rounded-xl border border-gray-200 bg-gradient-to-br from-gray-50 to-white px-5 py-4 dark:border-gray-700 dark:from-gray-800/50 dark:to-gray-900/50"
-              >
-                <div>
-                  <p className="text-sm font-medium text-gray-500 dark:text-gray-400">{b.code}</p>
-                  <p className="font-semibold text-gray-800 dark:text-white/90">{b.name}</p>
-                  <p className="mt-1 text-2xl font-bold text-green-600 dark:text-green-400">
-                    ${(b.balance ?? 0).toLocaleString()}
-                  </p>
-                </div>
-                <Link href="/finance/banks">
-                  <Button variant="outline" size="sm">Manage</Button>
-                </Link>
-              </div>
-            ))}
-          </div>
         </div>
-      )}
-
-      {/* Unpaid Students */}
-      <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm dark:border-gray-800 dark:bg-white/[0.03]">
-        <div className="border-b border-gray-200 px-6 py-4 dark:border-gray-800">
-          <h3 className="mb-1 flex items-center gap-2 text-lg font-semibold text-gray-800 dark:text-white/90">
-            <UserCircleIcon className="h-5 w-5 text-brand-500" />
-            Unpaid Students by Semester & Class
-          </h3>
-          <p className="text-sm text-gray-500 dark:text-gray-400">
-            Select semester, year, and class to generate a list of students who have not paid tuition.
-          </p>
-        </div>
-        <div className="border-b border-gray-200 px-6 py-4 dark:border-gray-800">
-          <div className="flex flex-wrap items-end gap-4">
-            <div>
-              <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400">Semester</label>
-              <select
-                value={unpaidSemester}
-                onChange={(e) => setUnpaidSemester(e.target.value)}
-                className="h-10 w-full min-w-0 sm:w-auto sm:min-w-[120px] rounded-xl border border-gray-200 bg-gray-50/50 px-3 text-sm outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-500/15 dark:border-gray-600 dark:bg-gray-800/50 dark:text-white"
-              >
-                {semesters.map((s) => (
-                  <option key={s.id} value={s.name}>{s.name}</option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400">Year</label>
-              <input
-                type="number"
-                value={unpaidYear}
-                onChange={(e) => setUnpaidYear(e.target.value)}
-                className="h-10 w-full min-w-0 sm:w-auto sm:min-w-[100px] rounded-xl border border-gray-200 bg-gray-50/50 px-3 text-sm outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-500/15 dark:border-gray-600 dark:bg-gray-800/50 dark:text-white"
-              />
-            </div>
-            <div>
-              <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400">Class</label>
-              <select
-                value={unpaidClassId}
-                onChange={(e) => setUnpaidClassId(e.target.value)}
-                className="h-10 w-full min-w-0 sm:w-auto sm:min-w-[200px] rounded-xl border border-gray-200 bg-gray-50/50 px-3 text-sm outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-500/15 dark:border-gray-600 dark:bg-gray-800/50 dark:text-white"
-              >
-                <option value="">Select class</option>
-                {filteredClasses.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.department.code} - {c.name} ({c.semester} {c.year})
-                  </option>
-                ))}
-              </select>
-            </div>
-            <Button
-              size="sm"
-              onClick={handleGenerateUnpaid}
-              disabled={!unpaidClassId || unpaidLoading}
-            >
-              {unpaidLoading ? "Loading..." : "Generate List"}
-            </Button>
-          </div>
-        </div>
-
-        {unpaidClassInfo && (
-          <div className="p-6">
-            <div className="mb-4 flex flex-wrap items-center justify-between gap-4">
-              <div>
-                <p className="font-medium text-gray-800 dark:text-white/90">
-                  {unpaidClassInfo.department.code} - {unpaidClassInfo.name} ({unpaidClassInfo.semester} {unpaidClassInfo.year})
-                </p>
-                <p className="text-sm text-gray-500 dark:text-gray-400">
-                  {unpaidStudents.length} unpaid student{unpaidStudents.length !== 1 ? "s" : ""}
-                </p>
-              </div>
-              {unpaidStudents.length > 0 && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  startIcon={<DownloadIcon />}
-                  onClick={handleExportUnpaidCSV}
-                >
-                  Export CSV
-                </Button>
-              )}
-            </div>
-
-            {unpaidStudents.length === 0 ? (
-              <div className="rounded-xl border border-dashed border-gray-200 bg-gray-50/50 px-6 py-12 text-center dark:border-gray-700 dark:bg-gray-800/30">
-                <p className="text-sm font-medium text-gray-600 dark:text-gray-400">
-                  All students in this class have paid for {unpaidClassInfo.semester} {unpaidClassInfo.year}.
-                </p>
-              </div>
-            ) : (
-              <>
-              <div className="overflow-x-auto rounded-xl border border-gray-200 dark:border-gray-700">
-                <Table>
-                  <TableHeader>
-                    <TableRow className="bg-transparent! hover:bg-transparent!">
-                      <TableCell isHeader>Student ID</TableCell>
-                      <TableCell isHeader>Name</TableCell>
-                      <TableCell isHeader>Email</TableCell>
-                      <TableCell isHeader>Phone</TableCell>
-                      <TableCell isHeader>Department</TableCell>
-                      <TableCell isHeader>Payment</TableCell>
-                      <TableCell isHeader className="text-right">Amount Due</TableCell>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {paginatedUnpaidStudents.map((s) => (
-                      <TableRow key={s.id}>
-                        <TableCell>
-                          <Link
-                            href={`/students/${encodeURIComponent(s.studentId)}`}
-                            className="font-mono font-medium text-brand-600 hover:underline dark:text-brand-400"
-                          >
-                            {s.studentId}
-                          </Link>
-                        </TableCell>
-                        <TableCell>{s.firstName} {s.lastName}</TableCell>
-                        <TableCell>{s.email || "—"}</TableCell>
-                        <TableCell>{s.phone || "—"}</TableCell>
-                        <TableCell>{s.department.code} - {s.department.name}</TableCell>
-                        <TableCell>{s.paymentStatus || "Fully Paid"}</TableCell>
-                        <TableCell className="text-right">
-                          {s.tuitionFee != null ? `$${Number(s.tuitionFee).toLocaleString()}` : "—"}
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
-              <TablePagination
-                page={unpaidPage}
-                totalPages={unpaidTotalPages}
-                total={unpaidTotal}
-                from={unpaidFrom}
-                to={unpaidTo}
-                pageSize={unpaidPageSize}
-                onPageChange={setUnpaidPage}
-                onPageSizeChange={setUnpaidPageSize}
-              />
-              </>
-            )}
-          </div>
-        )}
       </div>
     </div>
   );

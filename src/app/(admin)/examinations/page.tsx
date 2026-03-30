@@ -347,9 +347,6 @@ export default function ExaminationsPage() {
   // Get unique years from records
   const years = [...new Set(records.map((r) => r.year))].sort((a, b) => b - a);
 
-  // Get unique student IDs for GPA buttons (deduplicate)
-  const uniqueStudentIds = [...new Set(filtered.map((r) => r.studentId))];
-
   return (
     <div>
       <PageBreadCrumb pageTitle="Exam Records" />
@@ -534,31 +531,6 @@ export default function ExaminationsPage() {
           onPageChange={setPage}
           onPageSizeChange={setPageSize}
         />
-
-        {/* Unique students with GPA quick access */}
-        {uniqueStudentIds.length > 0 && (
-          <div className="border-t border-gray-100 px-5 py-4 dark:border-gray-800">
-            <p className="mb-2 text-xs font-medium uppercase text-gray-500 dark:text-gray-400">Quick GPA Lookup</p>
-            <div className="flex flex-wrap gap-2">
-              {uniqueStudentIds.map((sid) => {
-                const student = records.find((r) => r.studentId === sid)?.student;
-                if (!student) return null;
-                return (
-                  <button
-                    key={sid}
-                    onClick={() => viewGPA(student.id)}
-                    className="flex items-center gap-2 rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-medium text-gray-700 transition hover:border-brand-300 hover:bg-brand-50 hover:text-brand-700 dark:border-gray-700 dark:text-gray-300 dark:hover:border-brand-500 dark:hover:bg-brand-500/10 dark:hover:text-brand-400"
-                  >
-                    <span className="flex h-6 w-6 items-center justify-center rounded-full bg-brand-50 text-[10px] font-bold text-brand-600 dark:bg-brand-500/10 dark:text-brand-400">
-                      {student.firstName[0]}{student.lastName[0]}
-                    </span>
-                    {student.firstName} {student.lastName}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        )}
       </div>
 
       {/* ======= Add/Edit Modal ======= */}
