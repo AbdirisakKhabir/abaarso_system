@@ -4,13 +4,16 @@ import React, { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import PageBreadCrumb from "@/components/common/PageBreadCrumb";
 import Button from "@/components/ui/button/Button";
+import { DateInput } from "@/components/form/DateInput";
 import {
   Table,
   TableBody,
   TableCell,
   TableHeader,
+  TablePagination,
   TableRow,
 } from "@/components/ui/table";
+import { usePagination } from "@/hooks/usePagination";
 import { authFetch } from "@/lib/api";
 import { DownloadIcon } from "@/icons";
 
@@ -40,6 +43,19 @@ export default function DailyRevenueReportPage() {
     fetchData();
   }, [fetchData]);
 
+  const dailySummaryRows = data?.dailySummary ?? [];
+  const {
+    paginatedItems: paginatedDailySummary,
+    page,
+    setPage,
+    pageSize,
+    setPageSize,
+    totalPages,
+    total: dailySummaryTotal,
+    from,
+    to,
+  } = usePagination(dailySummaryRows, [dateFrom, dateTo]);
+
   const handlePrint = () => window.print();
   const handleExportCSV = () => {
     if (!data?.dailySummary.length) return;
@@ -60,19 +76,21 @@ export default function DailyRevenueReportPage() {
       <div className="mb-6 flex flex-wrap items-center justify-between gap-4 no-print">
         <PageBreadCrumb pageTitle="Daily Revenue Report" />
         <div className="flex gap-2">
-          <div className="flex items-center gap-2">
-            <input
-              type="date"
+          <div className="flex flex-wrap items-center gap-2">
+            <DateInput
+              id="daily-rev-from"
               value={dateFrom}
-              onChange={(e) => setDateFrom(e.target.value)}
-              className="h-10 rounded-lg border border-gray-200 px-3 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-white"
+              onChange={setDateFrom}
+              aria-label="Date from"
+              inputClassName="h-10 w-auto min-w-[140px] rounded-lg border border-gray-200 px-3 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-white"
             />
             <span className="text-gray-500">to</span>
-            <input
-              type="date"
+            <DateInput
+              id="daily-rev-to"
               value={dateTo}
-              onChange={(e) => setDateTo(e.target.value)}
-              className="h-10 rounded-lg border border-gray-200 px-3 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-white"
+              onChange={setDateTo}
+              aria-label="Date to"
+              inputClassName="h-10 w-auto min-w-[140px] rounded-lg border border-gray-200 px-3 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-white"
             />
           </div>
           <Link href="/reports/payment">
@@ -126,7 +144,7 @@ export default function DailyRevenueReportPage() {
                       </TableCell>
                     </TableRow>
                   ) : (
-                    data.dailySummary.map((d) => (
+                    paginatedDailySummary.map((d) => (
                       <TableRow key={d.date}>
                         <TableCell>{new Date(d.date).toLocaleDateString("en-US", { weekday: "short", year: "numeric", month: "short", day: "numeric" })}</TableCell>
                         <TableCell className="text-center">{d.count}</TableCell>
@@ -138,6 +156,17 @@ export default function DailyRevenueReportPage() {
                   )}
                 </TableBody>
               </Table>
+              <TablePagination
+                className="no-print"
+                page={page}
+                totalPages={totalPages}
+                total={dailySummaryTotal}
+                from={from}
+                to={to}
+                pageSize={pageSize}
+                onPageChange={setPage}
+                onPageSizeChange={setPageSize}
+              />
             </div>
           </>
         ) : (

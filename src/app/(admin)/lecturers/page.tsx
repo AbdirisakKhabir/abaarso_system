@@ -9,8 +9,10 @@ import {
   TableBody,
   TableCell,
   TableHeader,
+  TablePagination,
   TableRow,
 } from "@/components/ui/table";
+import { globalRowIndex, usePagination } from "@/hooks/usePagination";
 import Badge from "@/components/ui/badge/Badge";
 import { authFetch } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
@@ -94,6 +96,18 @@ export default function LecturersPage() {
     );
   });
 
+  const {
+    paginatedItems,
+    page,
+    setPage,
+    pageSize,
+    setPageSize,
+    totalPages,
+    total: filteredTotal,
+    from,
+    to,
+  } = usePagination(filtered, [search]);
+
   if (!hasPermission("lecturers.view")) {
     return (
       <div>
@@ -167,6 +181,7 @@ export default function LecturersPage() {
             </p>
           </div>
         ) : (
+          <>
           <Table>
             <TableHeader>
               <TableRow className="bg-transparent! hover:bg-transparent!">
@@ -180,10 +195,10 @@ export default function LecturersPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filtered.map((l, idx) => (
+              {paginatedItems.map((l, idx) => (
                 <TableRow key={l.id}>
                   <TableCell className="font-medium text-gray-400 dark:text-gray-500">
-                    {idx + 1}
+                    {globalRowIndex(page, pageSize, idx)}
                   </TableCell>
                   <TableCell>
                     <div className="flex items-center gap-3">
@@ -288,6 +303,17 @@ export default function LecturersPage() {
               ))}
             </TableBody>
           </Table>
+          <TablePagination
+            page={page}
+            totalPages={totalPages}
+            total={filteredTotal}
+            from={from}
+            to={to}
+            pageSize={pageSize}
+            onPageChange={setPage}
+            onPageSizeChange={setPageSize}
+          />
+          </>
         )}
       </div>
     </>

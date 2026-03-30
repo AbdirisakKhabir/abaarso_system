@@ -307,7 +307,7 @@ model TuitionPayment {
   amount        Float    @default(0)
   semester      String // "Fall", "Spring", "Summer"
   year          Int // e.g. 2026
-  paymentMethod String   @default("bank_receipt") // "bank_receipt" | "electronic"
+  paymentMethod String   @default("bank_receipt") // "bank_receipt" | "electronic" | "cash_on_hand"
   receiptNumber String? // Bank receipt number
   transactionId String? // Electronic transaction ID
   paymentDate   DateTime @default(now()) // Date student actually paid

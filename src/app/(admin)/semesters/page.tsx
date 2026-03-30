@@ -8,8 +8,10 @@ import {
   TableBody,
   TableCell,
   TableHeader,
+  TablePagination,
   TableRow,
 } from "@/components/ui/table";
+import { globalRowIndex, usePagination } from "@/hooks/usePagination";
 import Badge from "@/components/ui/badge/Badge";
 import { authFetch } from "@/lib/api";
 import { ModalOverlayGate } from "@/context/ModalOverlayContext";
@@ -132,6 +134,18 @@ export default function SemestersPage() {
     return s.name.toLowerCase().includes(q);
   });
 
+  const {
+    paginatedItems,
+    page,
+    setPage,
+    pageSize,
+    setPageSize,
+    totalPages,
+    total: filteredTotal,
+    from,
+    to,
+  } = usePagination(filtered, [search]);
+
   if (!hasPermission("semesters.view")) {
     return (
       <div>
@@ -201,6 +215,7 @@ export default function SemestersPage() {
             </p>
           </div>
         ) : (
+          <>
           <Table>
             <TableHeader>
               <TableRow className="bg-transparent! hover:bg-transparent!">
@@ -212,10 +227,10 @@ export default function SemestersPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filtered.map((s, idx) => (
+              {paginatedItems.map((s, idx) => (
                 <TableRow key={s.id}>
                   <TableCell className="font-medium text-gray-400 dark:text-gray-500">
-                    {idx + 1}
+                    {globalRowIndex(page, pageSize, idx)}
                   </TableCell>
                   <TableCell>
                     <span className="font-semibold text-gray-800 dark:text-white/90">
@@ -272,6 +287,17 @@ export default function SemestersPage() {
               ))}
             </TableBody>
           </Table>
+          <TablePagination
+            page={page}
+            totalPages={totalPages}
+            total={filteredTotal}
+            from={from}
+            to={to}
+            pageSize={pageSize}
+            onPageChange={setPage}
+            onPageSizeChange={setPageSize}
+          />
+          </>
         )}
       </div>
 

@@ -9,8 +9,10 @@ import {
   TableBody,
   TableCell,
   TableHeader,
+  TablePagination,
   TableRow,
 } from "@/components/ui/table";
+import { usePagination } from "@/hooks/usePagination";
 import { authFetch } from "@/lib/api";
 import { DownloadIcon } from "@/icons";
 
@@ -94,6 +96,18 @@ export default function UnpaidStudentsReportPage() {
   };
 
   const handlePrint = () => window.print();
+
+  const {
+    paginatedItems: paginatedUnpaidStudents,
+    page,
+    setPage,
+    pageSize,
+    setPageSize,
+    totalPages,
+    total: unpaidStudentsTotal,
+    from,
+    to,
+  } = usePagination(unpaidStudents, [unpaidSemester, unpaidYear, unpaidClassId, unpaidStudents]);
 
   const handleExportCSV = () => {
     if (unpaidStudents.length === 0) return;
@@ -231,7 +245,7 @@ export default function UnpaidStudentsReportPage() {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {unpaidStudents.map((s) => (
+                      {paginatedUnpaidStudents.map((s) => (
                         <TableRow key={s.id}>
                           <TableCell>
                             <span className="no-print">
@@ -266,6 +280,17 @@ export default function UnpaidStudentsReportPage() {
                       </TableRow>
                     </TableBody>
                   </Table>
+                  <TablePagination
+                    className="no-print"
+                    page={page}
+                    totalPages={totalPages}
+                    total={unpaidStudentsTotal}
+                    from={from}
+                    to={to}
+                    pageSize={pageSize}
+                    onPageChange={setPage}
+                    onPageSizeChange={setPageSize}
+                  />
                 </div>
               </>
             )}

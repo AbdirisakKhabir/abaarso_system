@@ -10,8 +10,10 @@ import {
   TableBody,
   TableCell,
   TableHeader,
+  TablePagination,
   TableRow,
 } from "@/components/ui/table";
+import { usePagination } from "@/hooks/usePagination";
 import { authFetch } from "@/lib/api";
 import { ModalOverlayGate } from "@/context/ModalOverlayContext";
 import { useAuth } from "@/context/AuthContext";
@@ -162,6 +164,18 @@ export default function ExpensesPage() {
     setModal("reject");
   };
 
+  const {
+    paginatedItems: paginatedExpenses,
+    page,
+    setPage,
+    pageSize,
+    setPageSize,
+    totalPages,
+    total: expensesTotal,
+    from,
+    to,
+  } = usePagination(expenses, [statusFilter, yearFilter]);
+
   if (!canView) {
     return (
       <div>
@@ -217,6 +231,7 @@ export default function ExpensesPage() {
             <div className="h-8 w-8 animate-spin rounded-full border-4 border-gray-200 border-t-brand-500" />
           </div>
         ) : (
+          <>
           <Table>
             <TableHeader>
               <TableRow className="bg-transparent! hover:bg-transparent!">
@@ -238,7 +253,7 @@ export default function ExpensesPage() {
                   </TableCell>
                 </TableRow>
               ) : (
-                expenses.map((e) => (
+                paginatedExpenses.map((e) => (
                   <TableRow key={e.id}>
                     <TableCell>{new Date(e.createdAt).toLocaleDateString()}</TableCell>
                     <TableCell>
@@ -279,6 +294,17 @@ export default function ExpensesPage() {
               )}
             </TableBody>
           </Table>
+          <TablePagination
+            page={page}
+            totalPages={totalPages}
+            total={expensesTotal}
+            from={from}
+            to={to}
+            pageSize={pageSize}
+            onPageChange={setPage}
+            onPageSizeChange={setPageSize}
+          />
+          </>
         )}
       </div>
 

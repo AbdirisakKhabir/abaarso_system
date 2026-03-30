@@ -9,8 +9,10 @@ import {
   TableBody,
   TableCell,
   TableHeader,
+  TablePagination,
   TableRow,
 } from "@/components/ui/table";
+import { usePagination } from "@/hooks/usePagination";
 import { authFetch } from "@/lib/api";
 import { DownloadIcon } from "@/icons";
 
@@ -41,6 +43,19 @@ export default function TreasuryReportPage() {
   useEffect(() => {
     fetchData();
   }, [fetchData]);
+
+  const treasuryBanks = data?.banks ?? [];
+  const {
+    paginatedItems: paginatedTreasuryBanks,
+    page,
+    setPage,
+    pageSize,
+    setPageSize,
+    totalPages,
+    total: treasuryBanksTotal,
+    from,
+    to,
+  } = usePagination(treasuryBanks, [year, data]);
 
   const handlePrint = () => window.print();
   const handleExportCSV = () => {
@@ -143,7 +158,7 @@ export default function TreasuryReportPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {data.banks.map((b) => (
+                  {paginatedTreasuryBanks.map((b) => (
                     <TableRow key={b.id}>
                       <TableCell className="font-mono">{b.code}</TableCell>
                       <TableCell>{b.name}</TableCell>
@@ -154,6 +169,17 @@ export default function TreasuryReportPage() {
                   ))}
                 </TableBody>
               </Table>
+              <TablePagination
+                className="no-print"
+                page={page}
+                totalPages={totalPages}
+                total={treasuryBanksTotal}
+                from={from}
+                to={to}
+                pageSize={pageSize}
+                onPageChange={setPage}
+                onPageSizeChange={setPageSize}
+              />
             </div>
           </>
         ) : (

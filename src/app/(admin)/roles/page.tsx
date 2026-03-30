@@ -8,8 +8,10 @@ import {
   TableBody,
   TableCell,
   TableHeader,
+  TablePagination,
   TableRow,
 } from "@/components/ui/table";
+import { globalRowIndex, usePagination } from "@/hooks/usePagination";
 import Badge from "@/components/ui/badge/Badge";
 import { authFetch } from "@/lib/api";
 import { ModalOverlayGate } from "@/context/ModalOverlayContext";
@@ -95,6 +97,18 @@ export default function RolesPage() {
         : [...f.permissionIds, permId],
     }));
   }
+
+  const {
+    paginatedItems,
+    page,
+    setPage,
+    pageSize,
+    setPageSize,
+    totalPages,
+    total: rolesTotal,
+    from,
+    to,
+  } = usePagination(roles, []);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -220,6 +234,7 @@ export default function RolesPage() {
             </p>
           </div>
         ) : (
+          <>
           <Table>
             <TableHeader>
               <TableRow className="bg-transparent! hover:bg-transparent!">
@@ -234,10 +249,10 @@ export default function RolesPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {roles.map((r, idx) => (
+              {paginatedItems.map((r, idx) => (
                 <TableRow key={r.id}>
                   <TableCell className="font-medium text-gray-400 dark:text-gray-500">
-                    {idx + 1}
+                    {globalRowIndex(page, pageSize, idx)}
                   </TableCell>
                   <TableCell>
                     <div className="flex items-center gap-3">
@@ -305,6 +320,17 @@ export default function RolesPage() {
               ))}
             </TableBody>
           </Table>
+          <TablePagination
+            page={page}
+            totalPages={totalPages}
+            total={rolesTotal}
+            from={from}
+            to={to}
+            pageSize={pageSize}
+            onPageChange={setPage}
+            onPageSizeChange={setPageSize}
+          />
+          </>
         )}
       </div>
 

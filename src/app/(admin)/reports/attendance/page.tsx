@@ -8,8 +8,11 @@ import {
   TableBody,
   TableCell,
   TableHeader,
+  TablePagination,
   TableRow,
 } from "@/components/ui/table";
+import { usePagination } from "@/hooks/usePagination";
+import { DateInput } from "@/components/form/DateInput";
 import Badge from "@/components/ui/badge/Badge";
 import { authFetch } from "@/lib/api";
 
@@ -124,6 +127,29 @@ export default function AttendanceReportPage() {
 
   const filteredClasses = filterDept ? classes.filter((c) => c.department?.id === Number(filterDept)) : classes;
 
+  const {
+    paginatedItems: paginatedSessions,
+    page: sessionsPage,
+    setPage: setSessionsPage,
+    pageSize: sessionsPageSize,
+    setPageSize: setSessionsPageSize,
+    totalPages: sessionsTotalPages,
+    total: sessionsTotal,
+    from: sessionsFrom,
+    to: sessionsTo,
+  } = usePagination(sessions, [filterDept, filterClass, dateFrom, dateTo]);
+  const {
+    paginatedItems: paginatedStudentAttendances,
+    page: studentsPage,
+    setPage: setStudentsPage,
+    pageSize: studentsPageSize,
+    setPageSize: setStudentsPageSize,
+    totalPages: studentsTotalPages,
+    total: studentsAttTotal,
+    from: studentsFrom,
+    to: studentsTo,
+  } = usePagination(studentAttendances, [filterClass, studentAttendances]);
+
   const handlePrint = () => window.print();
 
   return (
@@ -199,24 +225,22 @@ export default function AttendanceReportPage() {
                 ))}
               </select>
             </div>
-            <div>
-              <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400">Date From</label>
-              <input
-                type="date"
-                value={dateFrom}
-                onChange={(e) => setDateFrom(e.target.value)}
-                className="h-10 w-full min-w-0 sm:w-auto sm:min-w-[140px] rounded-lg border border-gray-200 bg-transparent px-3 text-sm text-gray-800 outline-none focus:border-brand-300 dark:border-gray-700 dark:text-white/80"
-              />
-            </div>
-            <div>
-              <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400">Date To</label>
-              <input
-                type="date"
-                value={dateTo}
-                onChange={(e) => setDateTo(e.target.value)}
-                className="h-10 w-full min-w-0 sm:w-auto sm:min-w-[140px] rounded-lg border border-gray-200 bg-transparent px-3 text-sm text-gray-800 outline-none focus:border-brand-300 dark:border-gray-700 dark:text-white/80"
-              />
-            </div>
+            <DateInput
+              id="att-report-from"
+              label="Date From"
+              labelClassName="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400"
+              value={dateFrom}
+              onChange={setDateFrom}
+              inputClassName="h-10 w-full min-w-0 sm:w-auto sm:min-w-[140px] rounded-lg border border-gray-200 bg-transparent px-3 text-sm text-gray-800 outline-none focus:border-brand-300 dark:border-gray-700 dark:text-white/80"
+            />
+            <DateInput
+              id="att-report-to"
+              label="Date To"
+              labelClassName="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400"
+              value={dateTo}
+              onChange={setDateTo}
+              inputClassName="h-10 w-full min-w-0 sm:w-auto sm:min-w-[140px] rounded-lg border border-gray-200 bg-transparent px-3 text-sm text-gray-800 outline-none focus:border-brand-300 dark:border-gray-700 dark:text-white/80"
+            />
           </div>
         </div>
 
@@ -279,6 +303,7 @@ export default function AttendanceReportPage() {
         <div className="overflow-x-auto">
           {viewMode === "students" ? (
             filterClass ? (
+              <>
               <Table>
                 <TableHeader className="border-b border-gray-100 dark:border-gray-800">
                   <TableRow>
@@ -308,7 +333,7 @@ export default function AttendanceReportPage() {
                       </TableCell>
                     </TableRow>
                   ) : (
-                    studentAttendances.map((a) => (
+                    paginatedStudentAttendances.map((a) => (
                       <TableRow key={a.studentId} className="border-b border-gray-50 dark:border-gray-800">
                         <TableCell className="px-5 py-3">
                           <p className="font-medium text-gray-800 dark:text-white/90">{a.firstName} {a.lastName}</p>
@@ -329,12 +354,25 @@ export default function AttendanceReportPage() {
                   )}
                 </TableBody>
               </Table>
+              <TablePagination
+                className="no-print"
+                page={studentsPage}
+                totalPages={studentsTotalPages}
+                total={studentsAttTotal}
+                from={studentsFrom}
+                to={studentsTo}
+                pageSize={studentsPageSize}
+                onPageChange={setStudentsPage}
+                onPageSizeChange={setStudentsPageSize}
+              />
+              </>
             ) : (
               <div className="px-5 py-12 text-center text-sm text-gray-500">
                 Select a class to view per-student attendance. Attendance marks (0-10) are used as 10% of the exam grade.
               </div>
             )
           ) : (
+          <>
           <Table>
             <TableHeader className="border-b border-gray-100 dark:border-gray-800">
               <TableRow>
@@ -365,7 +403,7 @@ export default function AttendanceReportPage() {
                   </TableCell>
                 </TableRow>
               ) : (
-                sessions.map((s) => (
+                paginatedSessions.map((s) => (
                   <TableRow key={s.id} className="border-b border-gray-50 dark:border-gray-800">
                     <TableCell className="px-5 py-3">
                       <p className="font-medium text-gray-800 dark:text-white/90">{s.class?.department?.code} - {s.class?.name}</p>
@@ -387,6 +425,18 @@ export default function AttendanceReportPage() {
               )}
             </TableBody>
           </Table>
+          <TablePagination
+            className="no-print"
+            page={sessionsPage}
+            totalPages={sessionsTotalPages}
+            total={sessionsTotal}
+            from={sessionsFrom}
+            to={sessionsTo}
+            pageSize={sessionsPageSize}
+            onPageChange={setSessionsPage}
+            onPageSizeChange={setSessionsPageSize}
+          />
+          </>
           )}
         </div>
       </div>

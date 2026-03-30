@@ -10,8 +10,10 @@ import {
   TableBody,
   TableCell,
   TableHeader,
+  TablePagination,
   TableRow,
 } from "@/components/ui/table";
+import { usePagination } from "@/hooks/usePagination";
 import { authFetch } from "@/lib/api";
 import { ModalOverlayGate } from "@/context/ModalOverlayContext";
 import { useAuth } from "@/context/AuthContext";
@@ -171,6 +173,18 @@ export default function PayrollPage() {
     setModal("reject");
   };
 
+  const {
+    paginatedItems,
+    page,
+    setPage,
+    pageSize,
+    setPageSize,
+    totalPages,
+    total: payrollTotal,
+    from,
+    to,
+  } = usePagination(payrolls, [statusFilter, yearFilter]);
+
   if (!canView) {
     return (
       <div>
@@ -226,6 +240,7 @@ export default function PayrollPage() {
             <div className="h-8 w-8 animate-spin rounded-full border-4 border-gray-200 border-t-brand-500" />
           </div>
         ) : (
+          <>
           <Table>
             <TableHeader>
               <TableRow className="bg-transparent! hover:bg-transparent!">
@@ -248,7 +263,7 @@ export default function PayrollPage() {
                   </TableCell>
                 </TableRow>
               ) : (
-                payrolls.map((p) => (
+                paginatedItems.map((p) => (
                   <TableRow key={p.id}>
                     <TableCell>{new Date(p.createdAt).toLocaleDateString()}</TableCell>
                     <TableCell>
@@ -290,6 +305,17 @@ export default function PayrollPage() {
               )}
             </TableBody>
           </Table>
+          <TablePagination
+            page={page}
+            totalPages={totalPages}
+            total={payrollTotal}
+            from={from}
+            to={to}
+            pageSize={pageSize}
+            onPageChange={setPage}
+            onPageSizeChange={setPageSize}
+          />
+          </>
         )}
       </div>
 

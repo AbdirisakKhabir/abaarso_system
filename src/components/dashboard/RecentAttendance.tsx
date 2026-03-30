@@ -7,8 +7,10 @@ import {
   TableBody,
   TableCell,
   TableHeader,
+  TablePagination,
   TableRow,
 } from "../ui/table";
+import { usePagination } from "@/hooks/usePagination";
 import Badge from "../ui/badge/Badge";
 import { authFetch } from "@/lib/api";
 import { CalenderIcon } from "@/icons";
@@ -40,6 +42,18 @@ export default function RecentAttendance() {
       .catch(() => {})
       .finally(() => setLoading(false));
   }, []);
+
+  const {
+    paginatedItems,
+    page,
+    setPage,
+    pageSize,
+    setPageSize,
+    totalPages,
+    total: sessionsTotal,
+    from,
+    to,
+  } = usePagination(sessions, []);
 
   return (
     <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white px-4 pb-4 shadow-sm dark:border-gray-800 dark:bg-white/5 sm:px-6 sm:pb-6">
@@ -97,7 +111,7 @@ export default function RecentAttendance() {
                 </TableCell>
               </TableRow>
             ) : (
-              sessions.map((s) => (
+              paginatedItems.map((s) => (
                 <TableRow key={s.id}>
                   <TableCell className="py-3">
                     <div>
@@ -130,6 +144,16 @@ export default function RecentAttendance() {
             )}
           </TableBody>
         </Table>
+        <TablePagination
+          page={page}
+          totalPages={totalPages}
+          total={sessionsTotal}
+          from={from}
+          to={to}
+          pageSize={pageSize}
+          onPageChange={setPage}
+          onPageSizeChange={setPageSize}
+        />
       </div>
     </div>
   );

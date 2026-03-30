@@ -8,8 +8,10 @@ import {
   TableBody,
   TableCell,
   TableHeader,
+  TablePagination,
   TableRow,
 } from "@/components/ui/table";
+import { usePagination } from "@/hooks/usePagination";
 import Badge from "@/components/ui/badge/Badge";
 import Link from "next/link";
 import { authFetch } from "@/lib/api";
@@ -229,6 +231,18 @@ export default function ExaminationsPage() {
     );
   });
 
+  const {
+    paginatedItems,
+    page,
+    setPage,
+    pageSize,
+    setPageSize,
+    totalPages,
+    total: filteredTotal,
+    from,
+    to,
+  } = usePagination(filtered, [search, filterSemester, filterCourseId, filterYear]);
+
   // Open edit modal
   const openEdit = (r: ExamRecord) => {
     setEditingRecord(r);
@@ -447,7 +461,7 @@ export default function ExaminationsPage() {
                   </TableCell>
                 </TableRow>
               ) : (
-                filtered.map((r) => (
+                paginatedItems.map((r) => (
                   <TableRow key={r.id} className="border-b border-gray-50 hover:bg-gray-50/50 dark:border-gray-800 dark:hover:bg-white/2">
                     <TableCell className="px-5 py-3">
                       <div className="flex items-center gap-3">
@@ -510,6 +524,16 @@ export default function ExaminationsPage() {
             </TableBody>
           </Table>
         </div>
+        <TablePagination
+          page={page}
+          totalPages={totalPages}
+          total={filteredTotal}
+          from={from}
+          to={to}
+          pageSize={pageSize}
+          onPageChange={setPage}
+          onPageSizeChange={setPageSize}
+        />
 
         {/* Unique students with GPA quick access */}
         {uniqueStudentIds.length > 0 && (

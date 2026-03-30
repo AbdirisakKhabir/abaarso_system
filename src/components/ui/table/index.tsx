@@ -98,3 +98,4 @@ const TableCell: React.FC<TableCellProps> = ({
 };
 
 export { Table, TableHeader, TableBody, TableRow, TableCell };
+export { TablePagination } from "./TablePagination";

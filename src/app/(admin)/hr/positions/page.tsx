@@ -8,8 +8,10 @@ import {
   TableBody,
   TableCell,
   TableHeader,
+  TablePagination,
   TableRow,
 } from "@/components/ui/table";
+import { globalRowIndex, usePagination } from "@/hooks/usePagination";
 import Badge from "@/components/ui/badge/Badge";
 import { authFetch } from "@/lib/api";
 import { ModalOverlayGate } from "@/context/ModalOverlayContext";
@@ -116,6 +118,18 @@ export default function HRPositionsPage() {
     (p) => !search.trim() || p.name.toLowerCase().includes(search.toLowerCase())
   );
 
+  const {
+    paginatedItems,
+    page,
+    setPage,
+    pageSize,
+    setPageSize,
+    totalPages,
+    total: filteredTotal,
+    from,
+    to,
+  } = usePagination(filtered, [search]);
+
   if (!hasPermission("hr.view")) {
     return (
       <div>
@@ -171,6 +185,7 @@ export default function HRPositionsPage() {
             </p>
           </div>
         ) : (
+          <>
           <Table>
             <TableHeader>
               <TableRow className="bg-transparent! hover:bg-transparent!">
@@ -182,9 +197,9 @@ export default function HRPositionsPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filtered.map((p, idx) => (
+              {paginatedItems.map((p, idx) => (
                 <TableRow key={p.id}>
-                  <TableCell className="font-medium text-gray-400 dark:text-gray-500">{idx + 1}</TableCell>
+                  <TableCell className="font-medium text-gray-400 dark:text-gray-500">{globalRowIndex(page, pageSize, idx)}</TableCell>
                   <TableCell className="font-semibold text-gray-800 dark:text-white/90">{p.name}</TableCell>
                   <TableCell className="text-gray-600 dark:text-gray-300">{p.description ?? "—"}</TableCell>
                   <TableCell>
@@ -210,6 +225,17 @@ export default function HRPositionsPage() {
               ))}
             </TableBody>
           </Table>
+          <TablePagination
+            page={page}
+            totalPages={totalPages}
+            total={filteredTotal}
+            from={from}
+            to={to}
+            pageSize={pageSize}
+            onPageChange={setPage}
+            onPageSizeChange={setPageSize}
+          />
+          </>
         )}
       </div>
 

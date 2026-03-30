@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState, useCallback, useMemo } from "react";
 import PageBreadCrumb from "@/components/common/PageBreadCrumb";
 import Button from "@/components/ui/button/Button";
 import {
@@ -8,8 +8,10 @@ import {
   TableBody,
   TableCell,
   TableHeader,
+  TablePagination,
   TableRow,
 } from "@/components/ui/table";
+import { usePagination } from "@/hooks/usePagination";
 import { authFetch } from "@/lib/api";
 import { ModalOverlayGate } from "@/context/ModalOverlayContext";
 import { useAuth } from "@/context/AuthContext";
@@ -305,6 +307,43 @@ export default function SchedulePage() {
     if (res.ok) await loadSchedules();
   }
 
+  type ScheduleTableRow =
+    | { kind: "off"; day: string; rowNum: number }
+    | { kind: "slot"; day: string; rowNum: number; slot: ScheduleSlot };
+
+  const scheduleTableRows = useMemo((): ScheduleTableRow[] => {
+    if (!classId) return [];
+    const classSlots = slots.filter((s) => s.classId === Number(classId));
+    const slotsByDay = DAYS.map((day) => classSlots.filter((s) => s.dayOfWeek === day));
+    let rowNum = 0;
+    const out: ScheduleTableRow[] = [];
+    DAYS.forEach((day, dayIdx) => {
+      const daySlots = slotsByDay[dayIdx];
+      if (daySlots.length === 0) {
+        rowNum++;
+        out.push({ kind: "off", day, rowNum });
+      } else {
+        daySlots.forEach((slot) => {
+          rowNum++;
+          out.push({ kind: "slot", day, rowNum, slot });
+        });
+      }
+    });
+    return out;
+  }, [classId, slots]);
+
+  const {
+    paginatedItems: paginatedScheduleRows,
+    page: schedulePage,
+    setPage: setSchedulePage,
+    pageSize: schedulePageSize,
+    setPageSize: setSchedulePageSize,
+    totalPages: scheduleTotalPages,
+    total: scheduleRowsTotal,
+    from: scheduleFrom,
+    to: scheduleTo,
+  } = usePagination(scheduleTableRows, [classId, semester, year]);
+
   function handlePrintSchedules() {
     const targetClasses = classId ? filteredClasses.filter((c) => c.id === Number(classId)) : filteredClasses;
     const sheetsHtml = targetClasses
@@ -489,6 +528,7 @@ export default function SchedulePage() {
             <p className="text-sm text-gray-500 dark:text-gray-400">Select a Department and Class to view or edit the schedule.</p>
           </div>
         ) : (
+          <>
           <Table>
             <TableHeader>
               <TableRow className="bg-transparent! hover:bg-transparent!">
@@ -502,58 +542,52 @@ export default function SchedulePage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {(() => {
-                const classSlots = classId ? slots.filter((s) => s.classId === Number(classId)) : slots;
-                const slotsByDay = DAYS.map((day) => classSlots.filter((s) => s.dayOfWeek === day));
-                let rowNum = 0;
-                return DAYS.flatMap((day, dayIdx) => {
-                  const daySlots = slotsByDay[dayIdx];
-                  if (daySlots.length === 0) {
-                    rowNum++;
-                    return (
-                      <TableRow key={`${day}-off`}>
-                        <TableCell className="text-center font-medium">{rowNum}</TableCell>
-                        <TableCell>{day}</TableCell>
-                        <TableCell>OFF</TableCell>
-                        <TableCell>OFF</TableCell>
-                        <TableCell>OFF</TableCell>
-                        <TableCell>OFF</TableCell>
-                        {canCreate && (
-                          <TableCell className="text-right">
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => {
-                                setForm({
-                                  id: "",
-                                  classId: Number(classId),
-                                  courseId: coursesForClass[0]?.id ?? 0,
-                                  lecturerId: 0,
-                                  dayOfWeek: day,
-                                  shift: SHIFTS[0],
-                                  startTime: "09:00",
-                                  endTime: "10:30",
-                                  room: "",
-                                });
-                                setModal("add");
-                                setEditingSlotId(null);
-                                setError("");
-                              }}
-                            >
-                              Add
-                            </Button>
-                          </TableCell>
-                        )}
-                      </TableRow>
-                    );
-                  }
-                  return daySlots.map((slot) => {
-                    rowNum++;
-                    const lecturer = slot.lecturer?.name ?? lecturersByCourse[(slot as ScheduleSlot).courseId ?? 0]?.find((l) => l.id === slot.lecturerId)?.name;
+              {paginatedScheduleRows.map((row) =>
+                row.kind === "off" ? (
+                  <TableRow key={`off-${row.day}-${row.rowNum}`}>
+                    <TableCell className="text-center font-medium">{row.rowNum}</TableCell>
+                    <TableCell>{row.day}</TableCell>
+                    <TableCell>OFF</TableCell>
+                    <TableCell>OFF</TableCell>
+                    <TableCell>OFF</TableCell>
+                    <TableCell>OFF</TableCell>
+                    {canCreate && (
+                      <TableCell className="text-right">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => {
+                            setForm({
+                              id: "",
+                              classId: Number(classId),
+                              courseId: coursesForClass[0]?.id ?? 0,
+                              lecturerId: 0,
+                              dayOfWeek: row.day,
+                              shift: SHIFTS[0],
+                              startTime: "09:00",
+                              endTime: "10:30",
+                              room: "",
+                            });
+                            setModal("add");
+                            setEditingSlotId(null);
+                            setError("");
+                          }}
+                        >
+                          Add
+                        </Button>
+                      </TableCell>
+                    )}
+                  </TableRow>
+                ) : (
+                  (() => {
+                    const slot = row.slot;
+                    const lecturer =
+                      slot.lecturer?.name ??
+                      lecturersByCourse[(slot as ScheduleSlot).courseId ?? 0]?.find((l) => l.id === slot.lecturerId)?.name;
                     return (
                       <TableRow key={slot.id}>
-                        <TableCell className="text-center font-medium">{rowNum}</TableCell>
-                        <TableCell>{day}</TableCell>
+                        <TableCell className="text-center font-medium">{row.rowNum}</TableCell>
+                        <TableCell>{row.day}</TableCell>
                         <TableCell>{formatTimeRange(slot.startTime, slot.endTime)}</TableCell>
                         <TableCell>{slot.course?.code ?? "—"}</TableCell>
                         <TableCell>{slot.course?.name ?? "—"}</TableCell>
@@ -584,11 +618,22 @@ export default function SchedulePage() {
                         )}
                       </TableRow>
                     );
-                  });
-                });
-              })()}
+                  })()
+                )
+              )}
             </TableBody>
           </Table>
+          <TablePagination
+            page={schedulePage}
+            totalPages={scheduleTotalPages}
+            total={scheduleRowsTotal}
+            from={scheduleFrom}
+            to={scheduleTo}
+            pageSize={schedulePageSize}
+            onPageChange={setSchedulePage}
+            onPageSizeChange={setSchedulePageSize}
+          />
+          </>
         )}
       </div>
 

@@ -9,8 +9,10 @@ import {
   TableBody,
   TableCell,
   TableHeader,
+  TablePagination,
   TableRow,
 } from "@/components/ui/table";
+import { usePagination } from "@/hooks/usePagination";
 import { authFetch } from "@/lib/api";
 import { DownloadIcon } from "@/icons";
 
@@ -32,6 +34,19 @@ export default function BankBalancesReportPage() {
   useEffect(() => {
     fetchData();
   }, [fetchData]);
+
+  const banksList = data?.banks ?? [];
+  const {
+    paginatedItems: paginatedBanks,
+    page,
+    setPage,
+    pageSize,
+    setPageSize,
+    totalPages,
+    total: banksTotal,
+    from,
+    to,
+  } = usePagination(banksList, [data]);
 
   const handlePrint = () => window.print();
   const handleExportCSV = () => {
@@ -98,9 +113,9 @@ export default function BankBalancesReportPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {data.banks.map((b, idx) => (
+                  {paginatedBanks.map((b, idx) => (
                     <TableRow key={b.id}>
-                      <TableCell className="text-gray-500">{idx + 1}</TableCell>
+                      <TableCell className="text-gray-500">{(page - 1) * pageSize + idx + 1}</TableCell>
                       <TableCell className="font-mono font-medium">{b.code}</TableCell>
                       <TableCell>{b.name}</TableCell>
                       <TableCell>{b.accountNumber || "—"}</TableCell>
@@ -111,6 +126,17 @@ export default function BankBalancesReportPage() {
                   ))}
                 </TableBody>
               </Table>
+              <TablePagination
+                className="no-print"
+                page={page}
+                totalPages={totalPages}
+                total={banksTotal}
+                from={from}
+                to={to}
+                pageSize={pageSize}
+                onPageChange={setPage}
+                onPageSizeChange={setPageSize}
+              />
             </div>
           </>
         ) : (

@@ -8,8 +8,10 @@ import {
   TableBody,
   TableCell,
   TableHeader,
+  TablePagination,
   TableRow,
 } from "@/components/ui/table";
+import { usePagination } from "@/hooks/usePagination";
 import Badge from "@/components/ui/badge/Badge";
 import { authFetch } from "@/lib/api";
 
@@ -87,6 +89,18 @@ export default function ExamReportPage() {
 
   const filteredClasses = filterDept ? classes.filter((c) => c.department?.id === Number(filterDept)) : classes;
   const currentYear = new Date().getFullYear();
+
+  const {
+    paginatedItems: paginatedRecords,
+    page,
+    setPage,
+    pageSize,
+    setPageSize,
+    totalPages,
+    total: recordsTotal,
+    from,
+    to,
+  } = usePagination(records, [filterDept, filterClass, filterSemester, filterYear]);
 
   const handlePrint = () => window.print();
 
@@ -212,7 +226,7 @@ export default function ExamReportPage() {
                   </TableCell>
                 </TableRow>
               ) : (
-                records.map((r) => (
+                paginatedRecords.map((r) => (
                   <TableRow key={r.id} className="border-b border-gray-50 dark:border-gray-800">
                     <TableCell className="px-5 py-3">
                       <p className="font-medium text-gray-800 dark:text-white/90">{r.student.firstName} {r.student.lastName}</p>
@@ -236,6 +250,17 @@ export default function ExamReportPage() {
               )}
             </TableBody>
           </Table>
+          <TablePagination
+            className="no-print"
+            page={page}
+            totalPages={totalPages}
+            total={recordsTotal}
+            from={from}
+            to={to}
+            pageSize={pageSize}
+            onPageChange={setPage}
+            onPageSizeChange={setPageSize}
+          />
         </div>
       </div>
     </div>

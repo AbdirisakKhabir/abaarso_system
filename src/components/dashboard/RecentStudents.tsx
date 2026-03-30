@@ -8,8 +8,10 @@ import {
   TableBody,
   TableCell,
   TableHeader,
+  TablePagination,
   TableRow,
 } from "../ui/table";
+import { usePagination } from "@/hooks/usePagination";
 import Badge from "../ui/badge/Badge";
 import { PageIcon } from "@/icons";
 
@@ -36,6 +38,18 @@ export default function RecentStudents() {
       .catch(() => {})
       .finally(() => setLoading(false));
   }, []);
+
+  const {
+    paginatedItems,
+    page,
+    setPage,
+    pageSize,
+    setPageSize,
+    totalPages,
+    total: studentsTotal,
+    from,
+    to,
+  } = usePagination(students, []);
 
   const statusColor = (s: string) =>
     s === "Admitted" ? "success" : s === "Pending" ? "warning" : s === "Rejected" ? "error" : "info";
@@ -93,7 +107,7 @@ export default function RecentStudents() {
                 </TableCell>
               </TableRow>
             ) : (
-              students.map((s) => (
+              paginatedItems.map((s) => (
                 <TableRow key={s.id}>
                   <TableCell className="py-3">
                     <div>
@@ -123,6 +137,16 @@ export default function RecentStudents() {
             )}
           </TableBody>
         </Table>
+        <TablePagination
+          page={page}
+          totalPages={totalPages}
+          total={studentsTotal}
+          from={from}
+          to={to}
+          pageSize={pageSize}
+          onPageChange={setPage}
+          onPageSizeChange={setPageSize}
+        />
       </div>
     </div>
   );

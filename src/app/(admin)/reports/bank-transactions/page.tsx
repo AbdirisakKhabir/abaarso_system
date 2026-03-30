@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import PageBreadCrumb from "@/components/common/PageBreadCrumb";
 import Button from "@/components/ui/button/Button";
@@ -9,9 +9,12 @@ import {
   TableBody,
   TableCell,
   TableHeader,
+  TablePagination,
   TableRow,
 } from "@/components/ui/table";
+import { usePagination } from "@/hooks/usePagination";
 import { authFetch } from "@/lib/api";
+import { DateInput } from "@/components/form/DateInput";
 import { DownloadIcon } from "@/icons";
 
 type Bank = { id: number; name: string; code: string };
@@ -50,6 +53,50 @@ export default function BankTransactionsReportPage() {
     fetchData();
   }, [fetchData]);
 
+  const depositsList = data?.deposits ?? [];
+  const withdrawalsList = data?.withdrawals ?? [];
+  const transfersSorted = useMemo(() => {
+    if (!data) return [];
+    return [...data.transfersOut, ...data.transfersIn].sort(
+      (a, b) => new Date(b.transferredAt).getTime() - new Date(a.transferredAt).getTime()
+    );
+  }, [data]);
+
+  const transferResetDeps = [bankId, dateFrom, dateTo, data];
+  const {
+    paginatedItems: paginatedDeposits,
+    page: depositsPage,
+    setPage: setDepositsPage,
+    pageSize: depositsPageSize,
+    setPageSize: setDepositsPageSize,
+    totalPages: depositsTotalPages,
+    total: depositsTotal,
+    from: depositsFrom,
+    to: depositsTo,
+  } = usePagination(depositsList, transferResetDeps);
+  const {
+    paginatedItems: paginatedWithdrawals,
+    page: withdrawalsPage,
+    setPage: setWithdrawalsPage,
+    pageSize: withdrawalsPageSize,
+    setPageSize: setWithdrawalsPageSize,
+    totalPages: withdrawalsTotalPages,
+    total: withdrawalsTotalCount,
+    from: withdrawalsFrom,
+    to: withdrawalsTo,
+  } = usePagination(withdrawalsList, transferResetDeps);
+  const {
+    paginatedItems: paginatedTransfers,
+    page: transfersPage,
+    setPage: setTransfersPage,
+    pageSize: transfersPageSize,
+    setPageSize: setTransfersPageSize,
+    totalPages: transfersTotalPages,
+    total: transfersTotalCount,
+    from: transfersFrom,
+    to: transfersTo,
+  } = usePagination(transfersSorted, transferResetDeps);
+
   const handlePrint = () => window.print();
 
   return (
@@ -77,24 +124,22 @@ export default function BankTransactionsReportPage() {
               ))}
             </select>
           </div>
-          <div>
-            <label className="mb-1 block text-xs text-gray-500">From Date</label>
-            <input
-              type="date"
-              value={dateFrom}
-              onChange={(e) => setDateFrom(e.target.value)}
-              className="h-10 rounded-lg border border-gray-200 px-3 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-white"
-            />
-          </div>
-          <div>
-            <label className="mb-1 block text-xs text-gray-500">To Date</label>
-            <input
-              type="date"
-              value={dateTo}
-              onChange={(e) => setDateTo(e.target.value)}
-              className="h-10 rounded-lg border border-gray-200 px-3 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-white"
-            />
-          </div>
+          <DateInput
+            id="bank-tx-from"
+            label="From Date"
+            labelClassName="mb-1 block text-xs text-gray-500"
+            value={dateFrom}
+            onChange={setDateFrom}
+            inputClassName="h-10 rounded-lg border border-gray-200 px-3 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-white"
+          />
+          <DateInput
+            id="bank-tx-to"
+            label="To Date"
+            labelClassName="mb-1 block text-xs text-gray-500"
+            value={dateTo}
+            onChange={setDateTo}
+            inputClassName="h-10 rounded-lg border border-gray-200 px-3 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-white"
+          />
         </div>
       </div>
 
@@ -145,6 +190,7 @@ export default function BankTransactionsReportPage() {
               ) : data.deposits.length === 0 ? (
                 <div className="py-12 text-center text-gray-500">No deposits in this period.</div>
               ) : (
+                <>
                 <Table>
                   <TableHeader>
                     <TableRow className="bg-transparent! hover:bg-transparent!">
@@ -155,7 +201,7 @@ export default function BankTransactionsReportPage() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {data.deposits.map((d) => (
+                    {paginatedDeposits.map((d) => (
                       <TableRow key={d.id}>
                         <TableCell>{new Date(d.paidAt).toLocaleDateString()}</TableCell>
                         <TableCell>{d.student?.firstName} {d.student?.lastName} ({d.student?.studentId})</TableCell>
@@ -171,6 +217,18 @@ export default function BankTransactionsReportPage() {
                     </TableRow>
                   </TableBody>
                 </Table>
+                <TablePagination
+                  className="no-print"
+                  page={depositsPage}
+                  totalPages={depositsTotalPages}
+                  total={depositsTotal}
+                  from={depositsFrom}
+                  to={depositsTo}
+                  pageSize={depositsPageSize}
+                  onPageChange={setDepositsPage}
+                  onPageSizeChange={setDepositsPageSize}
+                />
+                </>
               )}
             </div>
 
@@ -186,6 +244,7 @@ export default function BankTransactionsReportPage() {
               {data.withdrawals.length === 0 ? (
                 <div className="py-12 text-center text-gray-500">No withdrawals in this period.</div>
               ) : (
+                <>
                 <Table>
                   <TableHeader>
                     <TableRow className="bg-transparent! hover:bg-transparent!">
@@ -196,7 +255,7 @@ export default function BankTransactionsReportPage() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {data.withdrawals.map((w) => (
+                    {paginatedWithdrawals.map((w) => (
                       <TableRow key={w.id}>
                         <TableCell>{new Date(w.withdrawnAt).toLocaleDateString()}</TableCell>
                         <TableCell>{w.bank?.code}</TableCell>
@@ -212,6 +271,18 @@ export default function BankTransactionsReportPage() {
                     </TableRow>
                   </TableBody>
                 </Table>
+                <TablePagination
+                  className="no-print"
+                  page={withdrawalsPage}
+                  totalPages={withdrawalsTotalPages}
+                  total={withdrawalsTotalCount}
+                  from={withdrawalsFrom}
+                  to={withdrawalsTo}
+                  pageSize={withdrawalsPageSize}
+                  onPageChange={setWithdrawalsPage}
+                  onPageSizeChange={setWithdrawalsPageSize}
+                />
+                </>
               )}
             </div>
 
@@ -222,6 +293,7 @@ export default function BankTransactionsReportPage() {
               {data.transfersOut.length === 0 && data.transfersIn.length === 0 ? (
                 <div className="py-12 text-center text-gray-500">No transfers in this period.</div>
               ) : (
+                <>
                 <Table>
                   <TableHeader>
                     <TableRow className="bg-transparent! hover:bg-transparent!">
@@ -232,18 +304,28 @@ export default function BankTransactionsReportPage() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {[...data.transfersOut, ...data.transfersIn]
-                      .sort((a, b) => new Date(b.transferredAt).getTime() - new Date(a.transferredAt).getTime())
-                      .map((t) => (
-                        <TableRow key={t.id}>
-                          <TableCell>{new Date(t.transferredAt).toLocaleDateString()}</TableCell>
-                          <TableCell>{t.fromBank?.code}</TableCell>
-                          <TableCell>{t.toBank?.code}</TableCell>
-                          <TableCell className="text-right font-medium">${t.amount.toLocaleString()}</TableCell>
-                        </TableRow>
-                      ))}
+                    {paginatedTransfers.map((t) => (
+                      <TableRow key={t.id}>
+                        <TableCell>{new Date(t.transferredAt).toLocaleDateString()}</TableCell>
+                        <TableCell>{t.fromBank?.code}</TableCell>
+                        <TableCell>{t.toBank?.code}</TableCell>
+                        <TableCell className="text-right font-medium">${t.amount.toLocaleString()}</TableCell>
+                      </TableRow>
+                    ))}
                   </TableBody>
                 </Table>
+                <TablePagination
+                  className="no-print"
+                  page={transfersPage}
+                  totalPages={transfersTotalPages}
+                  total={transfersTotalCount}
+                  from={transfersFrom}
+                  to={transfersTo}
+                  pageSize={transfersPageSize}
+                  onPageChange={setTransfersPage}
+                  onPageSizeChange={setTransfersPageSize}
+                />
+                </>
               )}
             </div>
           </>

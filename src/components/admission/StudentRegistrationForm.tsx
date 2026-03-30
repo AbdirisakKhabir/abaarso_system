@@ -1,10 +1,10 @@
 "use client";
 
-import React, { useCallback, useRef, useState } from "react";
+import React, { useRef, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import Button from "@/components/ui/button/Button";
-import DatePicker from "@/components/form/date-picker";
+import { DateInput } from "@/components/form/DateInput";
 import { authFetch } from "@/lib/api";
 import { ChevronLeftIcon, UserCircleIcon, MailIcon, GroupIcon, UserIcon } from "@/icons";
 
@@ -95,10 +95,6 @@ export default function StudentRegistrationForm({
   const [uploading, setUploading] = useState(false);
   const [imagePreview, setImagePreview] = useState<string | null>(initialData?.imageUrl ?? null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-
-  const handleDobChange = useCallback((_dates: Date[], dateStr: string) => {
-    setForm((f) => ({ ...f, dateOfBirth: dateStr || "" }));
-  }, []);
 
   async function handleImageUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -321,7 +317,13 @@ export default function StudentRegistrationForm({
           <SectionHeader icon={UserIcon} title="Personal Details" subtitle="Date of birth, gender, and status" />
           <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
             <div>
-              <DatePicker id="dob-picker" label="Date of Birth" placeholder="Select date" defaultDate={form.dateOfBirth || undefined} onChange={handleDobChange} appendToBody />
+              <DateInput
+                id="student-dob"
+                label="Date of Birth"
+                value={form.dateOfBirth}
+                onChange={(v) => setForm((f) => ({ ...f, dateOfBirth: v }))}
+                inputClassName={inputClass}
+              />
             </div>
             <div>
               <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">Gender</label>

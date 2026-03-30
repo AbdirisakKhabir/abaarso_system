@@ -14,6 +14,11 @@ export async function GET(req: NextRequest) {
     const studentId = searchParams.get("studentId"); // studentId string e.g. STD-2026-0001
     const semester = searchParams.get("semester");
     const year = searchParams.get("year");
+    const pageParam = searchParams.get("page");
+    const pageSizeParam = searchParams.get("pageSize");
+    const paginate = pageParam != null || pageSizeParam != null;
+    const page = Math.max(1, Number(pageParam || 1));
+    const pageSize = Math.min(100, Math.max(1, Number(pageSizeParam || 10)));
 
     const where: { student?: { studentId?: string }; semester?: string; year?: number } = {};
     if (studentId) {
@@ -22,23 +27,42 @@ export async function GET(req: NextRequest) {
     if (semester) where.semester = semester;
     if (year) where.year = Number(year);
 
+    const include = {
+      student: {
+        select: {
+          id: true,
+          studentId: true,
+          firstName: true,
+          lastName: true,
+          department: { select: { id: true, name: true, code: true } },
+          class: { select: { id: true, name: true, semester: true, year: true, department: { select: { code: true } } } },
+        },
+      },
+      bank: { select: { id: true, name: true, code: true } },
+      recordedBy: { select: { id: true, name: true, email: true } },
+    } as const;
+
+    const orderBy = [{ year: "desc" as const }, { semester: "asc" as const }, { paidAt: "desc" as const }];
+
+    if (paginate) {
+      const skip = (page - 1) * pageSize;
+      const [items, total] = await Promise.all([
+        prisma.tuitionPayment.findMany({
+          where,
+          skip,
+          take: pageSize,
+          include,
+          orderBy,
+        }),
+        prisma.tuitionPayment.count({ where }),
+      ]);
+      return NextResponse.json({ items, total, page, pageSize });
+    }
+
     const payments = await prisma.tuitionPayment.findMany({
       where,
-      include: {
-        student: {
-          select: {
-            id: true,
-            studentId: true,
-            firstName: true,
-            lastName: true,
-            department: { select: { id: true, name: true, code: true } },
-            class: { select: { id: true, name: true, semester: true, year: true, department: { select: { code: true } } } },
-          },
-        },
-        bank: { select: { id: true, name: true, code: true } },
-        recordedBy: { select: { id: true, name: true, email: true } },
-      },
-      orderBy: [{ year: "desc" }, { semester: "asc" }, { paidAt: "desc" }],
+      include,
+      orderBy,
     });
 
     return NextResponse.json(payments);
@@ -131,7 +155,26 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const paymentMethodVal = paymentMethod === "electronic" ? "electronic" : "bank_receipt";
+    const method = String(paymentMethod || "bank_receipt");
+    if (method === "bank_receipt" && !String(receiptNumber || "").trim()) {
+      return NextResponse.json(
+        { error: "Receipt number is required for bank deposit" },
+        { status: 400 }
+      );
+    }
+    if (method === "electronic" && !String(transactionId || "").trim()) {
+      return NextResponse.json(
+        { error: "Transaction ID is required for electronic payment" },
+        { status: 400 }
+      );
+    }
+
+    const paymentMethodVal =
+      method === "electronic"
+        ? "electronic"
+        : method === "cash_on_hand"
+          ? "cash_on_hand"
+          : "bank_receipt";
     const paymentDateVal = paymentDate ? new Date(paymentDate) : new Date();
 
     const payment = await prisma.$transaction(async (tx) => {
@@ -143,8 +186,14 @@ export async function POST(req: NextRequest) {
           semester: String(semester),
           year: Number(year),
           paymentMethod: paymentMethodVal,
-          receiptNumber: receiptNumber ? String(receiptNumber).trim() : null,
-          transactionId: transactionId ? String(transactionId).trim() : null,
+          receiptNumber:
+            paymentMethodVal === "bank_receipt" && receiptNumber
+              ? String(receiptNumber).trim()
+              : null,
+          transactionId:
+            paymentMethodVal === "electronic" && transactionId
+              ? String(transactionId).trim()
+              : null,
           paymentDate: paymentDateVal,
           recordedById: auth.userId,
           note: note || null,

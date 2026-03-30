@@ -10,8 +10,10 @@ import {
   TableBody,
   TableCell,
   TableHeader,
+  TablePagination,
   TableRow,
 } from "@/components/ui/table";
+import { usePagination } from "@/hooks/usePagination";
 import Badge from "@/components/ui/badge/Badge";
 import { authFetch } from "@/lib/api";
 
@@ -58,21 +60,19 @@ export default function HRReportPage() {
     ? employees.filter((e) => e.position?.id === Number(filterPosition))
     : employees;
 
-  const handlePrint = () => window.print();
+  const {
+    paginatedItems: paginatedEmployees,
+    page,
+    setPage,
+    pageSize,
+    setPageSize,
+    totalPages,
+    total: employeesTotal,
+    from,
+    to,
+  } = usePagination(filteredEmployees, [filterPosition]);
 
-  if (!hasPermission("hr.view")) {
-    return (
-      <div>
-        <PageBreadCrumb pageTitle="HR Report" />
-        <div className="mt-6 flex flex-col items-center justify-center rounded-2xl border border-gray-200 bg-white px-6 py-16 dark:border-gray-800 dark:bg-white/3">
-          <p className="text-sm font-medium text-gray-500 dark:text-gray-400">You do not have permission to view this report.</p>
-          <Link href="/reports" className="mt-4 text-sm font-medium text-brand-600 hover:text-brand-700 dark:text-brand-400">
-            ← Back to Reports
-          </Link>
-        </div>
-      </div>
-    );
-  }
+  const handlePrint = () => window.print();
 
   const handleExportCSV = () => {
     const headers = ["Name", "Email", "Phone", "Position", "Department", "Hire Date", "Status"];
@@ -94,6 +94,20 @@ export default function HRReportPage() {
     a.click();
     URL.revokeObjectURL(url);
   };
+
+  if (!hasPermission("hr.view")) {
+    return (
+      <div>
+        <PageBreadCrumb pageTitle="HR Report" />
+        <div className="mt-6 flex flex-col items-center justify-center rounded-2xl border border-gray-200 bg-white px-6 py-16 dark:border-gray-800 dark:bg-white/3">
+          <p className="text-sm font-medium text-gray-500 dark:text-gray-400">You do not have permission to view this report.</p>
+          <Link href="/reports" className="mt-4 text-sm font-medium text-brand-600 hover:text-brand-700 dark:text-brand-400">
+            ← Back to Reports
+          </Link>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="report-print-area">
@@ -158,9 +172,9 @@ export default function HRReportPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filteredEmployees.map((e, idx) => (
+                  {paginatedEmployees.map((e, idx) => (
                     <TableRow key={e.id}>
-                      <TableCell className="text-gray-500">{idx + 1}</TableCell>
+                      <TableCell className="text-gray-500">{(page - 1) * pageSize + idx + 1}</TableCell>
                       <TableCell className="font-medium">{e.name}</TableCell>
                       <TableCell>{e.email}</TableCell>
                       <TableCell>{e.phone ?? "—"}</TableCell>
@@ -178,6 +192,17 @@ export default function HRReportPage() {
                   ))}
                 </TableBody>
               </Table>
+              <TablePagination
+                className="no-print"
+                page={page}
+                totalPages={totalPages}
+                total={employeesTotal}
+                from={from}
+                to={to}
+                pageSize={pageSize}
+                onPageChange={setPage}
+                onPageSizeChange={setPageSize}
+              />
             </div>
           )}
         </div>

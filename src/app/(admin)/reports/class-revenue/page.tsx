@@ -8,8 +8,10 @@ import {
   TableBody,
   TableCell,
   TableHeader,
+  TablePagination,
   TableRow,
 } from "@/components/ui/table";
+import { usePagination } from "@/hooks/usePagination";
 import Badge from "@/components/ui/badge/Badge";
 import { authFetch } from "@/lib/api";
 import { DownloadIcon } from "@/icons";
@@ -64,6 +66,18 @@ export default function ClassRevenueReportPage() {
   useEffect(() => {
     fetchRevenue();
   }, [fetchRevenue]);
+
+  const {
+    paginatedItems: paginatedRevenue,
+    page,
+    setPage,
+    pageSize,
+    setPageSize,
+    totalPages,
+    total: revenueTotal,
+    from,
+    to,
+  } = usePagination(revenue, [filterYear, filterDept, filterSemester]);
 
   const totalRevenue = revenue.reduce((sum, r) => sum + r.revenue, 0);
 
@@ -183,7 +197,7 @@ export default function ClassRevenueReportPage() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {revenue.map((r) => (
+                    {paginatedRevenue.map((r) => (
                       <TableRow key={r.id}>
                         <TableCell className="font-medium">{r.name}</TableCell>
                         <TableCell>{r.department ? `${r.department.code} - ${r.department.name}` : "—"}</TableCell>
@@ -222,6 +236,17 @@ export default function ClassRevenueReportPage() {
                     )}
                   </TableBody>
                 </Table>
+                <TablePagination
+                  className="no-print"
+                  page={page}
+                  totalPages={totalPages}
+                  total={revenueTotal}
+                  from={from}
+                  to={to}
+                  pageSize={pageSize}
+                  onPageChange={setPage}
+                  onPageSizeChange={setPageSize}
+                />
               </div>
             </>
           )}

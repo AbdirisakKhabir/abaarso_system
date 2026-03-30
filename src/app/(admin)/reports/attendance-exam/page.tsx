@@ -8,8 +8,10 @@ import {
   TableBody,
   TableCell,
   TableHeader,
+  TablePagination,
   TableRow,
 } from "@/components/ui/table";
+import { usePagination } from "@/hooks/usePagination";
 import { authFetch } from "@/lib/api";
 
 type Department = { id: number; name: string; code: string };
@@ -123,6 +125,18 @@ export default function AttendanceExamReportPage() {
   const displayCourses = filterCourse
     ? courses.filter((c) => String(c.id) === filterCourse)
     : courses;
+
+  const {
+    paginatedItems,
+    page,
+    setPage,
+    pageSize,
+    setPageSize,
+    totalPages,
+    total: rowsTotal,
+    from,
+    to,
+  } = usePagination(rows, [filterClass, filterCourse]);
 
   return (
     <div>
@@ -256,6 +270,7 @@ export default function AttendanceExamReportPage() {
               No students in this class or no data for the selected filters.
             </div>
           ) : (
+            <>
             <Table>
               <TableHeader className="border-b border-gray-100 dark:border-gray-800">
                 <TableRow>
@@ -316,7 +331,7 @@ export default function AttendanceExamReportPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {rows.map((r) => {
+                {paginatedItems.map((r) => {
                   const examMap = new Map(
                     r.examRecords.map((e) => [e.courseId, e])
                   );
@@ -399,6 +414,18 @@ export default function AttendanceExamReportPage() {
                 })}
               </TableBody>
             </Table>
+            <TablePagination
+              className="no-print"
+              page={page}
+              totalPages={totalPages}
+              total={rowsTotal}
+              from={from}
+              to={to}
+              pageSize={pageSize}
+              onPageChange={setPage}
+              onPageSizeChange={setPageSize}
+            />
+            </>
           )}
         </div>
       </div>

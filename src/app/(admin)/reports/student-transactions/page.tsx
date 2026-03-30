@@ -9,10 +9,13 @@ import {
   TableBody,
   TableCell,
   TableHeader,
+  TablePagination,
   TableRow,
 } from "@/components/ui/table";
+import { usePagination } from "@/hooks/usePagination";
 import Badge from "@/components/ui/badge/Badge";
 import { authFetch } from "@/lib/api";
+import { DateInput } from "@/components/form/DateInput";
 import { DownloadIcon } from "@/icons";
 
 type Department = { id: number; name: string; code: string };
@@ -85,6 +88,26 @@ export default function StudentTransactionsReportPage() {
   const filteredClasses = filterDept
     ? classes.filter((c) => c.department?.id === Number(filterDept))
     : classes;
+
+  const {
+    paginatedItems: paginatedTransactions,
+    page,
+    setPage,
+    pageSize,
+    setPageSize,
+    totalPages,
+    total: transactionsTotal,
+    from,
+    to,
+  } = usePagination(transactions, [
+    filterYear,
+    filterDept,
+    filterClass,
+    filterSearch,
+    filterPhone,
+    filterDateFrom,
+    filterDateTo,
+  ]);
 
   const handlePrint = () => window.print();
 
@@ -188,6 +211,23 @@ export default function StudentTransactionsReportPage() {
                 ))}
               </select>
             </div>
+            <DateInput
+              id="student-tx-date-from"
+              label="Payment from"
+              labelClassName="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400"
+              value={filterDateFrom}
+              onChange={setFilterDateFrom}
+              inputClassName="h-10 w-full min-w-0 sm:w-auto sm:min-w-[140px] rounded-lg border border-gray-200 bg-transparent px-3 text-sm text-gray-800 outline-none focus:border-brand-300 dark:border-gray-700 dark:text-white/80 [color-scheme:light] dark:[color-scheme:dark]"
+            />
+            <DateInput
+              id="student-tx-date-to"
+              label="Payment to"
+              labelClassName="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400"
+              value={filterDateTo}
+              onChange={setFilterDateTo}
+              min={filterDateFrom || undefined}
+              inputClassName="h-10 w-full min-w-0 sm:w-auto sm:min-w-[140px] rounded-lg border border-gray-200 bg-transparent px-3 text-sm text-gray-800 outline-none focus:border-brand-300 dark:border-gray-700 dark:text-white/80 [color-scheme:light] dark:[color-scheme:dark]"
+            />
           </div>
         </div>
         <div className="px-5 py-4">
@@ -227,7 +267,7 @@ export default function StudentTransactionsReportPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {transactions.map((t) => (
+                  {paginatedTransactions.map((t) => (
                     <TableRow key={t.studentId}>
                       <TableCell>
                         <span className="no-print">
@@ -267,6 +307,17 @@ export default function StudentTransactionsReportPage() {
                   )}
                 </TableBody>
               </Table>
+              <TablePagination
+                className="no-print"
+                page={page}
+                totalPages={totalPages}
+                total={transactionsTotal}
+                from={from}
+                to={to}
+                pageSize={pageSize}
+                onPageChange={setPage}
+                onPageSizeChange={setPageSize}
+              />
             </div>
           )}
         </div>

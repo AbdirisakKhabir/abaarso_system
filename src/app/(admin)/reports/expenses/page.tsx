@@ -10,8 +10,10 @@ import {
   TableBody,
   TableCell,
   TableHeader,
+  TablePagination,
   TableRow,
 } from "@/components/ui/table";
+import { usePagination } from "@/hooks/usePagination";
 import { authFetch } from "@/lib/api";
 import { DownloadIcon } from "@/icons";
 
@@ -59,6 +61,19 @@ export default function ExpenseReportPage() {
   useEffect(() => {
     fetchData();
   }, [fetchData]);
+
+  const expensesList = data?.expenses ?? [];
+  const {
+    paginatedItems: paginatedExpenses,
+    page,
+    setPage,
+    pageSize,
+    setPageSize,
+    totalPages,
+    total: expensesTotal,
+    from,
+    to,
+  } = usePagination(expensesList, [year, statusFilter]);
 
   const handlePrint = () => window.print();
   const handleExportCSV = () => {
@@ -180,7 +195,7 @@ export default function ExpenseReportPage() {
                       </TableCell>
                     </TableRow>
                   ) : (
-                    data.expenses.map((e) => (
+                    paginatedExpenses.map((e) => (
                       <TableRow key={e.id}>
                         <TableCell>{new Date(e.createdAt).toLocaleDateString()}</TableCell>
                         <TableCell><span className="max-w-[180px] truncate block" title={e.description}>{e.description}</span></TableCell>
@@ -199,6 +214,17 @@ export default function ExpenseReportPage() {
                   )}
                 </TableBody>
               </Table>
+              <TablePagination
+                className="no-print"
+                page={page}
+                totalPages={totalPages}
+                total={expensesTotal}
+                from={from}
+                to={to}
+                pageSize={pageSize}
+                onPageChange={setPage}
+                onPageSizeChange={setPageSize}
+              />
             </div>
           </>
         ) : (

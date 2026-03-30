@@ -9,10 +9,13 @@ import {
   TableBody,
   TableCell,
   TableHeader,
+  TablePagination,
   TableRow,
 } from "@/components/ui/table";
+import { usePagination } from "@/hooks/usePagination";
 import Badge from "@/components/ui/badge/Badge";
 import { authFetch } from "@/lib/api";
+import { DateInput } from "@/components/form/DateInput";
 import { DownloadIcon } from "@/icons";
 
 type Bank = { id: number; name: string; code: string };
@@ -58,6 +61,18 @@ export default function TransactionHistoryReportPage() {
   useEffect(() => {
     fetchData();
   }, [fetchData]);
+
+  const {
+    paginatedItems: paginatedTransactions,
+    page,
+    setPage,
+    pageSize,
+    setPageSize,
+    totalPages,
+    total: transactionsTotal,
+    from,
+    to,
+  } = usePagination(transactions, [bankId, type, dateFrom, dateTo]);
 
   const handlePrint = () => window.print();
   const handleExportCSV = () => {
@@ -142,24 +157,22 @@ export default function TransactionHistoryReportPage() {
               <option value="transfer_in">Transfer In</option>
             </select>
           </div>
-          <div>
-            <label className="mb-1 block text-xs text-gray-500">From Date</label>
-            <input
-              type="date"
-              value={dateFrom}
-              onChange={(e) => setDateFrom(e.target.value)}
-              className="h-10 rounded-lg border border-gray-200 px-3 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-white"
-            />
-          </div>
-          <div>
-            <label className="mb-1 block text-xs text-gray-500">To Date</label>
-            <input
-              type="date"
-              value={dateTo}
-              onChange={(e) => setDateTo(e.target.value)}
-              className="h-10 rounded-lg border border-gray-200 px-3 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-white"
-            />
-          </div>
+          <DateInput
+            id="tx-hist-from"
+            label="From Date"
+            labelClassName="mb-1 block text-xs text-gray-500"
+            value={dateFrom}
+            onChange={setDateFrom}
+            inputClassName="h-10 rounded-lg border border-gray-200 px-3 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-white"
+          />
+          <DateInput
+            id="tx-hist-to"
+            label="To Date"
+            labelClassName="mb-1 block text-xs text-gray-500"
+            value={dateTo}
+            onChange={setDateTo}
+            inputClassName="h-10 rounded-lg border border-gray-200 px-3 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-white"
+          />
         </div>
       </div>
 
@@ -223,6 +236,7 @@ export default function TransactionHistoryReportPage() {
             No transactions in this period. Transactions are created automatically when you record payments, withdrawals, or transfers.
           </div>
         ) : (
+          <>
           <Table>
             <TableHeader>
               <TableRow className="bg-transparent! hover:bg-transparent!">
@@ -236,7 +250,7 @@ export default function TransactionHistoryReportPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {transactions.map((t) => (
+              {paginatedTransactions.map((t) => (
                 <TableRow key={t.id}>
                   <TableCell className="whitespace-nowrap text-sm">
                     {new Date(t.createdAt).toLocaleString()}
@@ -278,6 +292,18 @@ export default function TransactionHistoryReportPage() {
               )}
             </TableBody>
           </Table>
+          <TablePagination
+            className="no-print"
+            page={page}
+            totalPages={totalPages}
+            total={transactionsTotal}
+            from={from}
+            to={to}
+            pageSize={pageSize}
+            onPageChange={setPage}
+            onPageSizeChange={setPageSize}
+          />
+          </>
         )}
       </div>
     </div>

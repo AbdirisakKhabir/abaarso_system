@@ -9,8 +9,10 @@ import {
   TableBody,
   TableCell,
   TableHeader,
+  TablePagination,
   TableRow,
 } from "@/components/ui/table";
+import { globalRowIndex, usePagination } from "@/hooks/usePagination";
 import Badge from "@/components/ui/badge/Badge";
 import Link from "next/link";
 import { authFetch } from "@/lib/api";
@@ -289,6 +291,18 @@ export default function AdmissionPage() {
     );
   });
 
+  const {
+    paginatedItems,
+    page,
+    setPage,
+    pageSize,
+    setPageSize,
+    totalPages,
+    total: filteredTotal,
+    from,
+    to,
+  } = usePagination(filtered, [search, filterStatus, filterDeptId]);
+
   if (!hasPermission("admission.view")) {
     return (
       <div>
@@ -460,6 +474,7 @@ export default function AdmissionPage() {
             </p>
           </div>
         ) : (
+          <>
           <Table>
             <TableHeader>
               <TableRow className="bg-transparent! hover:bg-transparent!">
@@ -487,7 +502,7 @@ export default function AdmissionPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filtered.map((s, idx) => (
+              {paginatedItems.map((s, idx) => (
                 <TableRow key={s.id}>
                   {canDelete && filtered.length > 0 && (
                     <TableCell className="w-12 px-3">
@@ -501,7 +516,7 @@ export default function AdmissionPage() {
                     </TableCell>
                   )}
                   <TableCell className="font-medium text-gray-400 dark:text-gray-500">
-                    {idx + 1}
+                    {globalRowIndex(page, pageSize, idx)}
                   </TableCell>
                   <TableCell>
                     <div className="flex items-center gap-3">
@@ -600,6 +615,17 @@ export default function AdmissionPage() {
               ))}
             </TableBody>
           </Table>
+          <TablePagination
+            page={page}
+            totalPages={totalPages}
+            total={filteredTotal}
+            from={from}
+            to={to}
+            pageSize={pageSize}
+            onPageChange={setPage}
+            onPageSizeChange={setPageSize}
+          />
+          </>
         )}
       </div>
 

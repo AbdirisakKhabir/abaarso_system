@@ -8,8 +8,11 @@ import {
   TableBody,
   TableCell,
   TableHeader,
+  TablePagination,
   TableRow,
 } from "@/components/ui/table";
+import { DateInput } from "@/components/form/DateInput";
+import { globalRowIndex, usePagination } from "@/hooks/usePagination";
 import Badge from "@/components/ui/badge/Badge";
 import { authFetch } from "@/lib/api";
 import { ModalOverlayGate } from "@/context/ModalOverlayContext";
@@ -165,6 +168,18 @@ export default function HREmployeesPage() {
       e.position.name.toLowerCase().includes(search.toLowerCase())
   );
 
+  const {
+    paginatedItems,
+    page,
+    setPage,
+    pageSize,
+    setPageSize,
+    totalPages,
+    total: filteredTotal,
+    from,
+    to,
+  } = usePagination(filtered, [search]);
+
   if (!hasPermission("hr.view")) {
     return (
       <div>
@@ -220,6 +235,7 @@ export default function HREmployeesPage() {
             </p>
           </div>
         ) : (
+          <>
           <Table>
             <TableHeader>
               <TableRow className="bg-transparent! hover:bg-transparent!">
@@ -234,9 +250,9 @@ export default function HREmployeesPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filtered.map((e, idx) => (
+              {paginatedItems.map((e, idx) => (
                 <TableRow key={e.id}>
-                  <TableCell className="font-medium text-gray-400 dark:text-gray-500">{idx + 1}</TableCell>
+                  <TableCell className="font-medium text-gray-400 dark:text-gray-500">{globalRowIndex(page, pageSize, idx)}</TableCell>
                   <TableCell className="font-semibold text-gray-800 dark:text-white/90">{e.name}</TableCell>
                   <TableCell className="text-gray-600 dark:text-gray-300">{e.email}</TableCell>
                   <TableCell><Badge color="info" size="sm">{e.position.name}</Badge></TableCell>
@@ -277,6 +293,17 @@ export default function HREmployeesPage() {
               ))}
             </TableBody>
           </Table>
+          <TablePagination
+            page={page}
+            totalPages={totalPages}
+            total={filteredTotal}
+            from={from}
+            to={to}
+            pageSize={pageSize}
+            onPageChange={setPage}
+            onPageSizeChange={setPageSize}
+          />
+          </>
         )}
       </div>
 
@@ -325,11 +352,13 @@ export default function HREmployeesPage() {
                   <input type="text" value={form.department} onChange={(e) => setForm((f) => ({ ...f, department: e.target.value }))} placeholder="e.g. Admin, Finance"
                     className="h-11 w-full rounded-lg border border-gray-200 bg-transparent px-4 py-2.5 text-sm text-gray-800 outline-none placeholder:text-gray-400 focus:border-brand-300 focus:ring-2 focus:ring-brand-500/20 dark:border-gray-700 dark:text-white dark:placeholder:text-gray-500 dark:focus:border-brand-500/40" />
                 </div>
-                <div>
-                  <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">Hire Date</label>
-                  <input type="date" value={form.hireDate} onChange={(e) => setForm((f) => ({ ...f, hireDate: e.target.value }))}
-                    className="h-11 w-full rounded-lg border border-gray-200 bg-transparent px-4 py-2.5 text-sm text-gray-800 outline-none focus:border-brand-300 focus:ring-2 focus:ring-brand-500/20 dark:border-gray-700 dark:text-white dark:focus:border-brand-500/40" />
-                </div>
+                <DateInput
+                  id="employee-hire-date"
+                  label="Hire Date"
+                  value={form.hireDate}
+                  onChange={(v) => setForm((f) => ({ ...f, hireDate: v }))}
+                  inputClassName="h-11 w-full rounded-lg border border-gray-200 bg-transparent px-4 py-2.5 text-sm text-gray-800 outline-none focus:border-brand-300 focus:ring-2 focus:ring-brand-500/20 dark:border-gray-700 dark:text-white dark:focus:border-brand-500/40"
+                />
               </div>
               <div className="mt-6 flex justify-end gap-3">
                 <Button type="button" variant="outline" onClick={() => setModal(null)} size="sm">Cancel</Button>

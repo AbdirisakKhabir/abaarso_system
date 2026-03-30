@@ -8,8 +8,10 @@ import {
   TableBody,
   TableCell,
   TableHeader,
+  TablePagination,
   TableRow,
 } from "@/components/ui/table";
+import { usePagination } from "@/hooks/usePagination";
 import Badge from "@/components/ui/badge/Badge";
 import { authFetch } from "@/lib/api";
 
@@ -76,6 +78,18 @@ export default function AdmissionReportPage() {
   }, [fetchReport]);
 
   const filteredClasses = filterDept ? classes.filter((c) => c.department?.id === Number(filterDept)) : classes;
+
+  const {
+    paginatedItems,
+    page,
+    setPage,
+    pageSize,
+    setPageSize,
+    totalPages,
+    total: studentsTotal,
+    from,
+    to,
+  } = usePagination(students, [filterDept, filterClass, filterStatus]);
 
   const handlePrint = () => window.print();
 
@@ -185,7 +199,7 @@ export default function AdmissionReportPage() {
                   </TableCell>
                 </TableRow>
               ) : (
-                students.map((s) => (
+                paginatedItems.map((s) => (
                   <TableRow key={s.id} className="border-b border-gray-50 dark:border-gray-800">
                     <TableCell className="px-5 py-3 font-mono text-sm text-gray-700 dark:text-gray-300">{s.studentId}</TableCell>
                     <TableCell className="px-5 py-3 font-medium text-gray-800 dark:text-white/90">{s.firstName} {s.lastName}</TableCell>
@@ -204,6 +218,17 @@ export default function AdmissionReportPage() {
               )}
             </TableBody>
           </Table>
+          <TablePagination
+            className="no-print"
+            page={page}
+            totalPages={totalPages}
+            total={studentsTotal}
+            from={from}
+            to={to}
+            pageSize={pageSize}
+            onPageChange={setPage}
+            onPageSizeChange={setPageSize}
+          />
         </div>
       </div>
     </div>

@@ -8,8 +8,10 @@ import {
   TableBody,
   TableCell,
   TableHeader,
+  TablePagination,
   TableRow,
 } from "@/components/ui/table";
+import { globalRowIndex, usePagination } from "@/hooks/usePagination";
 import Badge from "@/components/ui/badge/Badge";
 import { authFetch } from "@/lib/api";
 import { ModalOverlayGate } from "@/context/ModalOverlayContext";
@@ -131,6 +133,18 @@ export default function FacultiesPage() {
     );
   });
 
+  const {
+    paginatedItems,
+    page,
+    setPage,
+    pageSize,
+    setPageSize,
+    totalPages,
+    total: filteredTotal,
+    from,
+    to,
+  } = usePagination(filtered, [search]);
+
   if (!hasPermission("faculties.view")) {
     return (
       <div>
@@ -204,6 +218,7 @@ export default function FacultiesPage() {
             </p>
           </div>
         ) : (
+          <>
           <Table>
             <TableHeader>
               <TableRow className="bg-transparent! hover:bg-transparent!">
@@ -218,10 +233,10 @@ export default function FacultiesPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filtered.map((f, idx) => (
+              {paginatedItems.map((f, idx) => (
                 <TableRow key={f.id}>
                   <TableCell className="font-medium text-gray-400 dark:text-gray-500">
-                    {idx + 1}
+                    {globalRowIndex(page, pageSize, idx)}
                   </TableCell>
                   <TableCell>
                     <div className="flex items-center gap-3">
@@ -278,6 +293,17 @@ export default function FacultiesPage() {
               ))}
             </TableBody>
           </Table>
+          <TablePagination
+            page={page}
+            totalPages={totalPages}
+            total={filteredTotal}
+            from={from}
+            to={to}
+            pageSize={pageSize}
+            onPageChange={setPage}
+            onPageSizeChange={setPageSize}
+          />
+          </>
         )}
       </div>
 

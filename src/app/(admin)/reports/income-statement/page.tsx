@@ -9,8 +9,10 @@ import {
   TableBody,
   TableCell,
   TableHeader,
+  TablePagination,
   TableRow,
 } from "@/components/ui/table";
+import { usePagination } from "@/hooks/usePagination";
 import { authFetch } from "@/lib/api";
 import { DownloadIcon } from "@/icons";
 
@@ -46,6 +48,19 @@ export default function IncomeStatementReportPage() {
   useEffect(() => {
     fetchData();
   }, [fetchData]);
+
+  const expenseCategoryRows = data?.expenseCategories ?? [];
+  const {
+    paginatedItems: paginatedExpenseCategories,
+    page,
+    setPage,
+    pageSize,
+    setPageSize,
+    totalPages,
+    total: expenseCategoriesTotal,
+    from,
+    to,
+  } = usePagination(expenseCategoryRows, [year, data]);
 
   const handlePrint = () => window.print();
   const handleExportCSV = () => {
@@ -178,7 +193,7 @@ export default function IncomeStatementReportPage() {
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {data.expenseCategories.map((c) => (
+                        {paginatedExpenseCategories.map((c) => (
                           <TableRow key={c.category}>
                             <TableCell>{c.category}</TableCell>
                             <TableCell className="text-right font-medium text-red-600 dark:text-red-400">
@@ -189,6 +204,17 @@ export default function IncomeStatementReportPage() {
                         ))}
                       </TableBody>
                     </Table>
+                    <TablePagination
+                      className="no-print"
+                      page={page}
+                      totalPages={totalPages}
+                      total={expenseCategoriesTotal}
+                      from={from}
+                      to={to}
+                      pageSize={pageSize}
+                      onPageChange={setPage}
+                      onPageSizeChange={setPageSize}
+                    />
                   </div>
                 )}
                 <div className="rounded-xl border-2 border-red-200 bg-red-50/50 px-5 py-4 dark:border-red-900/50 dark:bg-red-900/10">

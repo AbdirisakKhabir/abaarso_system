@@ -9,8 +9,10 @@ import {
   TableBody,
   TableCell,
   TableHeader,
+  TablePagination,
   TableRow,
 } from "@/components/ui/table";
+import { usePagination } from "@/hooks/usePagination";
 import { authFetch } from "@/lib/api";
 import { ModalOverlayGate } from "@/context/ModalOverlayContext";
 import { useAuth } from "@/context/AuthContext";
@@ -170,6 +172,18 @@ export default function BanksPage() {
 
   const totalBalance = banks.reduce((sum, b) => sum + (b.balance ?? 0), 0);
 
+  const {
+    paginatedItems: paginatedBanks,
+    page,
+    setPage,
+    pageSize,
+    setPageSize,
+    totalPages,
+    total: banksTotal,
+    from,
+    to,
+  } = usePagination(banks, []);
+
   return (
     <div>
       <PageBreadCrumb pageTitle="Banks" />
@@ -243,6 +257,7 @@ export default function BanksPage() {
             )}
           </div>
         ) : (
+          <>
           <Table>
             <TableHeader>
               <TableRow className="bg-transparent! hover:bg-transparent!">
@@ -254,7 +269,7 @@ export default function BanksPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {banks.map((b) => (
+              {paginatedBanks.map((b) => (
                 <TableRow key={b.id}>
                   <TableCell className="font-mono font-medium">{b.code}</TableCell>
                   <TableCell>{b.name}</TableCell>
@@ -277,6 +292,17 @@ export default function BanksPage() {
               ))}
             </TableBody>
           </Table>
+          <TablePagination
+            page={page}
+            totalPages={totalPages}
+            total={banksTotal}
+            from={from}
+            to={to}
+            pageSize={pageSize}
+            onPageChange={setPage}
+            onPageSizeChange={setPageSize}
+          />
+          </>
         )}
       </div>
 

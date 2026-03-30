@@ -8,8 +8,10 @@ import {
   TableBody,
   TableCell,
   TableHeader,
+  TablePagination,
   TableRow,
 } from "@/components/ui/table";
+import { globalRowIndex, usePagination } from "@/hooks/usePagination";
 import Badge from "@/components/ui/badge/Badge";
 import { authFetch } from "@/lib/api";
 import { ModalOverlayGate } from "@/context/ModalOverlayContext";
@@ -312,6 +314,18 @@ export default function CoursesPage() {
 
   const deletableFiltered = filtered.filter((c) => c.classCount === 0);
 
+  const {
+    paginatedItems,
+    page,
+    setPage,
+    pageSize,
+    setPageSize,
+    totalPages,
+    total: filteredTotal,
+    from,
+    to,
+  } = usePagination(filtered, [search, filterDeptId]);
+
   if (!hasPermission("courses.view")) {
     return (
       <div>
@@ -432,6 +446,7 @@ export default function CoursesPage() {
             </p>
           </div>
         ) : (
+          <>
           <Table>
             <TableHeader>
               <TableRow className="bg-transparent! hover:bg-transparent!">
@@ -457,7 +472,7 @@ export default function CoursesPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filtered.map((c, idx) => (
+              {paginatedItems.map((c, idx) => (
                 <TableRow key={c.id}>
                   {canDelete && deletableFiltered.length > 0 && (
                     <TableCell className="w-12 px-3">
@@ -475,7 +490,7 @@ export default function CoursesPage() {
                     </TableCell>
                   )}
                   <TableCell className="font-medium text-gray-400 dark:text-gray-500">
-                    {idx + 1}
+                    {globalRowIndex(page, pageSize, idx)}
                   </TableCell>
                   <TableCell>
                     <div className="flex items-center gap-3">
@@ -545,6 +560,17 @@ export default function CoursesPage() {
               ))}
             </TableBody>
           </Table>
+          <TablePagination
+            page={page}
+            totalPages={totalPages}
+            total={filteredTotal}
+            from={from}
+            to={to}
+            pageSize={pageSize}
+            onPageChange={setPage}
+            onPageSizeChange={setPageSize}
+          />
+          </>
         )}
       </div>
 

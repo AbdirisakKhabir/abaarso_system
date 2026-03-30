@@ -9,8 +9,10 @@ import {
   TableBody,
   TableCell,
   TableHeader,
+  TablePagination,
   TableRow,
 } from "@/components/ui/table";
+import { globalRowIndex, usePagination } from "@/hooks/usePagination";
 import { authFetch } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import { DownloadIcon } from "@/icons";
@@ -73,6 +75,19 @@ export default function RecordExamsPage() {
   const [recordSaveResult, setRecordSaveResult] = useState<string | null>(null);
 
   const [courses, setCourses] = useState<CourseInfo[]>([]);
+
+  const recordRows = recordClassData?.rows ?? [];
+  const {
+    paginatedItems: paginatedRecordRows,
+    page: recordPage,
+    setPage: setRecordPage,
+    pageSize: recordPageSize,
+    setPageSize: setRecordPageSize,
+    totalPages: recordTotalPages,
+    total: recordRowsTotal,
+    from: recordFrom,
+    to: recordTo,
+  } = usePagination(recordRows, [recordClassId, recordCourseId]);
 
   useEffect(() => {
     authFetch("/api/faculties").then((r) => { if (r.ok) r.json().then(setFaculties); });
@@ -434,6 +449,7 @@ export default function RecordExamsPage() {
               <div className="h-10 w-10 animate-spin rounded-full border-2 border-brand-500 border-t-transparent" />
             </div>
           ) : recordClassData && recordClassData.rows.length > 0 ? (
+            <>
             <div className="overflow-x-auto rounded-xl border border-gray-200 dark:border-gray-700">
               <Table>
                 <TableHeader className="border-b border-gray-200 bg-gray-50 dark:border-gray-700 dark:bg-gray-800/50">
@@ -453,30 +469,42 @@ export default function RecordExamsPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {recordClassData.rows.map((r, idx) => {
+                  {paginatedRecordRows.map((r, idx) => {
                     const rec = r.record ?? { midExam: 0, finalExam: 0, project: 0, assignment: 0, presentation: 0, totalMarks: 0, grade: "", gradePoints: 0 };
+                    const globalIdx = (recordPage - 1) * recordPageSize + idx;
                     return (
                       <TableRow key={r.student.id} className="border-b border-gray-100 transition hover:bg-gray-50/50 dark:border-gray-800 dark:hover:bg-white/2">
-                        <TableCell className="px-3 py-2 text-center text-sm text-gray-500 dark:text-gray-400">{idx + 1}</TableCell>
+                        <TableCell className="px-3 py-2 text-center text-sm text-gray-500 dark:text-gray-400">{globalRowIndex(recordPage, recordPageSize, idx)}</TableCell>
                         <TableCell className="px-3 py-2 font-mono text-sm text-gray-800 dark:text-white/90">{r.student.studentId}</TableCell>
                         <TableCell className="px-3 py-2 text-sm font-medium text-gray-800 dark:text-white/90">{r.student.firstName} {r.student.lastName}</TableCell>
                         <TableCell className="px-3 py-2 text-center text-sm text-gray-600 dark:text-gray-400">
                           <span title="Attendance % (10% of grade)">{r.attendance != null ? `${r.attendance.attendancePercent}%` : "—"}</span>
                         </TableCell>
-                        <TableCell className="p-2"><input type="number" min={0} max={20} step={0.5} value={rec.midExam || ""} onChange={(e) => updateRecordRow(idx, "midExam", e.target.value)} className={inputCellClass} /></TableCell>
-                        <TableCell className="p-2"><input type="number" min={0} max={10} step={0.5} value={rec.project || ""} onChange={(e) => updateRecordRow(idx, "project", e.target.value)} className={inputCellClass} /></TableCell>
-                        <TableCell className="p-2"><input type="number" min={0} max={10} step={0.5} value={rec.assignment || ""} onChange={(e) => updateRecordRow(idx, "assignment", e.target.value)} className={inputCellClass} /></TableCell>
-                        <TableCell className="p-2"><input type="number" min={0} max={40} step={0.5} value={rec.finalExam || ""} onChange={(e) => updateRecordRow(idx, "finalExam", e.target.value)} className={inputCellClass} /></TableCell>
-                        <TableCell className="p-2"><input type="number" min={0} max={10} step={0.5} value={rec.presentation || ""} onChange={(e) => updateRecordRow(idx, "presentation", e.target.value)} className={inputCellClass} /></TableCell>
-                        <TableCell className="p-2"><input type="number" min={0} max={100} step={0.5} value={rec.totalMarks || ""} onChange={(e) => updateRecordRow(idx, "totalMarks", e.target.value)} className={`${inputCellClass} font-semibold`} /></TableCell>
-                        <TableCell className="p-2"><input type="text" value={rec.grade || ""} onChange={(e) => updateRecordRow(idx, "grade", e.target.value)} placeholder="A" className={inputCellClass} maxLength={3} /></TableCell>
-                        <TableCell className="p-2"><input type="number" min={0} max={4} step={0.1} value={rec.gradePoints || ""} onChange={(e) => updateRecordRow(idx, "gradePoints", e.target.value)} className={inputCellClass} /></TableCell>
+                        <TableCell className="p-2"><input type="number" min={0} max={20} step={0.5} value={rec.midExam || ""} onChange={(e) => updateRecordRow(globalIdx, "midExam", e.target.value)} className={inputCellClass} /></TableCell>
+                        <TableCell className="p-2"><input type="number" min={0} max={10} step={0.5} value={rec.project || ""} onChange={(e) => updateRecordRow(globalIdx, "project", e.target.value)} className={inputCellClass} /></TableCell>
+                        <TableCell className="p-2"><input type="number" min={0} max={10} step={0.5} value={rec.assignment || ""} onChange={(e) => updateRecordRow(globalIdx, "assignment", e.target.value)} className={inputCellClass} /></TableCell>
+                        <TableCell className="p-2"><input type="number" min={0} max={40} step={0.5} value={rec.finalExam || ""} onChange={(e) => updateRecordRow(globalIdx, "finalExam", e.target.value)} className={inputCellClass} /></TableCell>
+                        <TableCell className="p-2"><input type="number" min={0} max={10} step={0.5} value={rec.presentation || ""} onChange={(e) => updateRecordRow(globalIdx, "presentation", e.target.value)} className={inputCellClass} /></TableCell>
+                        <TableCell className="p-2"><input type="number" min={0} max={100} step={0.5} value={rec.totalMarks || ""} onChange={(e) => updateRecordRow(globalIdx, "totalMarks", e.target.value)} className={`${inputCellClass} font-semibold`} /></TableCell>
+                        <TableCell className="p-2"><input type="text" value={rec.grade || ""} onChange={(e) => updateRecordRow(globalIdx, "grade", e.target.value)} placeholder="A" className={inputCellClass} maxLength={3} /></TableCell>
+                        <TableCell className="p-2"><input type="number" min={0} max={4} step={0.1} value={rec.gradePoints || ""} onChange={(e) => updateRecordRow(globalIdx, "gradePoints", e.target.value)} className={inputCellClass} /></TableCell>
                       </TableRow>
                     );
                   })}
                 </TableBody>
               </Table>
             </div>
+            <TablePagination
+              page={recordPage}
+              totalPages={recordTotalPages}
+              total={recordRowsTotal}
+              from={recordFrom}
+              to={recordTo}
+              pageSize={recordPageSize}
+              onPageChange={setRecordPage}
+              onPageSizeChange={setRecordPageSize}
+            />
+            </>
           ) : recordClassData && recordClassData.rows.length === 0 ? (
             <div className="rounded-xl border border-dashed border-gray-200 py-12 text-center dark:border-gray-700">
               <p className="text-sm text-gray-500 dark:text-gray-400">No students in this class.</p>
