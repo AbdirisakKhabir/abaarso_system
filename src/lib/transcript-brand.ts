@@ -9,21 +9,32 @@ export const TRANSCRIPT_BRAND = {
   email: "registrar@abaarsotech.edu",
   website: "www.abaarsotech.edu",
   logoUrl: "/logo/logo%20abaarso.png",
-  semesterHeaderBg: "#d4edda", // Light green for Academic Year / Semester bands
-  semesterHeaderText: "#155724",
-  failGradeBg: "#fff3cd", // Yellow highlight for failing grades
-  failGradeText: "#856404",
+  /** Academic year / semester bar (same peach as course headers; text is white) */
+  semesterBandBg: "#F8CBAD",
+  semesterBandText: "#FFFFFF",
+  /** Course table column headers (Course Title, CrHrs, Grades group — not Course Code) */
+  courseTableHeaderBg: "#F8CBAD",
+  /** Failing marks highlight (typically &lt; 50) */
+  failGradeBg: "#FFFF00",
+  failGradeText: "#000000",
+  /** Shown above the grading legend table */
+  gradingSystemTitle: "Grading System",
 } as const;
 
-/** Grading system legend - matches GRADE_SCALE in lib/grades.ts */
+/**
+ * Display-only legend for the transcript (layout matches official partial transcript style).
+ * Adjust ranges to match your registrar policy; grading logic in the app uses `lib/grades.ts`.
+ */
 export const GRADING_SYSTEM_LEGEND = [
-  { range: "90-100", grade: "A" },
+  { range: "95-100", grade: "A+" },
+  { range: "90-94", grade: "A" },
   { range: "85-89", grade: "A-" },
   { range: "80-84", grade: "B+" },
   { range: "75-79", grade: "B" },
   { range: "70-74", grade: "B-" },
   { range: "65-69", grade: "C+" },
   { range: "60-64", grade: "C" },
-  { range: "50-59", grade: "D" },
+  { range: "55-59", grade: "D+" },
+  { range: "50-54", grade: "D" },
   { range: "Below 50", grade: "F" },
-];
+] as const;

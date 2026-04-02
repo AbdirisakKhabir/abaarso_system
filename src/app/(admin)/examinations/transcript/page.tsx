@@ -204,17 +204,10 @@ export default function TranscriptPage() {
     );
   }
 
-  const hasTranscript = transcript || classTranscript;
-
   return (
     <div>
-      <div className="mb-6 flex flex-wrap items-center justify-between gap-4 no-print">
+      <div className="mb-6 no-print">
         <PageBreadCrumb pageTitle="Transcript" />
-        {hasTranscript && (
-          <Button size="sm" onClick={handlePrint}>
-            Print Transcript
-          </Button>
-        )}
       </div>
 
 
@@ -340,6 +333,11 @@ export default function TranscriptPage() {
               </div>
             ) : (
             <div className="space-y-10">
+              <div className="no-print mb-4 flex justify-end">
+                <Button type="button" size="sm" onClick={handlePrint}>
+                  Print Transcript
+                </Button>
+              </div>
               {classTranscript.transcripts.map((t, idx) => {
                 const recBySem = t.records.reduce<Record<string, ExamRecord[]>>((acc, r) => {
                   const key = `${r.year}-${r.semester}`;
@@ -374,6 +372,7 @@ export default function TranscriptPage() {
             )
           ) : transcript ? (
             <TranscriptDocument
+              showPrintButton
               student={transcript.student}
               recordsBySemester={recordsBySemester}
               semesterKeys={semesterKeys}
