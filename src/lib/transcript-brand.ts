@@ -9,11 +9,9 @@ export const TRANSCRIPT_BRAND = {
   email: "registrar@abaarsotech.edu",
   website: "www.abaarsotech.edu",
   logoUrl: "/logo/logo%20abaarso.png",
-  /** Academic year / semester bar (same peach as course headers; text is white) */
-  semesterBandBg: "#F8CBAD",
+  /** Background only on the Academic Year / Semester bar (tables stay white) */
+  semesterBandBg: "#9e0539",
   semesterBandText: "#FFFFFF",
-  /** Course table column headers (Course Title, CrHrs, Grades group — not Course Code) */
-  courseTableHeaderBg: "#F8CBAD",
   /** Failing marks highlight (typically &lt; 50) */
   failGradeBg: "#FFFF00",
   failGradeText: "#000000",

@@ -5,7 +5,7 @@ import Button from "@/components/ui/button/Button";
 import { TRANSCRIPT_BRAND, GRADING_SYSTEM_LEGEND } from "@/lib/transcript-brand";
 
 const cellBorder = "border border-black px-1.5 py-0.5";
-const headerPeach = { backgroundColor: TRANSCRIPT_BRAND.courseTableHeaderBg };
+const tableHeaderCell = `${cellBorder} bg-white font-bold text-black`;
 
 type ExamRecord = {
   id: number;
@@ -155,15 +155,15 @@ export function TranscriptDocument({
           >
             <thead>
               <tr>
-                <th colSpan={2} className={`${cellBorder} text-left font-bold`} style={headerPeach}>
+                <th colSpan={2} className={`${tableHeaderCell} text-left`}>
                   {legendHeading}
                 </th>
               </tr>
               <tr>
-                <th className={`${cellBorder} text-center font-semibold`} style={headerPeach}>
+                <th className={`${tableHeaderCell} text-center font-semibold`}>
                   Percentage Score
                 </th>
-                <th className={`${cellBorder} text-center font-semibold`} style={headerPeach}>
+                <th className={`${tableHeaderCell} text-center font-semibold`}>
                   Grade
                 </th>
               </tr>
@@ -210,9 +210,12 @@ export function TranscriptDocument({
           const yearStart = yearEnd - 1;
 
           return (
-            <div key={key} className="mb-8 last:mb-4">
+            <div
+              key={key}
+              className={`transcript-semester-block mb-8 last:mb-4 ${keyIdx > 0 ? "break-before-page" : ""}`}
+            >
               <div
-                className="px-4 py-3 text-xl font-bold leading-snug print:text-lg print:py-2.5"
+                className="transcript-semester-band px-4 py-2.5 text-base font-bold leading-snug print:text-sm print:py-2"
                 style={semesterBandStyle}
               >
                 <div>Academic Year: {yearStart}-{yearEnd}</div>
@@ -225,37 +228,22 @@ export function TranscriptDocument({
               >
                 <thead>
                   <tr>
-                    <th
-                      rowSpan={2}
-                      className={`${cellBorder} bg-white text-left font-bold`}
-                    >
+                    <th rowSpan={2} className={`${tableHeaderCell} text-left`}>
                       Course Code
                     </th>
-                    <th
-                      rowSpan={2}
-                      className={`${cellBorder} text-left font-bold`}
-                      style={headerPeach}
-                    >
+                    <th rowSpan={2} className={`${tableHeaderCell} text-left`}>
                       Course Title
                     </th>
-                    <th
-                      rowSpan={2}
-                      className={`${cellBorder} w-10 text-center font-bold`}
-                      style={headerPeach}
-                    >
+                    <th rowSpan={2} className={`${tableHeaderCell} w-10 text-center`}>
                       CrHrs
                     </th>
-                    <th colSpan={3} className={`${cellBorder} text-center font-bold`} style={headerPeach}>
+                    <th colSpan={3} className={`${tableHeaderCell} text-center`}>
                       Grades
                     </th>
                   </tr>
                   <tr>
                     {(["Marks", "Grade", "GPA"] as const).map((h) => (
-                      <th
-                        key={h}
-                        className={`${cellBorder} w-12 text-center font-bold`}
-                        style={headerPeach}
-                      >
+                      <th key={h} className={`${tableHeaderCell} w-12 text-center`}>
                         {h}
                       </th>
                     ))}
@@ -301,7 +289,7 @@ export function TranscriptDocument({
                 </tfoot>
               </table>
 
-              <div className="mt-2 flex flex-wrap items-baseline justify-end gap-x-6 gap-y-1 text-[13px] font-semibold print:text-[13px]">
+              <div className="transcript-semester-gpa mt-2 flex flex-wrap items-baseline justify-end gap-x-6 gap-y-1 text-[13px] font-semibold print:text-[13px]">
                 <span>
                   GPA: <span className="font-bold">{semGpa?.gpa.toFixed(2) ?? "0.00"}</span>
                 </span>

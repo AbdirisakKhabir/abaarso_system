@@ -815,6 +815,27 @@ span.flatpickr-weekday,
     box-shadow: none !important;
     border: none !important;
   }
+  /* Keep each semester (band + table + GPA line) together; if it cannot fit
+     in the remaining space, browsers typically move the whole block forward. */
+  .transcript-semester-block {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+  .transcript-semester-band {
+    break-after: avoid;
+    page-break-after: avoid;
+  }
+  .transcript-semester-gpa {
+    break-before: avoid;
+    page-break-before: avoid;
+  }
+  /* If a semester table spans pages, repeat header/footer rows */
+  .transcript-semester-block .transcript-table thead {
+    display: table-header-group;
+  }
+  .transcript-semester-block .transcript-table tfoot {
+    display: table-footer-group;
+  }
   .transcript-table td,
   .transcript-table th {
     line-height: 1.25 !important;
