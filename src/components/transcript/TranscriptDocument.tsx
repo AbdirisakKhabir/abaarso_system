@@ -4,7 +4,8 @@ import React from "react";
 import Button from "@/components/ui/button/Button";
 import { TRANSCRIPT_BRAND, GRADING_SYSTEM_LEGEND } from "@/lib/transcript-brand";
 
-const cellBorder = "border border-black px-1.5 py-0.5";
+/** 12px body text; extra vertical padding for row spacing */
+const cellBorder = "border border-black px-2 py-2 text-[12px] leading-snug";
 const tableHeaderCell = `${cellBorder} bg-white font-bold text-black`;
 
 type ExamRecord = {
@@ -97,7 +98,7 @@ export function TranscriptDocument({
         </div>
       )}
       <div
-        className="transcript-document mx-auto max-w-[210mm] bg-white px-6 py-4 font-[Arial,Helvetica,sans-serif] text-black text-[13px] print:px-6 print:py-4 print:text-[13px]"
+        className="transcript-document mx-auto max-w-[210mm] bg-white px-6 py-4 font-[Arial,Helvetica,sans-serif] text-[12px] text-black print:px-6 print:py-4 print:text-[12px]"
         style={{ color: "#000" }}
       >
         {/* Header: logo top-left, title block centered */}
@@ -126,7 +127,7 @@ export function TranscriptDocument({
         {/* Student info + Grading system */}
         <div className="mb-4 flex flex-col gap-4 sm:flex-row sm:items-start">
           <table
-            className="transcript-table flex-1 border border-black text-[13px] print:text-[13px]"
+            className="transcript-table flex-1 border border-black text-[12px] print:text-[12px]"
             style={{ borderCollapse: "collapse" }}
           >
             <tbody>
@@ -209,13 +210,17 @@ export function TranscriptDocument({
           const yearEnd = Number(year);
           const yearStart = yearEnd - 1;
 
+          /* After page 1, start a new page every two semesters (pairs: 1+2, 3+4, …) */
+          const pageBreakBeforePair =
+            keyIdx > 0 && keyIdx % 2 === 1 ? "break-before-page" : "";
+
           return (
             <div
               key={key}
-              className={`transcript-semester-block mb-8 last:mb-4 ${keyIdx > 0 ? "break-before-page" : ""}`}
+              className={`transcript-semester-block mb-8 last:mb-4 ${pageBreakBeforePair}`}
             >
               <div
-                className="transcript-semester-band px-4 py-2.5 text-base font-bold leading-snug print:text-sm print:py-2"
+                className="transcript-semester-band px-4 py-2.5 text-[14px] font-bold leading-snug print:text-[14px] print:py-2"
                 style={semesterBandStyle}
               >
                 <div>Academic Year: {yearStart}-{yearEnd}</div>
@@ -223,7 +228,7 @@ export function TranscriptDocument({
               </div>
 
               <table
-                className="transcript-table mt-0 w-full border border-black text-[13px] print:text-[13px]"
+                className="transcript-table mt-0 w-full border border-black text-[12px] print:text-[12px]"
                 style={{ borderCollapse: "collapse" }}
               >
                 <thead>
@@ -289,7 +294,7 @@ export function TranscriptDocument({
                 </tfoot>
               </table>
 
-              <div className="transcript-semester-gpa mt-2 flex flex-wrap items-baseline justify-end gap-x-6 gap-y-1 text-[13px] font-semibold print:text-[13px]">
+              <div className="transcript-semester-gpa mt-2 flex flex-wrap items-baseline justify-end gap-x-6 gap-y-1 text-[12px] font-semibold print:text-[12px]">
                 <span>
                   GPA: <span className="font-bold">{semGpa?.gpa.toFixed(2) ?? "0.00"}</span>
                 </span>
@@ -304,8 +309,8 @@ export function TranscriptDocument({
         })}
 
         <div className="mt-4 border-t border-black pt-3 print:mt-3">
-          <p className="text-[13px] font-bold print:text-[13px]">
-            Cumulative GPA: <span className="text-base">{cumulativeGPA.toFixed(2)}</span>
+          <p className="text-[12px] font-bold print:text-[12px]">
+            Cumulative GPA: <span className="text-[14px] font-bold">{cumulativeGPA.toFixed(2)}</span>
           </p>
           <p className="text-[12px] print:text-[12px]">Total Credits: {totalCredits}</p>
           <p className="mt-1 text-[12px] text-gray-700 print:text-[12px]">

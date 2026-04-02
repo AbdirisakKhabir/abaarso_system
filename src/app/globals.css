@@ -824,6 +824,7 @@ span.flatpickr-weekday,
   .transcript-semester-band {
     break-after: avoid;
     page-break-after: avoid;
+    font-size: 14px !important;
   }
   .transcript-semester-gpa {
     break-before: avoid;
@@ -838,12 +839,12 @@ span.flatpickr-weekday,
   }
   .transcript-table td,
   .transcript-table th {
-    line-height: 1.25 !important;
-    padding: 3px 5px !important;
-    font-size: 13px !important;
+    line-height: 1.4 !important;
+    padding: 6px 8px !important;
+    font-size: 12px !important;
   }
   .transcript-row td {
-    padding: 1px 4px !important;
+    padding: 6px 8px !important;
   }
   @page {
     size: A4;
