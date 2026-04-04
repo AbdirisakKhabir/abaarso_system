@@ -148,12 +148,12 @@ export default function AttendancePage() {
     }
     setLoadingStudents(true);
     try {
-      // Get admitted students
-      const res = await authFetch("/api/students");
+      const res = await authFetch(
+        `/api/students?status=Admitted&classId=${encodeURIComponent(classId)}`
+      );
       if (res.ok) {
-        const allStudents: (StudentOption & { status: string })[] =
+        const admitted: (StudentOption & { status: string })[] =
           await res.json();
-        const admitted = allStudents.filter((s) => s.status === "Admitted");
         setStudents(
           admitted.map((s) => ({
             studentId: s.id,

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAuthUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { parsePaginationParams } from "@/lib/pagination";
 
 export async function GET(req: NextRequest) {
   try {
@@ -8,23 +9,53 @@ export async function GET(req: NextRequest) {
     if (!auth) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
+
+    const { searchParams } = new URL(req.url);
+    const { paginate, page, pageSize, skip } = parsePaginationParams(searchParams);
+
+    const include = {
+      _count: { select: { users: true } },
+      permissions: { include: { permission: true } },
+    } as const;
+
+    const mapRole = (r: {
+      id: number;
+      name: string;
+      description: string | null;
+      _count: { users: number };
+      permissions: { permission: { id: number; name: string; description: string | null; module: string | null } }[];
+    }) => ({
+      id: r.id,
+      name: r.name,
+      description: r.description,
+      userCount: r._count.users,
+      permissions: r.permissions.map((rp) => rp.permission),
+    });
+
+    if (paginate) {
+      const [rows, total] = await Promise.all([
+        prisma.role.findMany({
+          skip,
+          take: pageSize,
+          include,
+          orderBy: { name: "asc" },
+        }),
+        prisma.role.count(),
+      ]);
+      return NextResponse.json({
+        items: rows.map(mapRole),
+        total,
+        page,
+        pageSize,
+      });
+    }
+
     const roles = await prisma.role.findMany({
-      include: {
-        _count: { select: { users: true } },
-        permissions: { include: { permission: true } },
-      },
+      include,
       orderBy: { name: "asc" },
     });
 
-    return NextResponse.json(
-      roles.map((r) => ({
-        id: r.id,
-        name: r.name,
-        description: r.description,
-        userCount: r._count.users,
-        permissions: r.permissions.map((rp) => rp.permission),
-      }))
-    );
+    return NextResponse.json(roles.map(mapRole));
   } catch (e) {
     console.error("Roles list error:", e);
     return NextResponse.json(

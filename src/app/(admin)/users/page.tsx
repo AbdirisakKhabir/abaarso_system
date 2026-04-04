@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import PageBreadCrumb from "@/components/common/PageBreadCrumb";
 import Button from "@/components/ui/button/Button";
 import {
@@ -11,7 +11,8 @@ import {
   TablePagination,
   TableRow,
 } from "@/components/ui/table";
-import { globalRowIndex, usePagination } from "@/hooks/usePagination";
+import { globalRowIndex } from "@/hooks/usePagination";
+import { useServerPagination } from "@/hooks/useServerPagination";
 import Badge from "@/components/ui/badge/Badge";
 import { authFetch } from "@/lib/api";
 import { ModalOverlayGate } from "@/context/ModalOverlayContext";
@@ -47,17 +48,42 @@ export default function UsersPage() {
   const [submitError, setSubmitError] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
+  const {
+    page,
+    setPage,
+    pageSize,
+    setPageSize,
+    total,
+    setTotal,
+    totalPages,
+    from,
+    to,
+  } = useServerPagination([search]);
+
   const canCreate = hasPermission("users.create");
   const canEdit = hasPermission("users.edit");
   const canDelete = hasPermission("users.delete");
 
-  async function loadUsers() {
-    const res = await authFetch("/api/users");
-    if (res.ok) {
-      const data = await res.json();
-      setUsers(data);
+  const loadUsers = useCallback(async () => {
+    setLoading(true);
+    try {
+      const params = new URLSearchParams();
+      params.set("page", String(page));
+      params.set("pageSize", String(pageSize));
+      if (search.trim()) params.set("q", search.trim());
+      const res = await authFetch(`/api/users?${params.toString()}`);
+      if (res.ok) {
+        const data = await res.json();
+        setUsers(Array.isArray(data.items) ? data.items : []);
+        setTotal(typeof data.total === "number" ? data.total : 0);
+      } else {
+        setUsers([]);
+        setTotal(0);
+      }
+    } finally {
+      setLoading(false);
     }
-  }
+  }, [page, pageSize, search, setTotal]);
 
   async function loadRoles() {
     const res = await authFetch("/api/roles");
@@ -68,12 +94,12 @@ export default function UsersPage() {
   }
 
   useEffect(() => {
-    (async () => {
-      setLoading(true);
-      await Promise.all([loadUsers(), loadRoles()]);
-      setLoading(false);
-    })();
+    void loadRoles();
   }, []);
+
+  useEffect(() => {
+    void loadUsers();
+  }, [loadUsers]);
 
   function openAdd() {
     setModal("add");
@@ -157,28 +183,6 @@ export default function UsersPage() {
     }
   }
 
-  const filtered = users.filter((u) => {
-    if (!search.trim()) return true;
-    const q = search.toLowerCase();
-    return (
-      (u.name?.toLowerCase().includes(q) ?? false) ||
-      u.email.toLowerCase().includes(q) ||
-      u.role.name.toLowerCase().includes(q)
-    );
-  });
-
-  const {
-    paginatedItems,
-    page,
-    setPage,
-    pageSize,
-    setPageSize,
-    totalPages,
-    total: filteredTotal,
-    from,
-    to,
-  } = usePagination(filtered, [search]);
-
   if (!hasPermission("users.view")) {
     return (
       <div>
@@ -218,7 +222,7 @@ export default function UsersPage() {
               All Users
             </h3>
             <span className="inline-flex h-5 min-w-[20px] items-center justify-center rounded-full bg-brand-50 px-1.5 text-xs font-semibold text-brand-600 dark:bg-brand-500/10 dark:text-brand-400">
-              {filtered.length}
+              {total}
             </span>
           </div>
           <div className="relative w-full sm:w-64">
@@ -240,7 +244,7 @@ export default function UsersPage() {
           <div className="flex items-center justify-center py-16">
             <div className="h-8 w-8 animate-spin rounded-full border-4 border-gray-200 border-t-brand-500 dark:border-gray-700 dark:border-t-brand-400" />
           </div>
-        ) : filtered.length === 0 ? (
+        ) : total === 0 ? (
           <div className="flex flex-col items-center justify-center py-16">
             <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-gray-100 dark:bg-gray-800">
               <svg className="h-6 w-6 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
@@ -268,7 +272,7 @@ export default function UsersPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {paginatedItems.map((u, idx) => (
+              {users.map((u, idx) => (
                 <TableRow key={u.id}>
                   <TableCell className="font-medium text-gray-400 dark:text-gray-500">
                     {globalRowIndex(page, pageSize, idx)}
@@ -335,7 +339,7 @@ export default function UsersPage() {
           <TablePagination
             page={page}
             totalPages={totalPages}
-            total={filteredTotal}
+            total={total}
             from={from}
             to={to}
             pageSize={pageSize}

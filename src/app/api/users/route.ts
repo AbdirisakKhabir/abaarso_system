@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
+import type { Prisma } from "@prisma/client";
 import bcrypt from "bcryptjs";
 import { getAuthUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { parsePaginationParams } from "@/lib/pagination";
 
 export async function GET(req: NextRequest) {
   try {
@@ -10,16 +12,46 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
+    const { searchParams } = new URL(req.url);
+    const { paginate, page, pageSize, skip } = parsePaginationParams(searchParams);
+    const q = searchParams.get("q")?.trim();
+
+    const where: Prisma.UserWhereInput = {};
+    if (q) {
+      where.OR = [
+        { email: { contains: q } },
+        { name: { contains: q } },
+        { role: { name: { contains: q } } },
+      ];
+    }
+
+    const select = {
+      id: true,
+      email: true,
+      name: true,
+      roleId: true,
+      isActive: true,
+      createdAt: true,
+      role: { select: { name: true } },
+    } as const;
+
+    if (paginate) {
+      const [items, total] = await Promise.all([
+        prisma.user.findMany({
+          where,
+          skip,
+          take: pageSize,
+          select,
+          orderBy: { createdAt: "desc" },
+        }),
+        prisma.user.count({ where }),
+      ]);
+      return NextResponse.json({ items, total, page, pageSize });
+    }
+
     const users = await prisma.user.findMany({
-      select: {
-        id: true,
-        email: true,
-        name: true,
-        roleId: true,
-        isActive: true,
-        createdAt: true,
-        role: { select: { name: true } },
-      },
+      where,
+      select,
       orderBy: { createdAt: "desc" },
     });
 

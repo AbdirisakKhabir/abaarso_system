@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import Image from "next/image";
 import PageBreadCrumb from "@/components/common/PageBreadCrumb";
 import Button from "@/components/ui/button/Button";
@@ -12,7 +12,8 @@ import {
   TablePagination,
   TableRow,
 } from "@/components/ui/table";
-import { globalRowIndex, usePagination } from "@/hooks/usePagination";
+import { globalRowIndex } from "@/hooks/usePagination";
+import { useServerPagination } from "@/hooks/useServerPagination";
 import Badge from "@/components/ui/badge/Badge";
 import Link from "next/link";
 import { authFetch } from "@/lib/api";
@@ -92,15 +93,51 @@ export default function AdmissionPage() {
   const [importDepartmentId, setImportDepartmentId] = useState("");
   const [importLoading, setImportLoading] = useState(false);
   const [importResult, setImportResult] = useState<{ created: number; errors?: string[] } | null>(null);
+  const [statusCounts, setStatusCounts] = useState<Record<string, number>>({});
+
+  const {
+    page,
+    setPage,
+    pageSize,
+    setPageSize,
+    total,
+    setTotal,
+    totalPages,
+    from,
+    to,
+  } = useServerPagination([search, filterStatus, filterDeptId]);
 
   const canCreate = hasPermission("admission.create");
   const canEdit = hasPermission("admission.edit");
   const canDelete = hasPermission("admission.delete");
 
-  async function loadStudents() {
-    const res = await authFetch("/api/students");
-    if (res.ok) setStudents(await res.json());
-  }
+  const refreshStatusStats = useCallback(async () => {
+    const res = await authFetch("/api/students/stats");
+    if (res.ok) setStatusCounts(await res.json());
+  }, []);
+
+  const loadStudents = useCallback(async () => {
+    setLoading(true);
+    try {
+      const params = new URLSearchParams();
+      params.set("page", String(page));
+      params.set("pageSize", String(pageSize));
+      if (search.trim()) params.set("q", search.trim());
+      if (filterStatus !== "all") params.set("status", filterStatus);
+      if (filterDeptId !== "all") params.set("departmentId", filterDeptId);
+      const res = await authFetch(`/api/students?${params.toString()}`);
+      if (res.ok) {
+        const data = await res.json();
+        setStudents(Array.isArray(data.items) ? data.items : []);
+        setTotal(typeof data.total === "number" ? data.total : 0);
+      } else {
+        setStudents([]);
+        setTotal(0);
+      }
+    } finally {
+      setLoading(false);
+    }
+  }, [page, pageSize, search, filterStatus, filterDeptId, setTotal]);
 
   async function loadDepartments() {
     const res = await authFetch("/api/departments");
@@ -134,12 +171,20 @@ export default function AdmissionPage() {
   }
 
   useEffect(() => {
-    (async () => {
-      setLoading(true);
-      await Promise.all([loadStudents(), loadDepartments(), loadClasses()]);
-      setLoading(false);
-    })();
+    void refreshStatusStats();
+  }, [refreshStatusStats]);
+
+  useEffect(() => {
+    void Promise.all([loadDepartments(), loadClasses()]);
   }, []);
+
+  useEffect(() => {
+    void loadStudents();
+  }, [loadStudents]);
+
+  useEffect(() => {
+    setSelectedIds(new Set());
+  }, [page]);
 
   async function handleDownloadTemplate() {
     setImportLoading(true);
@@ -185,6 +230,7 @@ export default function AdmissionPage() {
       setImportResult({ created: data.created, errors: data.errors });
       setImportFile(null);
       await loadStudents();
+      void refreshStatusStats();
     } catch {
       alert("Import failed");
     } finally {
@@ -195,8 +241,10 @@ export default function AdmissionPage() {
   async function handleDelete(id: number) {
     if (!confirm("Are you sure you want to delete this student record?")) return;
     const res = await authFetch(`/api/students/${id}`, { method: "DELETE" });
-    if (res.ok) await loadStudents();
-    else {
+    if (res.ok) {
+      await loadStudents();
+      void refreshStatusStats();
+    } else {
       const data = await res.json();
       alert(data.error || "Failed to delete");
     }
@@ -212,10 +260,10 @@ export default function AdmissionPage() {
   }
 
   function toggleSelectAll() {
-    if (selectedIds.size === filtered.length) {
+    if (selectedIds.size === students.length) {
       setSelectedIds(new Set());
     } else {
-      setSelectedIds(new Set(filtered.map((s) => s.id)));
+      setSelectedIds(new Set(students.map((s) => s.id)));
     }
   }
 
@@ -234,6 +282,7 @@ export default function AdmissionPage() {
       if (res.ok) {
         setSelectedIds(new Set());
         await loadStudents();
+        void refreshStatusStats();
         if (data.errors?.length) {
           alert(`Deleted ${data.deleted}. ${data.skipped} failed:\n${data.errors.slice(0, 5).join("\n")}${data.errors.length > 5 ? `\n... and ${data.errors.length - 5} more` : ""}`);
         }
@@ -264,6 +313,7 @@ export default function AdmissionPage() {
       if (res.ok) {
         setSelectedIds(new Set());
         await loadStudents();
+        void refreshStatusStats();
         if (data.errors?.length) {
           alert(`Deleted ${data.deleted}. ${data.skipped} failed.`);
         }
@@ -275,33 +325,6 @@ export default function AdmissionPage() {
     }
     setBulkDeleting(false);
   }
-
-  const filtered = students.filter((s) => {
-    if (filterDeptId !== "all" && String(s.departmentId) !== filterDeptId) return false;
-    if (filterStatus !== "all" && s.status !== filterStatus) return false;
-    if (!search.trim()) return true;
-    const q = search.toLowerCase();
-    return (
-      s.studentId.toLowerCase().includes(q) ||
-      s.firstName.toLowerCase().includes(q) ||
-      s.lastName.toLowerCase().includes(q) ||
-      (s.email?.toLowerCase().includes(q) ?? false) ||
-      s.department.name.toLowerCase().includes(q) ||
-      (s.motherName?.toLowerCase().includes(q) ?? false)
-    );
-  });
-
-  const {
-    paginatedItems,
-    page,
-    setPage,
-    pageSize,
-    setPageSize,
-    totalPages,
-    total: filteredTotal,
-    from,
-    to,
-  } = usePagination(filtered, [search, filterStatus, filterDeptId]);
 
   if (!hasPermission("admission.view")) {
     return (
@@ -364,7 +387,7 @@ export default function AdmissionPage() {
       {/* Stats */}
       <div className="mb-6 grid grid-cols-2 gap-4 sm:grid-cols-4">
         {STATUSES.map((st) => {
-          const count = students.filter((s) => s.status === st).length;
+          const count = statusCounts[st] ?? 0;
           return (
             <div
               key={st}
@@ -390,11 +413,11 @@ export default function AdmissionPage() {
               Students
             </h3>
             <span className="inline-flex h-5 min-w-[20px] items-center justify-center rounded-full bg-brand-50 px-1.5 text-xs font-semibold text-brand-600 dark:bg-brand-500/10 dark:text-brand-400">
-              {filtered.length}
+              {total}
             </span>
           </div>
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
-            {canDelete && filtered.length > 0 && (
+            {canDelete && total > 0 && (
               <div className="flex items-center gap-2">
                 <Button
                   variant="outline"
@@ -460,7 +483,7 @@ export default function AdmissionPage() {
           <div className="flex items-center justify-center py-16">
             <div className="h-8 w-8 animate-spin rounded-full border-4 border-gray-200 border-t-brand-500 dark:border-gray-700 dark:border-t-brand-400" />
           </div>
-        ) : filtered.length === 0 ? (
+        ) : total === 0 ? (
           <div className="flex flex-col items-center justify-center py-16">
             <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-gray-100 dark:bg-gray-800">
               <svg className="h-6 w-6 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
@@ -478,11 +501,11 @@ export default function AdmissionPage() {
           <Table>
             <TableHeader>
               <TableRow className="bg-transparent! hover:bg-transparent!">
-                {canDelete && filtered.length > 0 && (
+                {canDelete && total > 0 && (
                   <TableCell isHeader className="w-12 px-3">
                     <input
                       type="checkbox"
-                      checked={selectedIds.size === filtered.length && filtered.length > 0}
+                      checked={selectedIds.size === students.length && students.length > 0}
                       onChange={toggleSelectAll}
                       className="h-4 w-4 rounded border-gray-300 text-brand-500 focus:ring-brand-500 dark:border-gray-600 dark:bg-gray-700"
                       aria-label="Select all"
@@ -502,9 +525,9 @@ export default function AdmissionPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {paginatedItems.map((s, idx) => (
+              {students.map((s, idx) => (
                 <TableRow key={s.id}>
-                  {canDelete && filtered.length > 0 && (
+                  {canDelete && total > 0 && (
                     <TableCell className="w-12 px-3">
                       <input
                         type="checkbox"
@@ -618,7 +641,7 @@ export default function AdmissionPage() {
           <TablePagination
             page={page}
             totalPages={totalPages}
-            total={filteredTotal}
+            total={total}
             from={from}
             to={to}
             pageSize={pageSize}

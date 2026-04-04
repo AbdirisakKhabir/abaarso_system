@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import PageBreadCrumb from "@/components/common/PageBreadCrumb";
 import Button from "@/components/ui/button/Button";
 import {
@@ -11,7 +11,8 @@ import {
   TablePagination,
   TableRow,
 } from "@/components/ui/table";
-import { globalRowIndex, usePagination } from "@/hooks/usePagination";
+import { globalRowIndex } from "@/hooks/usePagination";
+import { useServerPagination } from "@/hooks/useServerPagination";
 import Badge from "@/components/ui/badge/Badge";
 import { authFetch } from "@/lib/api";
 import { ModalOverlayGate } from "@/context/ModalOverlayContext";
@@ -40,22 +41,46 @@ export default function FacultiesPage() {
   const [submitError, setSubmitError] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
+  const {
+    page,
+    setPage,
+    pageSize,
+    setPageSize,
+    total,
+    setTotal,
+    totalPages,
+    from,
+    to,
+  } = useServerPagination([search]);
+
   const canCreate = hasPermission("faculties.create");
   const canEdit = hasPermission("faculties.edit");
   const canDelete = hasPermission("faculties.delete");
 
-  async function loadFaculties() {
-    const res = await authFetch("/api/faculties");
-    if (res.ok) setFaculties(await res.json());
-  }
+  const loadFaculties = useCallback(async () => {
+    setLoading(true);
+    try {
+      const params = new URLSearchParams();
+      params.set("page", String(page));
+      params.set("pageSize", String(pageSize));
+      if (search.trim()) params.set("q", search.trim());
+      const res = await authFetch(`/api/faculties?${params.toString()}`);
+      if (res.ok) {
+        const data = await res.json();
+        setFaculties(Array.isArray(data.items) ? data.items : []);
+        setTotal(typeof data.total === "number" ? data.total : 0);
+      } else {
+        setFaculties([]);
+        setTotal(0);
+      }
+    } finally {
+      setLoading(false);
+    }
+  }, [page, pageSize, search, setTotal]);
 
   useEffect(() => {
-    (async () => {
-      setLoading(true);
-      await loadFaculties();
-      setLoading(false);
-    })();
-  }, []);
+    void loadFaculties();
+  }, [loadFaculties]);
 
   function openAdd() {
     setModal("add");
@@ -123,28 +148,6 @@ export default function FacultiesPage() {
     }
   }
 
-  const filtered = faculties.filter((f) => {
-    if (!search.trim()) return true;
-    const q = search.toLowerCase();
-    return (
-      f.name.toLowerCase().includes(q) ||
-      f.code.toLowerCase().includes(q) ||
-      (f.description?.toLowerCase().includes(q) ?? false)
-    );
-  });
-
-  const {
-    paginatedItems,
-    page,
-    setPage,
-    pageSize,
-    setPageSize,
-    totalPages,
-    total: filteredTotal,
-    from,
-    to,
-  } = usePagination(filtered, [search]);
-
   if (!hasPermission("faculties.view")) {
     return (
       <div>
@@ -184,7 +187,7 @@ export default function FacultiesPage() {
               All Faculties
             </h3>
             <span className="inline-flex h-5 min-w-[20px] items-center justify-center rounded-full bg-brand-50 px-1.5 text-xs font-semibold text-brand-600 dark:bg-brand-500/10 dark:text-brand-400">
-              {filtered.length}
+              {total}
             </span>
           </div>
           <div className="relative w-full sm:w-64">
@@ -206,7 +209,7 @@ export default function FacultiesPage() {
           <div className="flex items-center justify-center py-16">
             <div className="h-8 w-8 animate-spin rounded-full border-4 border-gray-200 border-t-brand-500 dark:border-gray-700 dark:border-t-brand-400" />
           </div>
-        ) : filtered.length === 0 ? (
+        ) : total === 0 ? (
           <div className="flex flex-col items-center justify-center py-16">
             <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-gray-100 dark:bg-gray-800">
               <svg className="h-6 w-6 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
@@ -233,7 +236,7 @@ export default function FacultiesPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {paginatedItems.map((f, idx) => (
+              {faculties.map((f, idx) => (
                 <TableRow key={f.id}>
                   <TableCell className="font-medium text-gray-400 dark:text-gray-500">
                     {globalRowIndex(page, pageSize, idx)}
@@ -296,7 +299,7 @@ export default function FacultiesPage() {
           <TablePagination
             page={page}
             totalPages={totalPages}
-            total={filteredTotal}
+            total={total}
             from={from}
             to={to}
             pageSize={pageSize}

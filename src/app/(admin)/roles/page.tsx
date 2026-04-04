@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import PageBreadCrumb from "@/components/common/PageBreadCrumb";
 import Button from "@/components/ui/button/Button";
 import {
@@ -11,7 +11,8 @@ import {
   TablePagination,
   TableRow,
 } from "@/components/ui/table";
-import { globalRowIndex, usePagination } from "@/hooks/usePagination";
+import { globalRowIndex } from "@/hooks/usePagination";
+import { useServerPagination } from "@/hooks/useServerPagination";
 import Badge from "@/components/ui/badge/Badge";
 import { authFetch } from "@/lib/api";
 import { ModalOverlayGate } from "@/context/ModalOverlayContext";
@@ -43,17 +44,41 @@ export default function RolesPage() {
   const [submitError, setSubmitError] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
+  const {
+    page,
+    setPage,
+    pageSize,
+    setPageSize,
+    total,
+    setTotal,
+    totalPages,
+    from,
+    to,
+  } = useServerPagination([]);
+
   const canCreate = hasPermission("roles.create");
   const canEdit = hasPermission("roles.edit");
   const canDelete = hasPermission("roles.delete");
 
-  async function loadRoles() {
-    const res = await authFetch("/api/roles");
-    if (res.ok) {
-      const data = await res.json();
-      setRoles(data);
+  const loadRoles = useCallback(async () => {
+    setLoading(true);
+    try {
+      const params = new URLSearchParams();
+      params.set("page", String(page));
+      params.set("pageSize", String(pageSize));
+      const res = await authFetch(`/api/roles?${params.toString()}`);
+      if (res.ok) {
+        const data = await res.json();
+        setRoles(Array.isArray(data.items) ? data.items : []);
+        setTotal(typeof data.total === "number" ? data.total : 0);
+      } else {
+        setRoles([]);
+        setTotal(0);
+      }
+    } finally {
+      setLoading(false);
     }
-  }
+  }, [page, pageSize, setTotal]);
 
   async function loadPermissions() {
     const res = await authFetch("/api/permissions");
@@ -64,12 +89,12 @@ export default function RolesPage() {
   }
 
   useEffect(() => {
-    (async () => {
-      setLoading(true);
-      await Promise.all([loadRoles(), loadPermissions()]);
-      setLoading(false);
-    })();
+    void loadPermissions();
   }, []);
+
+  useEffect(() => {
+    void loadRoles();
+  }, [loadRoles]);
 
   function openAdd() {
     setModal("add");
@@ -97,18 +122,6 @@ export default function RolesPage() {
         : [...f.permissionIds, permId],
     }));
   }
-
-  const {
-    paginatedItems,
-    page,
-    setPage,
-    pageSize,
-    setPageSize,
-    totalPages,
-    total: rolesTotal,
-    from,
-    to,
-  } = usePagination(roles, []);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -213,7 +226,7 @@ export default function RolesPage() {
             All Roles
           </h3>
           <span className="inline-flex h-5 min-w-[20px] items-center justify-center rounded-full bg-brand-50 px-1.5 text-xs font-semibold text-brand-600 dark:bg-brand-500/10 dark:text-brand-400">
-            {roles.length}
+            {total}
           </span>
         </div>
 
@@ -222,7 +235,7 @@ export default function RolesPage() {
           <div className="flex items-center justify-center py-16">
             <div className="h-8 w-8 animate-spin rounded-full border-4 border-gray-200 border-t-brand-500 dark:border-gray-700 dark:border-t-brand-400" />
           </div>
-        ) : roles.length === 0 ? (
+        ) : total === 0 ? (
           <div className="flex flex-col items-center justify-center py-16">
             <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-gray-100 dark:bg-gray-800">
               <svg className="h-6 w-6 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
@@ -249,7 +262,7 @@ export default function RolesPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {paginatedItems.map((r, idx) => (
+              {roles.map((r, idx) => (
                 <TableRow key={r.id}>
                   <TableCell className="font-medium text-gray-400 dark:text-gray-500">
                     {globalRowIndex(page, pageSize, idx)}
@@ -323,7 +336,7 @@ export default function RolesPage() {
           <TablePagination
             page={page}
             totalPages={totalPages}
-            total={rolesTotal}
+            total={total}
             from={from}
             to={to}
             pageSize={pageSize}

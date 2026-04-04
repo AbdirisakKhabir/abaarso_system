@@ -84,7 +84,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
       setUser(stored.user);
       setToken(stored.token);
-      refreshUser();
+      // Let protected routes and sign-in redirect run immediately; validate token in the background.
+      setIsLoading(false);
+      void refreshUser();
     } else {
       setIsLoading(false);
     }

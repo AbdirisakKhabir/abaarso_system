@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
+import type { Prisma } from "@prisma/client";
 import { getAuthUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { parsePaginationParams } from "@/lib/pagination";
 
 export async function GET(req: NextRequest) {
   try {
@@ -9,25 +11,71 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const lecturers = await prisma.lecturer.findMany({
-      orderBy: { name: "asc" },
-      include: {
-        departments: {
-          include: { department: { select: { id: true, name: true, code: true } } },
-        },
-        courses: {
-          include: { course: { select: { id: true, name: true, code: true, department: { select: { id: true, name: true, code: true } } } } },
+    const { searchParams } = new URL(req.url);
+    const { paginate, page, pageSize, skip } = parsePaginationParams(searchParams);
+    const q = searchParams.get("q")?.trim();
+    const where: Prisma.LecturerWhereInput = {};
+    if (q) {
+      where.OR = [
+        { name: { contains: q } },
+        { email: { contains: q } },
+        { phone: { contains: q } },
+        { degree: { contains: q } },
+      ];
+    }
+
+    const lecturerInclude = {
+      departments: {
+        include: { department: { select: { id: true, name: true, code: true } } },
+      },
+      courses: {
+        include: {
+          course: {
+            select: {
+              id: true,
+              name: true,
+              code: true,
+              department: { select: { id: true, name: true, code: true } },
+            },
+          },
         },
       },
+    } as const;
+
+    type LecturerListRow = Prisma.LecturerGetPayload<{ include: typeof lecturerInclude }>;
+
+    const mapLecturer = (l: LecturerListRow) => ({
+      ...l,
+      departments: l.departments.map((d) => d.department),
+      courses: l.courses.map((c) => c.course),
     });
 
-    return NextResponse.json(
-      lecturers.map((l) => ({
-        ...l,
-        departments: l.departments.map((d) => d.department),
-        courses: l.courses.map((c) => c.course),
-      }))
-    );
+    if (paginate) {
+      const [rows, total] = await Promise.all([
+        prisma.lecturer.findMany({
+          where,
+          skip,
+          take: pageSize,
+          include: lecturerInclude,
+          orderBy: { name: "asc" },
+        }),
+        prisma.lecturer.count({ where }),
+      ]);
+      return NextResponse.json({
+        items: rows.map(mapLecturer),
+        total,
+        page,
+        pageSize,
+      });
+    }
+
+    const lecturers = await prisma.lecturer.findMany({
+      where,
+      include: lecturerInclude,
+      orderBy: { name: "asc" },
+    });
+
+    return NextResponse.json(lecturers.map(mapLecturer));
   } catch (e) {
     console.error("Lecturers list error:", e);
     return NextResponse.json(

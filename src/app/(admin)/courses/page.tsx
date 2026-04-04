@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import PageBreadCrumb from "@/components/common/PageBreadCrumb";
 import Button from "@/components/ui/button/Button";
 import {
@@ -11,7 +11,8 @@ import {
   TablePagination,
   TableRow,
 } from "@/components/ui/table";
-import { globalRowIndex, usePagination } from "@/hooks/usePagination";
+import { globalRowIndex } from "@/hooks/usePagination";
+import { useServerPagination } from "@/hooks/useServerPagination";
 import Badge from "@/components/ui/badge/Badge";
 import { authFetch } from "@/lib/api";
 import { ModalOverlayGate } from "@/context/ModalOverlayContext";
@@ -58,14 +59,43 @@ export default function CoursesPage() {
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [bulkDeleting, setBulkDeleting] = useState(false);
 
+  const {
+    page,
+    setPage,
+    pageSize,
+    setPageSize,
+    total,
+    setTotal,
+    totalPages,
+    from,
+    to,
+  } = useServerPagination([search, filterDeptId]);
+
   const canCreate = hasPermission("courses.create");
   const canEdit = hasPermission("courses.edit");
   const canDelete = hasPermission("courses.delete");
 
-  async function loadCourses() {
-    const res = await authFetch("/api/courses");
-    if (res.ok) setCourses(await res.json());
-  }
+  const loadCourses = useCallback(async () => {
+    setLoading(true);
+    try {
+      const params = new URLSearchParams();
+      params.set("page", String(page));
+      params.set("pageSize", String(pageSize));
+      if (search.trim()) params.set("q", search.trim());
+      if (filterDeptId !== "all") params.set("departmentId", filterDeptId);
+      const res = await authFetch(`/api/courses?${params.toString()}`);
+      if (res.ok) {
+        const data = await res.json();
+        setCourses(Array.isArray(data.items) ? data.items : []);
+        setTotal(typeof data.total === "number" ? data.total : 0);
+      } else {
+        setCourses([]);
+        setTotal(0);
+      }
+    } finally {
+      setLoading(false);
+    }
+  }, [page, pageSize, search, filterDeptId, setTotal]);
 
   async function loadDepartments() {
     const res = await authFetch("/api/departments");
@@ -82,12 +112,16 @@ export default function CoursesPage() {
   }
 
   useEffect(() => {
-    (async () => {
-      setLoading(true);
-      await Promise.all([loadCourses(), loadDepartments()]);
-      setLoading(false);
-    })();
+    void loadDepartments();
   }, []);
+
+  useEffect(() => {
+    void loadCourses();
+  }, [loadCourses]);
+
+  useEffect(() => {
+    setSelectedIds(new Set());
+  }, [page]);
 
   function openAdd() {
     setModal("add");
@@ -178,10 +212,11 @@ export default function CoursesPage() {
   }
 
   function toggleSelectAll() {
-    if (selectedIds.size === deletableFiltered.length) {
+    const deletable = courses.filter((c) => c.classCount === 0);
+    if (selectedIds.size === deletable.length) {
       setSelectedIds(new Set());
     } else {
-      setSelectedIds(new Set(deletableFiltered.map((c) => c.id)));
+      setSelectedIds(new Set(deletable.map((c) => c.id)));
     }
   }
 
@@ -300,31 +335,7 @@ export default function CoursesPage() {
     setImportLoading(false);
   }
 
-  const filtered = courses.filter((c) => {
-    if (filterDeptId !== "all" && String(c.departmentId) !== filterDeptId)
-      return false;
-    if (!search.trim()) return true;
-    const q = search.toLowerCase();
-    return (
-      c.name.toLowerCase().includes(q) ||
-      c.code.toLowerCase().includes(q) ||
-      c.department.name.toLowerCase().includes(q)
-    );
-  });
-
-  const deletableFiltered = filtered.filter((c) => c.classCount === 0);
-
-  const {
-    paginatedItems,
-    page,
-    setPage,
-    pageSize,
-    setPageSize,
-    totalPages,
-    total: filteredTotal,
-    from,
-    to,
-  } = usePagination(filtered, [search, filterDeptId]);
+  const deletableOnPage = courses.filter((c) => c.classCount === 0);
 
   if (!hasPermission("courses.view")) {
     return (
@@ -372,11 +383,11 @@ export default function CoursesPage() {
               All Courses
             </h3>
             <span className="inline-flex h-5 min-w-[20px] items-center justify-center rounded-full bg-brand-50 px-1.5 text-xs font-semibold text-brand-600 dark:bg-brand-500/10 dark:text-brand-400">
-              {filtered.length}
+              {total}
             </span>
           </div>
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
-            {canDelete && deletableFiltered.length > 0 && (
+            {canDelete && deletableOnPage.length > 0 && (
               <div className="flex items-center gap-2">
                 <Button
                   variant="outline"
@@ -432,7 +443,7 @@ export default function CoursesPage() {
           <div className="flex items-center justify-center py-16">
             <div className="h-8 w-8 animate-spin rounded-full border-4 border-gray-200 border-t-brand-500 dark:border-gray-700 dark:border-t-brand-400" />
           </div>
-        ) : filtered.length === 0 ? (
+        ) : total === 0 ? (
           <div className="flex flex-col items-center justify-center py-16">
             <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-gray-100 dark:bg-gray-800">
               <svg className="h-6 w-6 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
@@ -450,11 +461,14 @@ export default function CoursesPage() {
           <Table>
             <TableHeader>
               <TableRow className="bg-transparent! hover:bg-transparent!">
-                {canDelete && deletableFiltered.length > 0 && (
+                {canDelete && deletableOnPage.length > 0 && (
                   <TableCell isHeader className="w-12 px-3">
                     <input
                       type="checkbox"
-                      checked={selectedIds.size === deletableFiltered.length && deletableFiltered.length > 0}
+                      checked={
+                        selectedIds.size === deletableOnPage.length &&
+                        deletableOnPage.length > 0
+                      }
                       onChange={toggleSelectAll}
                       className="h-4 w-4 rounded border-gray-300 text-brand-500 focus:ring-brand-500 dark:border-gray-600 dark:bg-gray-700"
                       aria-label="Select all"
@@ -472,9 +486,9 @@ export default function CoursesPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {paginatedItems.map((c, idx) => (
+              {courses.map((c, idx) => (
                 <TableRow key={c.id}>
-                  {canDelete && deletableFiltered.length > 0 && (
+                  {canDelete && deletableOnPage.length > 0 && (
                     <TableCell className="w-12 px-3">
                       {c.classCount === 0 ? (
                         <input
@@ -563,7 +577,7 @@ export default function CoursesPage() {
           <TablePagination
             page={page}
             totalPages={totalPages}
-            total={filteredTotal}
+            total={total}
             from={from}
             to={to}
             pageSize={pageSize}

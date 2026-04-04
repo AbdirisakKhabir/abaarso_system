@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
+import type { Prisma } from "@prisma/client";
 import { getAuthUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { parsePaginationParams } from "@/lib/pagination";
 
 export async function GET(req: NextRequest) {
   try {
@@ -9,11 +11,35 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const activeOnly = req.nextUrl.searchParams.get("active") === "true";
+    const { searchParams } = new URL(req.url);
+    const { paginate, page, pageSize, skip } = parsePaginationParams(searchParams);
+    const activeOnly = searchParams.get("active") === "true";
+    const q = searchParams.get("q")?.trim();
+
+    const where: Prisma.SemesterWhereInput = {};
+    if (activeOnly) where.isActive = true;
+    if (q) {
+      where.name = { contains: q };
+    }
+
+    const orderBy = [{ sortOrder: "asc" as const }, { name: "asc" as const }];
+
+    if (paginate) {
+      const [items, total] = await Promise.all([
+        prisma.semester.findMany({
+          where,
+          skip,
+          take: pageSize,
+          orderBy,
+        }),
+        prisma.semester.count({ where }),
+      ]);
+      return NextResponse.json({ items, total, page, pageSize });
+    }
 
     const semesters = await prisma.semester.findMany({
-      where: activeOnly ? { isActive: true } : undefined,
-      orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
+      where: Object.keys(where).length ? where : undefined,
+      orderBy,
     });
 
     return NextResponse.json(semesters);

@@ -45,7 +45,7 @@ export default function SignInForm() {
       setError(result.error);
       return;
     }
-    router.push(redirect);
+    router.replace(redirect);
     router.refresh();
   };
 

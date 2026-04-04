@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
+import type { Prisma } from "@prisma/client";
 import { getAuthUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { parsePaginationParams } from "@/lib/pagination";
 
 export async function GET(req: NextRequest) {
   try {
@@ -9,10 +11,45 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
+    const { searchParams } = new URL(req.url);
+    const { paginate, page, pageSize, skip } = parsePaginationParams(searchParams);
+    const q = searchParams.get("q")?.trim();
+    const facultyId = searchParams.get("facultyId");
+    const where: Prisma.DepartmentWhereInput = {};
+    if (q) {
+      where.OR = [
+        { name: { contains: q } },
+        { code: { contains: q } },
+        { description: { contains: q } },
+        { faculty: { name: { contains: q } } },
+      ];
+    }
+    if (facultyId && facultyId !== "all") {
+      const id = Number(facultyId);
+      if (Number.isInteger(id) && id > 0) where.facultyId = id;
+    }
+
+    const include = {
+      faculty: { select: { id: true, name: true, code: true } },
+    } as const;
+
+    if (paginate) {
+      const [items, total] = await Promise.all([
+        prisma.department.findMany({
+          where,
+          skip,
+          take: pageSize,
+          include,
+          orderBy: { name: "asc" },
+        }),
+        prisma.department.count({ where }),
+      ]);
+      return NextResponse.json({ items, total, page, pageSize });
+    }
+
     const departments = await prisma.department.findMany({
-      include: {
-        faculty: { select: { id: true, name: true, code: true } },
-      },
+      where,
+      include,
       orderBy: { name: "asc" },
     });
 

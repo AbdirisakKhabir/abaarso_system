@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
+import type { Prisma } from "@prisma/client";
 import { getAuthUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { parsePaginationParams } from "@/lib/pagination";
 import { isValidSemester } from "@/lib/semesters";
 
 export async function GET(req: NextRequest) {
@@ -10,11 +12,52 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
+    const { searchParams } = new URL(req.url);
+    const { paginate, page, pageSize, skip } = parsePaginationParams(searchParams);
+    const q = searchParams.get("q")?.trim();
+    const departmentId = searchParams.get("departmentId");
+    const semester = searchParams.get("semester");
+    const where: Prisma.ClassWhereInput = {};
+    if (q) {
+      where.OR = [
+        { name: { contains: q } },
+        { semester: { contains: q } },
+        { room: { contains: q } },
+        { department: { name: { contains: q } } },
+      ];
+    }
+    if (departmentId && departmentId !== "all") {
+      const id = Number(departmentId);
+      if (Number.isInteger(id) && id > 0) where.departmentId = id;
+    }
+    if (semester && semester !== "all") {
+      where.semester = semester;
+    }
+
+    const include = {
+      department: { select: { id: true, name: true, code: true } },
+    } as const;
+
+    const orderBy = [{ year: "desc" as const }, { semester: "asc" as const }, { name: "asc" as const }];
+
+    if (paginate) {
+      const [items, total] = await Promise.all([
+        prisma.class.findMany({
+          where,
+          skip,
+          take: pageSize,
+          include,
+          orderBy,
+        }),
+        prisma.class.count({ where }),
+      ]);
+      return NextResponse.json({ items, total, page, pageSize });
+    }
+
     const classes = await prisma.class.findMany({
-      include: {
-        department: { select: { id: true, name: true, code: true } },
-      },
-      orderBy: [{ year: "desc" }, { semester: "asc" }, { name: "asc" }],
+      where,
+      include,
+      orderBy,
     });
 
     return NextResponse.json(classes);

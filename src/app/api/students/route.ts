@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
+import type { Prisma } from "@prisma/client";
 import { getAuthUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { parsePaginationParams } from "@/lib/pagination";
 
 // Generate a unique student ID like STD-2026-0001
 async function generateStudentId(): Promise<string> {
@@ -21,6 +23,54 @@ async function generateStudentId(): Promise<string> {
   return `${prefix}${String(nextNum).padStart(4, "0")}`;
 }
 
+const studentListInclude = {
+  department: {
+    select: { id: true, name: true, code: true },
+  },
+  admissionAcademicYear: {
+    select: { id: true, name: true, startYear: true, endYear: true },
+  },
+  class: {
+    select: {
+      id: true,
+      name: true,
+      semester: true,
+      year: true,
+      department: { select: { code: true } },
+    },
+  },
+} as const;
+
+function buildStudentWhere(searchParams: URLSearchParams): Prisma.StudentWhereInput {
+  const where: Prisma.StudentWhereInput = {};
+  const status = searchParams.get("status");
+  if (status && status !== "all") {
+    where.status = status;
+  }
+  const departmentId = searchParams.get("departmentId");
+  if (departmentId && departmentId !== "all") {
+    const id = Number(departmentId);
+    if (Number.isInteger(id) && id > 0) where.departmentId = id;
+  }
+  const classId = searchParams.get("classId");
+  if (classId && classId !== "all") {
+    const id = Number(classId);
+    if (Number.isInteger(id) && id > 0) where.classId = id;
+  }
+  const q = searchParams.get("q")?.trim();
+  if (q) {
+    where.OR = [
+      { studentId: { contains: q } },
+      { firstName: { contains: q } },
+      { lastName: { contains: q } },
+      { email: { contains: q } },
+      { motherName: { contains: q } },
+      { department: { name: { contains: q } } },
+    ];
+  }
+  return where;
+}
+
 export async function GET(req: NextRequest) {
   try {
     const auth = await getAuthUser(req);
@@ -28,18 +78,27 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
+    const { searchParams } = new URL(req.url);
+    const { paginate, page, pageSize, skip } = parsePaginationParams(searchParams);
+    const where = buildStudentWhere(searchParams);
+
+    if (paginate) {
+      const [items, total] = await Promise.all([
+        prisma.student.findMany({
+          where,
+          skip,
+          take: pageSize,
+          include: studentListInclude,
+          orderBy: { createdAt: "desc" },
+        }),
+        prisma.student.count({ where }),
+      ]);
+      return NextResponse.json({ items, total, page, pageSize });
+    }
+
     const students = await prisma.student.findMany({
-      include: {
-        department: {
-          select: { id: true, name: true, code: true },
-        },
-        admissionAcademicYear: {
-          select: { id: true, name: true, startYear: true, endYear: true },
-        },
-        class: {
-          select: { id: true, name: true, semester: true, year: true, department: { select: { code: true } } },
-        },
-      },
+      where,
+      include: studentListInclude,
       orderBy: { createdAt: "desc" },
     });
 
