@@ -235,8 +235,6 @@ export default function RecordExamsPage() {
     setImportResult(null);
     try {
       const params = new URLSearchParams({ classId: templateClassId, courseId: templateCourseId });
-      if (templateFacultyId) params.set("facultyId", templateFacultyId);
-      if (templateDepartmentId) params.set("departmentId", templateDepartmentId);
       const res = await authFetch(`/api/examinations/template?${params.toString()}`);
       if (!res.ok) {
         const data = await res.json();

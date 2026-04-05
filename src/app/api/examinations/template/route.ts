@@ -15,9 +15,6 @@ export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url);
     const classId = searchParams.get("classId");
     const courseId = searchParams.get("courseId");
-    const departmentId = searchParams.get("departmentId");
-    const facultyId = searchParams.get("facultyId");
-
     if (!classId || !courseId) {
       return NextResponse.json(
         { error: "classId and courseId are required to download template" },
@@ -44,34 +41,12 @@ export async function GET(req: NextRequest) {
       );
     }
 
-    // Get students in this class (from attendance) - unique student IDs
-    const attendanceStudentIds = await prisma.attendanceRecord.findMany({
-      where: { session: { classId: Number(classId) } },
-      select: { studentId: true },
-      distinct: ["studentId"],
+    // Same roster source as record-class: admitted students assigned to this class only
+    const students = await prisma.student.findMany({
+      where: { classId: Number(classId), status: "Admitted" },
+      select: { id: true, studentId: true, firstName: true, lastName: true },
+      orderBy: [{ studentId: "asc" }],
     });
-    const ids = attendanceStudentIds.map((r) => r.studentId);
-
-    let students: { id: number; studentId: string; firstName: string; lastName: string }[];
-    if (ids.length > 0) {
-      students = await prisma.student.findMany({
-        where: { id: { in: ids } },
-        select: { id: true, studentId: true, firstName: true, lastName: true },
-        orderBy: [{ firstName: "asc" }, { lastName: "asc" }],
-      });
-    } else {
-      const deptId = departmentId ? Number(departmentId) : cls.departmentId;
-      const where: { departmentId: number; status: string; department?: { facultyId: number } } = {
-        departmentId: deptId,
-        status: "Admitted",
-      };
-      if (facultyId) where.department = { facultyId: Number(facultyId) };
-      students = await prisma.student.findMany({
-        where,
-        select: { id: true, studentId: true, firstName: true, lastName: true },
-        orderBy: [{ firstName: "asc" }, { lastName: "asc" }],
-      });
-    }
 
     // Compute attendance marks (0-10) for each student - semester-filtered
     const { start, end } = getSemesterDateRange(cls.semester, cls.year);

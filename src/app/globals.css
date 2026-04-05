@@ -815,20 +815,23 @@ span.flatpickr-weekday,
     box-shadow: none !important;
     border: none !important;
   }
-  /* Keep each semester (band + table + GPA line) together; if it cannot fit
-     in the remaining space, browsers typically move the whole block forward. */
+  /* Allow semester sections to split across pages so a full transcript can stay ~2 pages */
   .transcript-semester-block {
-    break-inside: avoid;
-    page-break-inside: avoid;
+    break-inside: auto;
+    page-break-inside: auto;
   }
   .transcript-semester-band {
     break-after: avoid;
     page-break-after: avoid;
-    font-size: 14px !important;
+    font-size: 10px !important;
+    padding-top: 0.25rem !important;
+    padding-bottom: 0.25rem !important;
   }
   .transcript-semester-gpa {
     break-before: avoid;
     page-break-before: avoid;
+    font-size: 9px !important;
+    margin-top: 0.125rem !important;
   }
   /* If a semester table spans pages, repeat header/footer rows */
   .transcript-semester-block .transcript-table thead {
@@ -839,16 +842,16 @@ span.flatpickr-weekday,
   }
   .transcript-table td,
   .transcript-table th {
-    line-height: 1.4 !important;
-    padding: 6px 8px !important;
-    font-size: 12px !important;
+    line-height: 1.2 !important;
+    padding: 2px 4px !important;
+    font-size: 9px !important;
   }
   .transcript-row td {
-    padding: 6px 8px !important;
+    padding: 2px 4px !important;
   }
   @page {
     size: A4;
-    margin: 12mm;
+    margin: 8mm;
   }
   body {
     background: white;
