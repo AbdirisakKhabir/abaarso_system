@@ -4,6 +4,10 @@ import React from "react";
 import Button from "@/components/ui/button/Button";
 import { TRANSCRIPT_BRAND, GRADING_SYSTEM_LEGEND } from "@/lib/transcript-brand";
 
+/** Brand palette for transcript accents */
+const BRAND_PRIMARY = "#a1133f";
+const SEMESTER_BAND_BG = "#f2c9d5";
+
 /** Compact table cells so a full 9-semester transcript fits ~2 printed pages */
 const cellBorder =
   "border border-black px-1 py-0.5 text-[10px] leading-tight print:text-[9px] print:leading-tight";
@@ -54,15 +58,6 @@ type TranscriptDocumentProps = {
   showPrintButton?: boolean;
 };
 
-function hexToRgba(hex: string, alpha: number): string {
-  const h = hex.replace("#", "");
-  if (h.length !== 6) return hex;
-  const r = parseInt(h.slice(0, 2), 16);
-  const g = parseInt(h.slice(2, 4), 16);
-  const b = parseInt(h.slice(4, 6), 16);
-  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
-}
-
 function formatSemesterLabel(semester: string): string {
   const m = String(semester).match(/(\d+)/);
   if (m) return `Semester ${m[1]}`;
@@ -93,14 +88,13 @@ export function TranscriptDocument({
 
   const legendHeading = `${TRANSCRIPT_BRAND.gradingSystemTitle.endsWith(":") ? TRANSCRIPT_BRAND.gradingSystemTitle.slice(0, -1) : TRANSCRIPT_BRAND.gradingSystemTitle}:`;
 
-  /** Same brand color with lower opacity so the bar reads slightly softer on white */
   const semesterBandStyle = {
-    backgroundColor: hexToRgba(TRANSCRIPT_BRAND.semesterBandBg, 0.72),
-    color: TRANSCRIPT_BRAND.semesterBandText,
+    backgroundColor: SEMESTER_BAND_BG,
+    color: BRAND_PRIMARY,
   };
 
-  const courseCodeHeaderClass = `${cellBorder} bg-brand-500 text-left font-bold text-white print:bg-brand-500 print:text-white`;
-  const courseCodeCellClass = `${cellBorder} bg-brand-500 font-mono font-semibold text-white print:bg-brand-500 print:text-white`;
+  const courseCodeHeaderClass = `${cellBorder} bg-[#a1133f] text-left font-bold text-white print:bg-[#a1133f] print:text-white`;
+  const courseCodeCellClass = `${cellBorder} bg-[#a1133f] font-mono font-semibold text-white print:bg-[#a1133f] print:text-white`;
 
   return (
     <div className="transcript-print-root">
