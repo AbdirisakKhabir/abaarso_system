@@ -8,7 +8,8 @@ import Link from "next/link";
 import Image from "next/image";
 import React, { useState, useEffect } from "react";
 import { useAuth } from "@/context/AuthContext";
-import { useRouter, useSearchParams } from "next/navigation";
+import { normalizeRedirectParam, redirectAfterAuth } from "@/lib/auth-client-redirect";
+import { useSearchParams } from "next/navigation";
 
 export default function SignInForm() {
   const [showPassword, setShowPassword] = useState(false);
@@ -18,18 +19,16 @@ export default function SignInForm() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const { user, login, isLoading } = useAuth();
-  const router = useRouter();
   const searchParams = useSearchParams();
-  const redirect = searchParams.get("redirect") || "/";
+  const redirect = normalizeRedirectParam(searchParams.get("redirect"));
 
   // Redirect if already logged in
   useEffect(() => {
     if (isLoading) return;
     if (user) {
-      router.replace(redirect);
-      router.refresh();
+      redirectAfterAuth(redirect);
     }
-  }, [user, isLoading, router, redirect]);
+  }, [user, isLoading, redirect]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -45,8 +44,7 @@ export default function SignInForm() {
       setError(result.error);
       return;
     }
-    router.replace(redirect);
-    router.refresh();
+    redirectAfterAuth(redirect);
   };
 
   if (isLoading || user) {

@@ -9,7 +9,7 @@ import Link from "next/link";
 import Image from "next/image";
 import React, { useEffect, useState } from "react";
 import { useAuth } from "@/context/AuthContext";
-import { useRouter } from "next/navigation";
+import { redirectAfterAuth } from "@/lib/auth-client-redirect";
 
 export default function SignUpForm() {
   const [showPassword, setShowPassword] = useState(false);
@@ -21,15 +21,13 @@ export default function SignUpForm() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const { user, isLoading, login } = useAuth();
-  const router = useRouter();
 
   useEffect(() => {
     if (isLoading) return;
     if (user) {
-      router.replace("/");
-      router.refresh();
+      redirectAfterAuth("/");
     }
-  }, [user, isLoading, router]);
+  }, [user, isLoading]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -71,8 +69,7 @@ export default function SignUpForm() {
         setError(loginResult.error);
         return;
       }
-      router.push("/");
-      router.refresh();
+      redirectAfterAuth("/");
     } catch {
       setError("Network error.");
     } finally {

@@ -814,6 +814,11 @@ span.flatpickr-weekday,
   .transcript-document {
     box-shadow: none !important;
     border: none !important;
+    font-family: Cambria, Georgia, "Times New Roman", serif !important;
+  }
+  .transcript-header-banner img {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
   }
   /* Allow semester sections to split across pages so a full transcript can stay ~2 pages */
   .transcript-semester-block {
@@ -823,14 +828,14 @@ span.flatpickr-weekday,
   .transcript-semester-band {
     break-after: avoid;
     page-break-after: avoid;
-    font-size: 10px !important;
+    font-size: 11px !important;
     padding-top: 0.25rem !important;
     padding-bottom: 0.25rem !important;
   }
   .transcript-semester-gpa {
     break-before: avoid;
     page-break-before: avoid;
-    font-size: 9px !important;
+    font-size: 10px !important;
     margin-top: 0.125rem !important;
   }
   /* If a semester table spans pages, repeat header/footer rows */
@@ -844,7 +849,12 @@ span.flatpickr-weekday,
   .transcript-table th {
     line-height: 1.2 !important;
     padding: 2px 4px !important;
-    font-size: 9px !important;
+    font-size: 10px !important;
+  }
+  .transcript-info-table td,
+  .transcript-info-table th {
+    padding: 6px 10px !important;
+    line-height: 1.45 !important;
   }
   .transcript-row td {
     padding: 2px 4px !important;

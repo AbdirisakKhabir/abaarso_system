@@ -8,10 +8,20 @@ import { TRANSCRIPT_BRAND, GRADING_SYSTEM_LEGEND } from "@/lib/transcript-brand"
 const BRAND_PRIMARY = "#a1133f";
 const SEMESTER_BAND_BG = "#f2c9d5";
 
+/** Official banner (uploaded registrar header) */
+const TRANSCRIPT_HEADER_IMAGE = "/logo/transcript-header.png";
+
+/** Body font: Cambria (+1px vs prior compact sizing) */
+const transcriptFont = "font-['Cambria',Georgia,'Times_New_Roman',serif]";
+
 /** Compact table cells so a full 9-semester transcript fits ~2 printed pages */
 const cellBorder =
-  "border border-black px-1 py-0.5 text-[10px] leading-tight print:text-[9px] print:leading-tight";
+  "border border-black px-1 py-0.5 text-[11px] leading-tight print:text-[10px] print:leading-tight";
 const tableHeaderCell = `${cellBorder} bg-white font-bold text-black`;
+
+/** Student info block (top left): more breathing room per row */
+const infoCell =
+  "border border-black px-2 py-2 text-[11px] leading-snug print:px-2 print:py-1.5 print:text-[10px]";
 
 type ExamRecord = {
   id: number;
@@ -93,9 +103,6 @@ export function TranscriptDocument({
     color: BRAND_PRIMARY,
   };
 
-  const courseCodeHeaderClass = `${cellBorder} bg-[#a1133f] text-left font-bold text-white print:bg-[#a1133f] print:text-white`;
-  const courseCodeCellClass = `${cellBorder} bg-[#a1133f] font-mono font-semibold text-white print:bg-[#a1133f] print:text-white`;
-
   return (
     <div className="transcript-print-root">
       {showPrintButton && (
@@ -106,60 +113,53 @@ export function TranscriptDocument({
         </div>
       )}
       <div
-        className="transcript-document mx-auto max-w-[210mm] bg-white px-4 py-3 font-[Arial,Helvetica,sans-serif] text-[10px] text-black print:px-3 print:py-2 print:text-[9px]"
+        className={`transcript-document ${transcriptFont} mx-auto max-w-[210mm] bg-white px-4 py-3 text-[11px] text-black print:px-3 print:py-2 print:text-[10px]`}
         style={{ color: "#000" }}
       >
-        {/* Header: logo top-left, title block centered */}
-        <div className="relative mb-3 min-h-16 print:mb-2 print:min-h-14">
-          <div className="absolute left-0 top-0 h-16 w-16 shrink-0 overflow-hidden print:h-12 print:w-12">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={TRANSCRIPT_BRAND.logoUrl}
-              alt="University logo"
-              className="h-full w-full object-contain p-1"
-            />
-          </div>
-          <div className="px-14 text-center print:px-12">
-            <h1 className="text-lg font-bold uppercase tracking-tight print:text-sm">
-              {TRANSCRIPT_BRAND.universityName}
-            </h1>
-            <p className="mt-0.5 text-[11px] italic print:text-[9px]">
-              E-mail Address: {TRANSCRIPT_BRAND.email}, Website: {TRANSCRIPT_BRAND.website}
-            </p>
-            <p className="mt-1 text-[11px] font-bold print:text-[9px]">{TRANSCRIPT_BRAND.officeTitle}</p>
-            <div className="my-2 border-t border-black print:my-1.5" />
-            <h2 className="text-sm font-bold print:text-[10px]">{TRANSCRIPT_BRAND.documentTitle}</h2>
-          </div>
+        {/* Official registrar banner (logo, name, motto, contact) */}
+        <div className="transcript-header-banner mb-3 print:mb-2">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={TRANSCRIPT_HEADER_IMAGE}
+            alt="Abaarso Tech University — Registrar of Office"
+            className="h-auto w-full max-h-[160px] object-contain object-left print:max-h-[140px]"
+          />
+          <div className="my-2 border-t border-black print:my-1.5" />
+          <h2 className="text-center text-[13px] font-bold print:text-[12px]">
+            {TRANSCRIPT_BRAND.documentTitle}
+          </h2>
         </div>
 
-        {/* Student info + Grading system */}
-        <div className="mb-2 flex flex-col gap-2 sm:flex-row sm:items-start print:mb-1.5 print:gap-2">
-          <table
-            className="transcript-table flex-1 border border-black text-[10px] print:text-[9px]"
-            style={{ borderCollapse: "collapse" }}
-          >
-            <tbody>
-              {(
-                [
-                  ["College", college],
-                  ["Department", department],
-                  ["Student Name", studentName],
-                  ["Student ID", student.studentId],
-                  ["Entry Year", String(entryYear)],
-                ] as const
-              ).map(([label, value]) => (
-                <tr key={label}>
-                  <td className={`${cellBorder} w-[28%] font-semibold`}>{label}</td>
-                  <td className={`${cellBorder} ${label === "Student ID" ? "font-mono" : ""}`}>
-                    {value}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        {/* Student info fills width up to grading table; gap-0 so tables sit flush */}
+        <div className="mb-2 flex flex-col gap-2 sm:flex-row sm:flex-nowrap sm:items-stretch sm:gap-0 print:mb-1.5 print:gap-0">
+          <div className="min-w-0 w-full flex-1 sm:min-w-0">
+            <table
+              className="transcript-table transcript-info-table h-full w-full border border-black text-[11px] print:text-[10px]"
+              style={{ borderCollapse: "collapse" }}
+            >
+              <tbody>
+                {(
+                  [
+                    ["College", college],
+                    ["Department", department],
+                    ["Student Name", studentName],
+                    ["Student ID", student.studentId],
+                    ["Entry Year", String(entryYear)],
+                  ] as const
+                ).map(([label, value]) => (
+                  <tr key={label}>
+                    <td className={`${infoCell} w-[30%] font-semibold`}>{label}</td>
+                    <td className={`${infoCell} ${label === "Student ID" ? "font-mono" : ""}`}>
+                      {value}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
 
           <table
-            className="transcript-table w-full shrink-0 border border-black text-[10px] sm:w-44 print:text-[9px]"
+            className="transcript-table transcript-grading-table w-full shrink-0 border border-black text-[11px] sm:w-44 print:text-[10px]"
             style={{ borderCollapse: "collapse" }}
           >
             <thead>
@@ -224,7 +224,7 @@ export function TranscriptDocument({
               className="transcript-semester-block mb-2 last:mb-1 print:mb-1.5"
             >
               <div
-                className="transcript-semester-band px-2 py-1 text-[11px] font-bold leading-tight print:text-[10px] print:py-0.5"
+                className="transcript-semester-band px-2 py-1 text-[12px] font-bold leading-tight print:text-[11px] print:py-0.5"
                 style={semesterBandStyle}
               >
                 Academic Year: {yearStart}-{yearEnd}
@@ -233,12 +233,12 @@ export function TranscriptDocument({
               </div>
 
               <table
-                className="transcript-table mt-0 w-full border border-black text-[10px] print:text-[9px]"
+                className="transcript-table mt-0 w-full border border-black text-[11px] print:text-[10px]"
                 style={{ borderCollapse: "collapse" }}
               >
                 <thead>
                   <tr>
-                    <th rowSpan={2} className={courseCodeHeaderClass}>
+                    <th rowSpan={2} className={`${tableHeaderCell} text-left`}>
                       Course Code
                     </th>
                     <th rowSpan={2} className={`${tableHeaderCell} text-left`}>
@@ -270,7 +270,9 @@ export function TranscriptDocument({
                       : undefined;
                     return (
                       <tr key={r.id} className="transcript-row bg-white">
-                        <td className={courseCodeCellClass}>{r.course.code}</td>
+                        <td className={`${cellBorder} text-left font-mono font-semibold`}>
+                          {r.course.code}
+                        </td>
                         <td className={`${cellBorder} text-left`}>{r.course.name}</td>
                         <td className={`${cellBorder} text-center`}>{r.course.creditHours}</td>
                         <td className={`${cellBorder} text-center`} style={markStyle}>
@@ -299,7 +301,7 @@ export function TranscriptDocument({
                 </tfoot>
               </table>
 
-              <div className="transcript-semester-gpa mt-0.5 flex flex-wrap items-baseline justify-end gap-x-4 gap-y-0 text-[10px] font-semibold print:text-[9px]">
+              <div className="transcript-semester-gpa mt-0.5 flex flex-wrap items-baseline justify-end gap-x-4 gap-y-0 text-[11px] font-semibold print:text-[10px]">
                 <span>
                   GPA: <span className="font-bold">{semGpa?.gpa.toFixed(2) ?? "0.00"}</span>
                 </span>
@@ -314,11 +316,11 @@ export function TranscriptDocument({
         })}
 
         <div className="mt-2 border-t border-black pt-1.5 print:mt-1.5 print:pt-1">
-          <p className="text-[10px] font-bold print:text-[9px]">
-            Cumulative GPA: <span className="text-[11px] font-bold print:text-[10px]">{cumulativeGPA.toFixed(2)}</span>
+          <p className="text-[11px] font-bold print:text-[10px]">
+            Cumulative GPA: <span className="text-[12px] font-bold print:text-[11px]">{cumulativeGPA.toFixed(2)}</span>
           </p>
-          <p className="text-[10px] print:text-[9px]">Total Credits: {totalCredits}</p>
-          <p className="mt-0.5 text-[9px] text-gray-700 print:text-[8px]">
+          <p className="text-[11px] print:text-[10px]">Total Credits: {totalCredits}</p>
+          <p className="mt-0.5 text-[10px] text-gray-700 print:text-[9px]">
             Generated: {new Date().toLocaleDateString()}
           </p>
         </div>
@@ -326,10 +328,10 @@ export function TranscriptDocument({
         <div className="mt-3 flex justify-end print:mt-2">
           <div className="w-40 text-right">
             <div className="mb-0.5 h-px border-t-2 border-black" />
-            <p className="text-[10px] font-bold text-gray-900 print:text-[9px]">
+            <p className="text-[11px] font-bold text-gray-900 print:text-[10px]">
               {TRANSCRIPT_BRAND.officeTitle}
             </p>
-            <p className="text-[9px] text-gray-600 print:text-[8px]">Authorized Signature</p>
+            <p className="text-[10px] text-gray-600 print:text-[9px]">Authorized Signature</p>
           </div>
         </div>
       </div>
