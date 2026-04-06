@@ -845,6 +845,12 @@ span.flatpickr-weekday,
   .transcript-semester-block .transcript-table tfoot {
     display: table-footer-group;
   }
+  .transcript-course-grade-thead th {
+    background-color: #a53851 !important;
+    color: #fff !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
   .transcript-table td,
   .transcript-table th {
     line-height: 1.2 !important;

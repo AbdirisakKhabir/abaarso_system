@@ -19,6 +19,8 @@ const cellBorder =
   "border border-black px-1 py-0.5 text-[11px] leading-tight print:text-[10px] print:leading-tight";
 const tableHeaderCell = `${cellBorder} bg-white font-bold text-black`;
 
+const courseGradeTableHeaderCell = `${cellBorder} border-black bg-[#a53851] font-bold text-white print:bg-[#a53851] print:text-white`;
+
 /** Student info block (top left): more breathing room per row */
 const infoCell =
   "border border-black px-2 py-2 text-[11px] leading-snug print:px-2 print:py-1.5 print:text-[10px]";
@@ -236,24 +238,24 @@ export function TranscriptDocument({
                 className="transcript-table mt-0 w-full border border-black text-[11px] print:text-[10px]"
                 style={{ borderCollapse: "collapse" }}
               >
-                <thead>
+                <thead className="transcript-course-grade-thead">
                   <tr>
-                    <th rowSpan={2} className={`${tableHeaderCell} text-left`}>
+                    <th rowSpan={2} className={`${courseGradeTableHeaderCell} text-left`}>
                       Course Code
                     </th>
-                    <th rowSpan={2} className={`${tableHeaderCell} text-left`}>
+                    <th rowSpan={2} className={`${courseGradeTableHeaderCell} text-left`}>
                       Course Title
                     </th>
-                    <th rowSpan={2} className={`${tableHeaderCell} w-8 text-center`}>
+                    <th rowSpan={2} className={`${courseGradeTableHeaderCell} w-8 text-center`}>
                       CrHrs
                     </th>
-                    <th colSpan={3} className={`${tableHeaderCell} text-center`}>
+                    <th colSpan={3} className={`${courseGradeTableHeaderCell} text-center`}>
                       Grades
                     </th>
                   </tr>
                   <tr>
                     {(["Marks", "Grade", "GPA"] as const).map((h) => (
-                      <th key={h} className={`${tableHeaderCell} w-9 text-center`}>
+                      <th key={h} className={`${courseGradeTableHeaderCell} w-9 text-center`}>
                         {h}
                       </th>
                     ))}
