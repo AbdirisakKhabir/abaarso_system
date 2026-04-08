@@ -17,6 +17,11 @@ export const TRANSCRIPT_BRAND = {
   failGradeText: "#000000",
   /** Shown above the grading legend table */
   gradingSystemTitle: "Grading System",
+  /**
+   * Student info table — Entry Year. Non-empty uses this value; empty string uses
+   * transcript / admission date automatically.
+   */
+  entryYearDisplay: "2022",
 } as const;
 
 /**

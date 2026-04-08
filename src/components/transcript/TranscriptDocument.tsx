@@ -154,7 +154,11 @@ export function TranscriptDocument({
   const college = student.department?.faculty?.name ?? "—";
   const department = student.department?.name ?? "—";
   const studentName = `${student.firstName} ${student.lastName}`;
-  const entryYear = formatEntryYear(semesterKeys, student.admissionDate);
+  const entryYear =
+    typeof TRANSCRIPT_BRAND.entryYearDisplay === "string" &&
+    TRANSCRIPT_BRAND.entryYearDisplay.trim() !== ""
+      ? TRANSCRIPT_BRAND.entryYearDisplay.trim()
+      : formatEntryYear(semesterKeys, student.admissionDate);
 
   const legendHeading = `${TRANSCRIPT_BRAND.gradingSystemTitle.endsWith(":") ? TRANSCRIPT_BRAND.gradingSystemTitle.slice(0, -1) : TRANSCRIPT_BRAND.gradingSystemTitle}:`;
 
