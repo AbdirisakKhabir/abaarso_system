@@ -23,6 +23,9 @@ const SEMESTER_HEAD_BG = "#e8e8e8";
 
 const semesterHeadingLineClass = `transcript-semester-title-row border-b border-black px-2 py-1.5 text-left text-[12px] font-bold text-black underline print:border-black print:py-1 print:text-[11px]`;
 
+/** Fixed % widths so every semester table lines up (Course Code | Title | CrHrs | Marks | Grade | GPA) */
+const SEMESTER_GRADES_COL_PCTS = ["16%", "36%", "8%", "14%", "10%", "16%"] as const;
+
 /** Student info block (top left): more breathing room per row */
 const infoCell =
   "border border-black px-2 py-2 text-[11px] leading-snug print:px-2 print:py-1.5 print:text-[10px]";
@@ -293,17 +296,22 @@ export function TranscriptDocument({
                   {academicSemesterLine}
                 </div>
                 <table
-                  className="transcript-table mt-0 w-full border-0 text-[11px] print:text-[10px]"
-                  style={{ borderCollapse: "collapse" }}
+                  className="transcript-table transcript-semester-grades-table mt-0 w-full table-fixed border-0 text-[11px] print:text-[10px]"
+                  style={{ borderCollapse: "collapse", tableLayout: "fixed", width: "100%" }}
                 >
+                  <colgroup>
+                    {SEMESTER_GRADES_COL_PCTS.map((w, i) => (
+                      <col key={i} style={{ width: w }} />
+                    ))}
+                  </colgroup>
                 <thead className="transcript-course-grade-thead">
                   <tr>
                     <th className={`${courseGradeTableHeaderCell} text-left`}>Course Code</th>
                     <th className={`${courseGradeTableHeaderCell} text-left`}>Course Title</th>
-                    <th className={`${courseGradeTableHeaderCell} w-8 text-center`}>CrHrs</th>
-                    <th className={`${courseGradeTableHeaderCell} w-9 text-center`}>Marks</th>
-                    <th className={`${courseGradeTableHeaderCell} w-9 text-center`}>Grade</th>
-                    <th className={`${courseGradeTableHeaderCell} w-9 text-center`}>GPA</th>
+                    <th className={`${courseGradeTableHeaderCell} text-center`}>CrHrs</th>
+                    <th className={`${courseGradeTableHeaderCell} text-center`}>Marks</th>
+                    <th className={`${courseGradeTableHeaderCell} text-center`}>Grade</th>
+                    <th className={`${courseGradeTableHeaderCell} text-center`}>GPA</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -317,10 +325,14 @@ export function TranscriptDocument({
                       : undefined;
                     return (
                       <tr key={r.id} className="transcript-row bg-white">
-                        <td className={`${cellBorder} text-left font-mono font-semibold`}>
+                        <td
+                          className={`${cellBorder} transcript-semester-cell-code text-left font-mono font-semibold wrap-break-word`}
+                        >
                           {r.course.code}
                         </td>
-                        <td className={`${cellBorder} text-left`}>{r.course.name}</td>
+                        <td className={`${cellBorder} transcript-semester-cell-title text-left wrap-break-word`}>
+                          {r.course.name}
+                        </td>
                         <td className={`${cellBorder} text-center`}>{r.course.creditHours}</td>
                         <td className={`${cellBorder} text-center`} style={markStyle}>
                           {r.totalMarks.toFixed(2)}
