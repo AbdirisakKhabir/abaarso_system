@@ -294,25 +294,12 @@ export function TranscriptDocument({
                 >
                 <thead className="transcript-course-grade-thead">
                   <tr>
-                    <th rowSpan={2} className={`${courseGradeTableHeaderCell} text-left`}>
-                      Course Code
-                    </th>
-                    <th rowSpan={2} className={`${courseGradeTableHeaderCell} text-left`}>
-                      Course Title
-                    </th>
-                    <th rowSpan={2} className={`${courseGradeTableHeaderCell} w-8 text-center`}>
-                      CrHrs
-                    </th>
-                    <th colSpan={3} className={`${courseGradeTableHeaderCell} text-center`}>
-                      Grades
-                    </th>
-                  </tr>
-                  <tr>
-                    {(["Marks", "Grade", "GPA"] as const).map((h) => (
-                      <th key={h} className={`${courseGradeTableHeaderCell} w-9 text-center`}>
-                        {h}
-                      </th>
-                    ))}
+                    <th className={`${courseGradeTableHeaderCell} text-left`}>Course Code</th>
+                    <th className={`${courseGradeTableHeaderCell} text-left`}>Course Title</th>
+                    <th className={`${courseGradeTableHeaderCell} w-8 text-center`}>CrHrs</th>
+                    <th className={`${courseGradeTableHeaderCell} w-9 text-center`}>Marks</th>
+                    <th className={`${courseGradeTableHeaderCell} w-9 text-center`}>Grade</th>
+                    <th className={`${courseGradeTableHeaderCell} w-9 text-center`}>GPA</th>
                   </tr>
                 </thead>
                 <tbody>
