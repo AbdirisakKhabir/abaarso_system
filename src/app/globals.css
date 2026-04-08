@@ -827,8 +827,8 @@ span.flatpickr-weekday,
     break-inside: auto;
     page-break-inside: auto;
   }
-  .transcript-semester-title-row th {
-    background-color: #ffffff !important;
+  .transcript-semester-title-row {
+    background-color: #e8e8e8 !important;
     color: #000000 !important;
     text-decoration: underline !important;
     font-weight: 700 !important;
@@ -872,9 +872,17 @@ span.flatpickr-weekday,
   .transcript-row td {
     padding: 2px 4px !important;
   }
+  /* Page 1: no sheet margin; page 2+: top margin only (rest 0) */
   @page {
     size: A4;
+    margin-top: 8mm;
+    margin-left: 0;
+    margin-right: 0;
+    margin-bottom: 0;
+  }
+  @page :first {
     margin: 0;
+    size: A4;
   }
   body {
     background: white;

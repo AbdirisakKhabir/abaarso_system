@@ -18,8 +18,10 @@ const tableHeaderCell = `${cellBorder} bg-white font-bold text-black`;
 
 const courseGradeTableHeaderCell = `${cellBorder} border-black bg-[#a53851] font-bold text-white print:bg-[#a53851] print:text-white`;
 
-/** Single full-width row above column headers: semester + academic year */
-const semesterTitleRowCell = `${cellBorder} bg-white text-left text-[12px] font-bold text-black underline print:text-[11px]`;
+/** Gray smoke — single-line semester heading above the course table (matches sample layout) */
+const SEMESTER_HEAD_BG = "#e8e8e8";
+
+const semesterHeadingLineClass = `transcript-semester-title-row border-b border-black px-2 py-1.5 text-left text-[12px] font-bold text-black underline print:border-black print:py-1 print:text-[11px]`;
 
 /** Student info block (top left): more breathing room per row */
 const infoCell =
@@ -70,11 +72,36 @@ type TranscriptDocumentProps = {
   showPrintButton?: boolean;
 };
 
-function formatSemesterLabel(semester: string): string {
-  const m = String(semester).match(/(\d+)/);
-  if (m) return `Semester ${m[1]}`;
-  const t = String(semester).trim();
-  return t.length > 0 ? t : "—";
+const SEMESTER_NUMBER_WORDS = [
+  "",
+  "One",
+  "Two",
+  "Three",
+  "Four",
+  "Five",
+  "Six",
+  "Seven",
+  "Eight",
+  "Nine",
+  "Ten",
+] as const;
+
+/** e.g. "Semester 3" / "Semester Three" from DB label */
+function formatSemesterWords(semesterLabel: string): string {
+  const s = String(semesterLabel).trim();
+  const m = /semester\s*(\d+)/i.exec(s);
+  if (m) {
+    const n = Number(m[1]);
+    const w = SEMESTER_NUMBER_WORDS[n];
+    if (w) return `Semester ${w}`;
+    return `Semester ${m[1]}`;
+  }
+  return s.length > 0 ? s : "—";
+}
+
+/** "Academic Year: 2022-2023. Semester Three" */
+function formatAcademicYearSemesterLine(yearStart: number, yearEnd: number, semesterLabel: string): string {
+  return `Academic Year: ${yearStart}-${yearEnd}. ${formatSemesterWords(semesterLabel)}`;
 }
 
 function isFailingMark(totalMarks: number, grade: string | null): boolean {
@@ -220,7 +247,7 @@ export function TranscriptDocument({
 
         {/* Semesters */}
         {semesterKeys.map((key, keyIdx) => {
-          const [year, semester] = key.split("-");
+          const { year: yearEndNum, semester: semesterLabel } = parseYearSemesterKey(key);
           const records = recordsBySemester[key] || [];
           const semGpa = semGpaMap[key];
           const prevKeys = semesterKeys.slice(0, keyIdx);
@@ -245,26 +272,27 @@ export function TranscriptDocument({
               ? Math.round((totalHptsSoFar / totalCreditsSoFar) * 100) / 100
               : 0;
 
-          const yearEnd = Number(year);
+          const yearEnd = yearEndNum;
           const yearStart = yearEnd - 1;
+          const academicSemesterLine = formatAcademicYearSemesterLine(yearStart, yearEnd, semesterLabel);
 
           return (
             <div
               key={key}
               className="transcript-semester-block mb-2 last:mb-1 print:mb-1"
             >
-              <table
-                className="transcript-table mt-0 w-full border border-black text-[11px] print:text-[10px]"
-                style={{ borderCollapse: "collapse" }}
-              >
+              <div className="transcript-semester-table-wrap border border-black print:border-black">
+                <div
+                  className={semesterHeadingLineClass}
+                  style={{ backgroundColor: SEMESTER_HEAD_BG }}
+                >
+                  {academicSemesterLine}
+                </div>
+                <table
+                  className="transcript-table mt-0 w-full border-0 text-[11px] print:text-[10px]"
+                  style={{ borderCollapse: "collapse" }}
+                >
                 <thead className="transcript-course-grade-thead">
-                  <tr className="transcript-semester-title-row">
-                    <th colSpan={6} className={semesterTitleRowCell}>
-                      Academic Year: {yearStart}-{yearEnd}
-                      <span className="mx-1.5">—</span>
-                      {formatSemesterLabel(semester)}
-                    </th>
-                  </tr>
                   <tr>
                     <th rowSpan={2} className={`${courseGradeTableHeaderCell} text-left`}>
                       Course Code
@@ -328,6 +356,7 @@ export function TranscriptDocument({
                   </tr>
                 </tfoot>
               </table>
+              </div>
 
               <div className="transcript-semester-gpa mt-0.5 flex flex-wrap items-baseline justify-end gap-x-4 gap-y-0 text-[11px] font-semibold print:text-[10px]">
                 <span>
