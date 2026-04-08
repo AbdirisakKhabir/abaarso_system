@@ -16,12 +16,10 @@ const cellBorder =
   "border border-black px-1 py-0.5 text-[11px] leading-tight print:text-[10px] print:leading-tight";
 const tableHeaderCell = `${cellBorder} bg-white font-bold text-black`;
 
-const courseGradeTableHeaderCell = `${cellBorder} border-black bg-[#a53851] font-bold text-white print:bg-[#a53851] print:text-white`;
+/** Column headers for course results — same neutral style as other transcript tables (no fill color) */
+const courseGradeTableHeaderCell = `${cellBorder} bg-white font-bold text-black`;
 
-/** Gray smoke — single-line semester heading above the course table (matches sample layout) */
-const SEMESTER_HEAD_BG = "#e8e8e8";
-
-const semesterHeadingLineClass = `transcript-semester-title-row border-b border-black px-2 py-1.5 text-left text-[12px] font-bold text-black underline print:border-black print:py-1 print:text-[11px]`;
+const semesterHeadingLineClass = `transcript-semester-title-row border-b border-black bg-white px-2 py-1.5 text-left text-[12px] font-bold text-black underline print:border-black print:py-1 print:text-[11px]`;
 
 /** Fixed % widths so every semester table lines up (Course Code | Title | CrHrs | Marks | Grade | GPA) */
 const SEMESTER_GRADES_COL_PCTS = ["16%", "36%", "8%", "14%", "10%", "16%"] as const;
@@ -105,11 +103,6 @@ function formatSemesterWords(semesterLabel: string): string {
 /** "Academic Year: 2022-2023. Semester Three" */
 function formatAcademicYearSemesterLine(yearStart: number, yearEnd: number, semesterLabel: string): string {
   return `Academic Year: ${yearStart}-${yearEnd}. ${formatSemesterWords(semesterLabel)}`;
-}
-
-function isFailingMark(totalMarks: number, grade: string | null): boolean {
-  if (Number.isFinite(totalMarks) && totalMarks < 50) return true;
-  return (grade || "").toUpperCase() === "F";
 }
 
 /** Earliest calendar year appearing on the transcript (from graded semesters). */
@@ -289,12 +282,7 @@ export function TranscriptDocument({
               className="transcript-semester-block mb-2 last:mb-1 print:mb-1"
             >
               <div className="transcript-semester-table-wrap border border-black print:border-black">
-                <div
-                  className={semesterHeadingLineClass}
-                  style={{ backgroundColor: SEMESTER_HEAD_BG }}
-                >
-                  {academicSemesterLine}
-                </div>
+                <div className={semesterHeadingLineClass}>{academicSemesterLine}</div>
                 <table
                   className="transcript-table transcript-semester-grades-table mt-0 w-full table-fixed border-0 text-[11px] print:text-[10px]"
                   style={{ borderCollapse: "collapse", tableLayout: "fixed", width: "100%" }}
@@ -316,13 +304,6 @@ export function TranscriptDocument({
                 </thead>
                 <tbody>
                   {records.map((r) => {
-                    const fail = isFailingMark(r.totalMarks, r.grade);
-                    const markStyle = fail
-                      ? {
-                          backgroundColor: TRANSCRIPT_BRAND.failGradeBg,
-                          color: TRANSCRIPT_BRAND.failGradeText,
-                        }
-                      : undefined;
                     return (
                       <tr key={r.id} className="transcript-row bg-white">
                         <td
@@ -334,10 +315,10 @@ export function TranscriptDocument({
                           {r.course.name}
                         </td>
                         <td className={`${cellBorder} text-center`}>{r.course.creditHours}</td>
-                        <td className={`${cellBorder} text-center`} style={markStyle}>
+                        <td className={`${cellBorder} text-center`}>
                           {r.totalMarks.toFixed(2)}
                         </td>
-                        <td className={`${cellBorder} text-center font-semibold`} style={markStyle}>
+                        <td className={`${cellBorder} text-center font-semibold`}>
                           {r.grade || "—"}
                         </td>
                         <td className={`${cellBorder} text-center`}>

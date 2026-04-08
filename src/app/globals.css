@@ -807,6 +807,7 @@ span.flatpickr-weekday,
   word-wrap: break-word;
   overflow-wrap: break-word;
   vertical-align: top;
+  background-color: #fff;
 }
 
 /* Print styles - hide navigation and show only report content */
@@ -840,15 +841,13 @@ span.flatpickr-weekday,
     page-break-inside: auto;
   }
   .transcript-semester-title-row {
-    background-color: #e8e8e8 !important;
+    background-color: #ffffff !important;
     color: #000000 !important;
     text-decoration: underline !important;
     font-weight: 700 !important;
     text-align: left !important;
     padding: 4px 8px !important;
     font-size: 11px !important;
-    -webkit-print-color-adjust: exact;
-    print-color-adjust: exact;
   }
   .transcript-semester-gpa {
     break-before: avoid;
@@ -864,10 +863,8 @@ span.flatpickr-weekday,
     display: table-footer-group;
   }
   .transcript-course-grade-thead tr:not(.transcript-semester-title-row) th {
-    background-color: #a53851 !important;
-    color: #fff !important;
-    -webkit-print-color-adjust: exact;
-    print-color-adjust: exact;
+    background-color: #ffffff !important;
+    color: #000000 !important;
   }
   .transcript-table td,
   .transcript-table th {
@@ -894,6 +891,7 @@ span.flatpickr-weekday,
     word-wrap: break-word !important;
     overflow-wrap: break-word !important;
     vertical-align: top !important;
+    background-color: #ffffff !important;
   }
   /* Page 1: no sheet margin; page 2+: top margin only (rest 0) */
   @page {
