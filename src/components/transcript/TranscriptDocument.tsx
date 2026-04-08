@@ -16,10 +16,13 @@ const cellBorder =
   "border border-black px-1 py-0.5 text-[11px] leading-tight print:text-[10px] print:leading-tight";
 const tableHeaderCell = `${cellBorder} bg-white font-bold text-black`;
 
-/** Column headers for course results — same neutral style as other transcript tables (no fill color) */
-const courseGradeTableHeaderCell = `${cellBorder} bg-white font-bold text-black`;
+/** Course / marks table column headers (brand maroon) — body cells stay plain white; no low-mark fill */
+const courseGradeTableHeaderCell = `${cellBorder} border-black bg-[#a53851] font-bold text-white print:bg-[#a53851] print:text-white`;
 
-const semesterHeadingLineClass = `transcript-semester-title-row border-b border-black bg-white px-2 py-1.5 text-left text-[12px] font-bold text-black underline print:border-black print:py-1 print:text-[11px]`;
+/** Academic year / semester line above each course table */
+const SEMESTER_HEAD_BG = "#e8e8e8";
+
+const semesterHeadingLineClass = `transcript-semester-title-row border-b border-black px-2 py-1.5 text-left text-[12px] font-bold text-black underline print:border-black print:py-1 print:text-[11px]`;
 
 /** Fixed % widths so every semester table lines up (Course Code | Title | CrHrs | Marks | Grade | GPA) */
 const SEMESTER_GRADES_COL_PCTS = ["16%", "36%", "8%", "14%", "10%", "16%"] as const;
@@ -282,7 +285,12 @@ export function TranscriptDocument({
               className="transcript-semester-block mb-2 last:mb-1 print:mb-1"
             >
               <div className="transcript-semester-table-wrap border border-black print:border-black">
-                <div className={semesterHeadingLineClass}>{academicSemesterLine}</div>
+                <div
+                  className={semesterHeadingLineClass}
+                  style={{ backgroundColor: SEMESTER_HEAD_BG }}
+                >
+                  {academicSemesterLine}
+                </div>
                 <table
                   className="transcript-table transcript-semester-grades-table mt-0 w-full table-fixed border-0 text-[11px] print:text-[10px]"
                   style={{ borderCollapse: "collapse", tableLayout: "fixed", width: "100%" }}

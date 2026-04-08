@@ -807,6 +807,10 @@ span.flatpickr-weekday,
   word-wrap: break-word;
   overflow-wrap: break-word;
   vertical-align: top;
+}
+/* Result rows only: white — no conditional fill for low marks */
+.transcript-semester-grades-table tbody td,
+.transcript-semester-grades-table tfoot td {
   background-color: #fff;
 }
 
@@ -841,13 +845,15 @@ span.flatpickr-weekday,
     page-break-inside: auto;
   }
   .transcript-semester-title-row {
-    background-color: #ffffff !important;
+    background-color: #e8e8e8 !important;
     color: #000000 !important;
     text-decoration: underline !important;
     font-weight: 700 !important;
     text-align: left !important;
     padding: 4px 8px !important;
     font-size: 11px !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
   }
   .transcript-semester-gpa {
     break-before: avoid;
@@ -863,8 +869,10 @@ span.flatpickr-weekday,
     display: table-footer-group;
   }
   .transcript-course-grade-thead tr:not(.transcript-semester-title-row) th {
-    background-color: #ffffff !important;
-    color: #000000 !important;
+    background-color: #a53851 !important;
+    color: #ffffff !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
   }
   .transcript-table td,
   .transcript-table th {
@@ -891,6 +899,9 @@ span.flatpickr-weekday,
     word-wrap: break-word !important;
     overflow-wrap: break-word !important;
     vertical-align: top !important;
+  }
+  .transcript-semester-grades-table tbody td,
+  .transcript-semester-grades-table tfoot td {
     background-color: #ffffff !important;
   }
   /* Page 1: no sheet margin; page 2+: top margin only (rest 0) */
