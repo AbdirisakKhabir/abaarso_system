@@ -3,10 +3,7 @@
 import React from "react";
 import Button from "@/components/ui/button/Button";
 import { TRANSCRIPT_BRAND, GRADING_SYSTEM_LEGEND } from "@/lib/transcript-brand";
-
-/** Brand palette for transcript accents */
-const BRAND_PRIMARY = "#a1133f";
-const SEMESTER_BAND_BG = "#f2c9d5";
+import { parseYearSemesterKey } from "@/lib/semester-sort";
 
 /** Official banner (uploaded registrar header) */
 const TRANSCRIPT_HEADER_IMAGE = "/logo/transcript-header.png";
@@ -20,6 +17,9 @@ const cellBorder =
 const tableHeaderCell = `${cellBorder} bg-white font-bold text-black`;
 
 const courseGradeTableHeaderCell = `${cellBorder} border-black bg-[#a53851] font-bold text-white print:bg-[#a53851] print:text-white`;
+
+/** Single full-width row above column headers: semester + academic year */
+const semesterTitleRowCell = `${cellBorder} bg-white text-left text-[12px] font-bold text-black underline print:text-[11px]`;
 
 /** Student info block (top left): more breathing room per row */
 const infoCell =
@@ -82,6 +82,39 @@ function isFailingMark(totalMarks: number, grade: string | null): boolean {
   return (grade || "").toUpperCase() === "F";
 }
 
+/** Earliest calendar year appearing on the transcript (from graded semesters). */
+function earliestTranscriptYear(semesterKeys: string[]): number | null {
+  let min = Infinity;
+  for (const k of semesterKeys) {
+    const { year } = parseYearSemesterKey(k);
+    if (year > 0 && year < min) min = year;
+  }
+  return min === Infinity ? null : min;
+}
+
+/** Calendar year from stored admission date (ISO YYYY-MM-DD uses the date, not UTC shift). */
+function yearFromAdmissionDate(d: string | Date): number | null {
+  const s = typeof d === "string" ? d.trim() : new Date(d).toISOString().slice(0, 10);
+  const iso = /^(\d{4})-\d{2}-\d{2}/.exec(s);
+  if (iso) return Number(iso[1]);
+  const t = new Date(d).getTime();
+  if (Number.isNaN(t)) return null;
+  return new Date(d).getFullYear();
+}
+
+function formatEntryYear(
+  semesterKeys: string[],
+  admissionDate: string | Date | undefined
+): string {
+  const fromGrades = earliestTranscriptYear(semesterKeys);
+  if (fromGrades != null) return String(fromGrades);
+  if (admissionDate) {
+    const y = yearFromAdmissionDate(admissionDate);
+    if (y != null) return String(y);
+  }
+  return "—";
+}
+
 export function TranscriptDocument({
   student,
   recordsBySemester,
@@ -94,16 +127,9 @@ export function TranscriptDocument({
   const college = student.department?.faculty?.name ?? "—";
   const department = student.department?.name ?? "—";
   const studentName = `${student.firstName} ${student.lastName}`;
-  const entryYear = student.admissionDate
-    ? new Date(student.admissionDate).getFullYear()
-    : "—";
+  const entryYear = formatEntryYear(semesterKeys, student.admissionDate);
 
   const legendHeading = `${TRANSCRIPT_BRAND.gradingSystemTitle.endsWith(":") ? TRANSCRIPT_BRAND.gradingSystemTitle.slice(0, -1) : TRANSCRIPT_BRAND.gradingSystemTitle}:`;
-
-  const semesterBandStyle = {
-    backgroundColor: SEMESTER_BAND_BG,
-    color: BRAND_PRIMARY,
-  };
 
   return (
     <div className="transcript-print-root">
@@ -115,25 +141,25 @@ export function TranscriptDocument({
         </div>
       )}
       <div
-        className={`transcript-document ${transcriptFont} mx-auto max-w-[210mm] bg-white px-4 py-3 text-[11px] text-black print:px-3 print:py-2 print:text-[10px]`}
+        className={`transcript-document ${transcriptFont} mx-auto max-w-[210mm] bg-white px-4 py-3 text-[11px] text-black print:text-[10px]`}
         style={{ color: "#000" }}
       >
         {/* Official registrar banner (logo, name, motto, contact) */}
-        <div className="transcript-header-banner mb-3 print:mb-2">
+        <div className="transcript-header-banner mb-3 print:mb-1">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src={TRANSCRIPT_HEADER_IMAGE}
             alt="Abaarso Tech University — Registrar of Office"
-            className="h-auto w-full max-h-[160px] object-contain object-left print:max-h-[140px]"
+            className="h-auto w-full max-h-[160px] object-contain object-left print:max-h-[120px]"
           />
-          <div className="my-2 border-t border-black print:my-1.5" />
+          <div className="my-2 border-t border-black print:my-1" />
           <h2 className="text-center text-[13px] font-bold print:text-[12px]">
             {TRANSCRIPT_BRAND.documentTitle}
           </h2>
         </div>
 
         {/* Student info fills width up to grading table; gap-0 so tables sit flush */}
-        <div className="mb-2 flex flex-col gap-2 sm:flex-row sm:flex-nowrap sm:items-stretch sm:gap-0 print:mb-1.5 print:gap-0">
+        <div className="mb-2 flex flex-col gap-2 sm:flex-row sm:flex-nowrap sm:items-stretch sm:gap-0 print:mb-1 print:gap-0">
           <div className="min-w-0 w-full flex-1 sm:min-w-0">
             <table
               className="transcript-table transcript-info-table h-full w-full border border-black text-[11px] print:text-[10px]"
@@ -150,8 +176,10 @@ export function TranscriptDocument({
                   ] as const
                 ).map(([label, value]) => (
                   <tr key={label}>
-                    <td className={`${infoCell} w-[30%] font-semibold`}>{label}</td>
-                    <td className={`${infoCell} ${label === "Student ID" ? "font-mono" : ""}`}>
+                    <td className={`${infoCell} w-[30%] font-bold`}>{label}</td>
+                    <td
+                      className={`${infoCell} font-bold ${label === "Student ID" ? "font-mono" : ""}`}
+                    >
                       {value}
                     </td>
                   </tr>
@@ -223,22 +251,20 @@ export function TranscriptDocument({
           return (
             <div
               key={key}
-              className="transcript-semester-block mb-2 last:mb-1 print:mb-1.5"
+              className="transcript-semester-block mb-2 last:mb-1 print:mb-1"
             >
-              <div
-                className="transcript-semester-band px-2 py-1 text-[12px] font-bold leading-tight print:text-[11px] print:py-0.5"
-                style={semesterBandStyle}
-              >
-                Academic Year: {yearStart}-{yearEnd}
-                <span className="mx-1.5 opacity-80">·</span>
-                {formatSemesterLabel(semester)}
-              </div>
-
               <table
                 className="transcript-table mt-0 w-full border border-black text-[11px] print:text-[10px]"
                 style={{ borderCollapse: "collapse" }}
               >
                 <thead className="transcript-course-grade-thead">
+                  <tr className="transcript-semester-title-row">
+                    <th colSpan={6} className={semesterTitleRowCell}>
+                      Academic Year: {yearStart}-{yearEnd}
+                      <span className="mx-1.5">—</span>
+                      {formatSemesterLabel(semester)}
+                    </th>
+                  </tr>
                   <tr>
                     <th rowSpan={2} className={`${courseGradeTableHeaderCell} text-left`}>
                       Course Code
@@ -317,7 +343,7 @@ export function TranscriptDocument({
           );
         })}
 
-        <div className="mt-2 border-t border-black pt-1.5 print:mt-1.5 print:pt-1">
+        <div className="mt-2 border-t border-black pt-1.5 print:mt-1 print:pt-0.5">
           <p className="text-[11px] font-bold print:text-[10px]">
             Cumulative GPA: <span className="text-[12px] font-bold print:text-[11px]">{cumulativeGPA.toFixed(2)}</span>
           </p>
@@ -327,7 +353,7 @@ export function TranscriptDocument({
           </p>
         </div>
 
-        <div className="mt-3 flex justify-end print:mt-2">
+        <div className="mt-3 flex justify-end print:mt-1">
           <div className="w-40 text-right">
             <div className="mb-0.5 h-px border-t-2 border-black" />
             <p className="text-[11px] font-bold text-gray-900 print:text-[10px]">

@@ -815,6 +815,8 @@ span.flatpickr-weekday,
     box-shadow: none !important;
     border: none !important;
     font-family: Cambria, Georgia, "Times New Roman", serif !important;
+    padding: 3mm !important;
+    max-width: none !important;
   }
   .transcript-header-banner img {
     -webkit-print-color-adjust: exact;
@@ -825,12 +827,16 @@ span.flatpickr-weekday,
     break-inside: auto;
     page-break-inside: auto;
   }
-  .transcript-semester-band {
-    break-after: avoid;
-    page-break-after: avoid;
+  .transcript-semester-title-row th {
+    background-color: #ffffff !important;
+    color: #000000 !important;
+    text-decoration: underline !important;
+    font-weight: 700 !important;
+    text-align: left !important;
+    padding: 4px 8px !important;
     font-size: 11px !important;
-    padding-top: 0.25rem !important;
-    padding-bottom: 0.25rem !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
   }
   .transcript-semester-gpa {
     break-before: avoid;
@@ -845,7 +851,7 @@ span.flatpickr-weekday,
   .transcript-semester-block .transcript-table tfoot {
     display: table-footer-group;
   }
-  .transcript-course-grade-thead th {
+  .transcript-course-grade-thead tr:not(.transcript-semester-title-row) th {
     background-color: #a53851 !important;
     color: #fff !important;
     -webkit-print-color-adjust: exact;
@@ -859,15 +865,16 @@ span.flatpickr-weekday,
   }
   .transcript-info-table td,
   .transcript-info-table th {
-    padding: 6px 10px !important;
-    line-height: 1.45 !important;
+    padding: 4px 8px !important;
+    line-height: 1.35 !important;
+    font-weight: 700 !important;
   }
   .transcript-row td {
     padding: 2px 4px !important;
   }
   @page {
     size: A4;
-    margin: 8mm;
+    margin: 0;
   }
   body {
     background: white;
