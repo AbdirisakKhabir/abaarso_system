@@ -17,7 +17,11 @@ export async function GET(req: NextRequest) {
     const q = searchParams.get("q")?.trim();
     const departmentId = searchParams.get("departmentId");
     const semester = searchParams.get("semester");
+    const activeOnly = searchParams.get("active") === "true";
     const where: Prisma.ClassWhereInput = {};
+    if (activeOnly) {
+      where.isActive = true;
+    }
     if (q) {
       where.OR = [
         { name: { contains: q } },

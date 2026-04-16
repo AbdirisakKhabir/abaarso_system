@@ -15,7 +15,11 @@ export async function GET(req: NextRequest) {
     const { paginate, page, pageSize, skip } = parsePaginationParams(searchParams);
     const q = searchParams.get("q")?.trim();
     const facultyId = searchParams.get("facultyId");
+    const activeOnly = searchParams.get("active") === "true";
     const where: Prisma.DepartmentWhereInput = {};
+    if (activeOnly) {
+      where.isActive = true;
+    }
     if (q) {
       where.OR = [
         { name: { contains: q } },

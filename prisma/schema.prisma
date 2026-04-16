@@ -56,8 +56,9 @@ model Permission {
 model RolePermission {
   roleId       Int
   permissionId Int
-  role         Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
-  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+  /** Explicit DB names avoid `db push` trying to add duplicate FK constraint names on MySQL. */
+  role         Role       @relation(fields: [roleId], references: [id], onDelete: Cascade, map: "role_permissions_roleId_fkey")
+  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade, map: "role_permissions_permissionId_fkey")
 
   @@id([roleId, permissionId])
   @@map("role_permissions")
