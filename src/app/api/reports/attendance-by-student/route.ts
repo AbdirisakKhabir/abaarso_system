@@ -47,16 +47,36 @@ export async function GET(req: NextRequest) {
     const year = yearParam ? Number(yearParam) : cls.year;
     const { start, end } = getSemesterDateRange(semester, year);
 
-    // Get attendance sessions for this class within the semester date range
-    const sessions = await prisma.attendanceSession.findMany({
+    /** Up to 12 sessions map to W1–W6 (first half) and W1–W6 (second half), ordered by date. */
+    const SHEET_SLOTS = 12;
+
+    const sessionsOrdered = await prisma.attendanceSession.findMany({
       where: {
         classId: Number(classId),
         date: { gte: start, lte: end },
       },
+      orderBy: [{ date: "asc" }, { shift: "asc" }],
       select: { id: true },
     });
-    const sessionIds = sessions.map((s) => s.id);
+    const sessionIds = sessionsOrdered.map((s) => s.id);
     const totalSessions = sessionIds.length;
+
+    const slotSessionIds: (number | null)[] = Array.from(
+      { length: SHEET_SLOTS },
+      (_, i) => sessionsOrdered[i]?.id ?? null
+    );
+
+    const scheduleMeta = await prisma.classSchedule.findFirst({
+      where: {
+        classId: Number(classId),
+        semester: cls.semester,
+        year: cls.year,
+      },
+      include: {
+        course: { select: { code: true, name: true } },
+        lecturer: { select: { name: true } },
+      },
+    });
 
     // Get all students in this class (from Student.classId)
     const students = await prisma.student.findMany({
@@ -75,6 +95,14 @@ export async function GET(req: NextRequest) {
         class: cls,
         students: [],
         totalSessions: 0,
+        sheet: {
+          slotSessionIds: Array.from({ length: SHEET_SLOTS }, () => null),
+          facultyLabel: `FACULTY OF ${cls.department.code} — ${cls.department.name}`,
+          courseLabel: scheduleMeta
+            ? `${scheduleMeta.course.code} — ${scheduleMeta.course.name}`
+            : null,
+          lecturerName: scheduleMeta?.lecturer?.name ?? null,
+        },
       });
     }
 
@@ -104,6 +132,26 @@ export async function GET(req: NextRequest) {
       else if (r.status === "Excused") agg.excused++;
     }
 
+    const recordMap = new Map<string, string>();
+    for (const r of records) {
+      recordMap.set(`${r.studentId}:${r.sessionId}`, r.status);
+    }
+
+    function halfSlotTint(
+      slots: (boolean | null)[],
+      start: number
+    ): "none" | "warn" {
+      let denom = 0;
+      let num = 0;
+      for (let i = start; i < start + 6; i++) {
+        if (slotSessionIds[i] == null) continue;
+        denom++;
+        if (slots[i] === true) num++;
+      }
+      if (denom === 0) return "none";
+      return num / denom < 0.5 ? "warn" : "none";
+    }
+
     const result = students.map((s) => {
       const agg = byStudent.get(s.id) ?? {
         present: 0,
@@ -120,6 +168,21 @@ export async function GET(req: NextRequest) {
         presentPlusExcused,
         totalSessions
       );
+
+      const slots: (boolean | null)[] = Array.from(
+        { length: SHEET_SLOTS },
+        (_, i) => {
+          const sid = slotSessionIds[i];
+          if (sid == null) return null;
+          const st = recordMap.get(`${s.id}:${sid}`);
+          if (st === undefined) return false;
+          return st === "Present" || st === "Excused";
+        }
+      );
+      const totalChecked = slots.filter((v) => v === true).length;
+      const sheetMarksRaw = (totalChecked / SHEET_SLOTS) * 10;
+      const sheetMarksRounded = Math.round(sheetMarksRaw * 10) / 10;
+
       return {
         studentId: s.id,
         studentIdStr: s.studentId,
@@ -132,6 +195,13 @@ export async function GET(req: NextRequest) {
         totalSessions,
         attendancePercent,
         attendanceMarks,
+        slots,
+        totalChecked,
+        sheetMarksRaw,
+        sheetMarksRounded,
+        firstHalfTint: halfSlotTint(slots, 0),
+        secondHalfTint: halfSlotTint(slots, 6),
+        rowDanger: attendancePercent < 35,
       };
     });
 
@@ -141,6 +211,14 @@ export async function GET(req: NextRequest) {
       year,
       students: result,
       totalSessions,
+      sheet: {
+        slotSessionIds,
+        facultyLabel: `FACULTY OF ${cls.department.code} — ${cls.department.name}`,
+        courseLabel: scheduleMeta
+          ? `${scheduleMeta.course.code} — ${scheduleMeta.course.name}`
+          : null,
+        lecturerName: scheduleMeta?.lecturer?.name ?? null,
+      },
     });
   } catch (e) {
     console.error("Attendance-by-student report error:", e);

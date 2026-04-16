@@ -919,4 +919,10 @@ span.flatpickr-weekday,
   body {
     background: white;
   }
+  .attendance-sheet table,
+  .attendance-sheet th,
+  .attendance-sheet td {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
 }

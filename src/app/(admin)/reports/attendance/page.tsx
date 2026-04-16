@@ -15,6 +15,7 @@ import { usePagination } from "@/hooks/usePagination";
 import { DateInput } from "@/components/form/DateInput";
 import Badge from "@/components/ui/badge/Badge";
 import { authFetch } from "@/lib/api";
+import AttendanceSheetTable from "@/components/reports/AttendanceSheetTable";
 
 type Department = { id: number; name: string; code: string };
 type ClassItem = {
@@ -36,6 +37,18 @@ type StudentAttendance = {
   totalSessions: number;
   attendancePercent: number;
   attendanceMarks: number;
+  slots: (boolean | null)[];
+  totalChecked: number;
+  sheetMarksRaw: number;
+  sheetMarksRounded: number;
+  firstHalfTint: "none" | "warn";
+  secondHalfTint: "none" | "warn";
+  rowDanger: boolean;
+};
+type SheetMeta = {
+  facultyLabel: string;
+  courseLabel: string | null;
+  lecturerName: string | null;
 };
 type Session = {
   id: number;
@@ -66,9 +79,10 @@ export default function AttendanceReportPage() {
   const [filterClass, setFilterClass] = useState("");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
-  const [viewMode, setViewMode] = useState<"sessions" | "students">("sessions");
+  const [viewMode, setViewMode] = useState<"sessions" | "students">("students");
   const [studentAttendances, setStudentAttendances] = useState<StudentAttendance[]>([]);
   const [selectedClassInfo, setSelectedClassInfo] = useState<{ name: string; semester: string; year: number } | null>(null);
+  const [sheetMeta, setSheetMeta] = useState<SheetMeta | null>(null);
 
   const fetchReport = useCallback(async () => {
     setLoading(true);
@@ -101,6 +115,7 @@ export default function AttendanceReportPage() {
     if (!filterClass) {
       setStudentAttendances([]);
       setSelectedClassInfo(null);
+      setSheetMeta(null);
       return;
     }
     setLoading(true);
@@ -110,13 +125,16 @@ export default function AttendanceReportPage() {
         const data = await res.json();
         setStudentAttendances(data.students || []);
         setSelectedClassInfo(data.class ? { name: data.class.name, semester: data.class.semester, year: data.class.year } : null);
+        setSheetMeta(data.sheet ?? null);
       } else {
         setStudentAttendances([]);
         setSelectedClassInfo(null);
+        setSheetMeta(null);
       }
     } catch {
       setStudentAttendances([]);
       setSelectedClassInfo(null);
+      setSheetMeta(null);
     }
     setLoading(false);
   }, [filterClass]);
@@ -138,18 +156,6 @@ export default function AttendanceReportPage() {
     from: sessionsFrom,
     to: sessionsTo,
   } = usePagination(sessions, [filterDept, filterClass, dateFrom, dateTo]);
-  const {
-    paginatedItems: paginatedStudentAttendances,
-    page: studentsPage,
-    setPage: setStudentsPage,
-    pageSize: studentsPageSize,
-    setPageSize: setStudentsPageSize,
-    totalPages: studentsTotalPages,
-    total: studentsAttTotal,
-    from: studentsFrom,
-    to: studentsTo,
-  } = usePagination(studentAttendances, [filterClass, studentAttendances]);
-
   const handlePrint = () => window.print();
 
   return (
@@ -159,8 +165,7 @@ export default function AttendanceReportPage() {
         <Button size="sm" onClick={handlePrint}>Print</Button>
       </div>
 
-      <div className="mb-4 print:block hidden print:mb-2">
-        <h1 className="text-xl font-bold text-gray-900">Attendance Report</h1>
+      <div className="mb-4 hidden print:mb-2 print:block">
         <p className="text-sm text-gray-600">Generated: {new Date().toLocaleDateString()}</p>
       </div>
 
@@ -294,8 +299,10 @@ export default function AttendanceReportPage() {
               </p>
             </div>
             <div className="rounded-xl bg-gray-50 px-4 py-2 dark:bg-white/5">
-              <span className="text-xs text-gray-500 dark:text-gray-400">Attendance = 10% of Exam</span>
-              <p className="text-sm font-medium text-gray-700 dark:text-gray-300">Present + Excused / Total × 10</p>
+              <span className="text-xs text-gray-500 dark:text-gray-400">Sheet marks (10% scale)</span>
+              <p className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                Total classes ÷ 12 × 10 (W1–W6 × 2 halves)
+              </p>
             </div>
           </div>
         )}
@@ -303,72 +310,32 @@ export default function AttendanceReportPage() {
         <div className="overflow-x-auto">
           {viewMode === "students" ? (
             filterClass ? (
-              <>
-              <Table>
-                <TableHeader className="border-b border-gray-100 dark:border-gray-800">
-                  <TableRow>
-                    <TableCell isHeader className="px-5 py-3 text-left text-xs font-medium uppercase text-gray-500 dark:text-gray-400">Student</TableCell>
-                    <TableCell isHeader className="px-5 py-3 text-center text-xs font-medium uppercase text-gray-500 dark:text-gray-400">Present</TableCell>
-                    <TableCell isHeader className="px-5 py-3 text-center text-xs font-medium uppercase text-gray-500 dark:text-gray-400">Absent</TableCell>
-                    <TableCell isHeader className="px-5 py-3 text-center text-xs font-medium uppercase text-gray-500 dark:text-gray-400">Late</TableCell>
-                    <TableCell isHeader className="px-5 py-3 text-center text-xs font-medium uppercase text-gray-500 dark:text-gray-400">Excused</TableCell>
-                    <TableCell isHeader className="px-5 py-3 text-center text-xs font-medium uppercase text-gray-500 dark:text-gray-400">Attendance %</TableCell>
-                    <TableCell isHeader className="px-5 py-3 text-center text-xs font-medium uppercase text-gray-500 dark:text-gray-400">Marks (0-10)</TableCell>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {loading ? (
-                    <TableRow>
-                      <TableCell colSpan={7} className="px-5 py-10 text-center">
-                        <div className="flex items-center justify-center gap-2">
-                          <div className="h-5 w-5 animate-spin rounded-full border-2 border-brand-500 border-t-transparent" />
-                          <span className="text-sm text-gray-500">Loading...</span>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ) : studentAttendances.length === 0 ? (
-                    <TableRow>
-                      <TableCell colSpan={7} className="px-5 py-10 text-center text-sm text-gray-500">
-                        No students in this class or no attendance sessions recorded.
-                      </TableCell>
-                    </TableRow>
-                  ) : (
-                    paginatedStudentAttendances.map((a) => (
-                      <TableRow key={a.studentId} className="border-b border-gray-50 dark:border-gray-800">
-                        <TableCell className="px-5 py-3">
-                          <p className="font-medium text-gray-800 dark:text-white/90">{a.firstName} {a.lastName}</p>
-                          <p className="font-mono text-xs text-gray-500 dark:text-gray-400">{a.studentIdStr}</p>
-                        </TableCell>
-                        <TableCell className="px-5 py-3 text-center font-medium text-green-600 dark:text-green-400">{a.present}</TableCell>
-                        <TableCell className="px-5 py-3 text-center font-medium text-red-600 dark:text-red-400">{a.absent}</TableCell>
-                        <TableCell className="px-5 py-3 text-center font-medium text-yellow-600 dark:text-yellow-600">{a.late}</TableCell>
-                        <TableCell className="px-5 py-3 text-center text-sm text-gray-600 dark:text-gray-400">{a.excused}</TableCell>
-                        <TableCell className="px-5 py-3 text-center">
-                          <span className={a.attendancePercent >= 80 ? "font-medium text-green-600 dark:text-green-400" : a.attendancePercent >= 60 ? "text-yellow-600 dark:text-yellow-500" : "font-medium text-red-600 dark:text-red-400"}>
-                            {a.attendancePercent}%
-                          </span>
-                        </TableCell>
-                        <TableCell className="px-5 py-3 text-center font-medium text-gray-800 dark:text-white/90">{a.attendanceMarks.toFixed(2)}</TableCell>
-                      </TableRow>
-                    ))
-                  )}
-                </TableBody>
-              </Table>
-              <TablePagination
-                className="no-print"
-                page={studentsPage}
-                totalPages={studentsTotalPages}
-                total={studentsAttTotal}
-                from={studentsFrom}
-                to={studentsTo}
-                pageSize={studentsPageSize}
-                onPageChange={setStudentsPage}
-                onPageSizeChange={setStudentsPageSize}
-              />
-              </>
+              <div className="px-3 py-4 sm:px-5">
+                {loading ? (
+                  <div className="flex items-center justify-center gap-2 py-16">
+                    <div className="h-5 w-5 animate-spin rounded-full border-2 border-brand-500 border-t-transparent" />
+                    <span className="text-sm text-gray-500">Loading...</span>
+                  </div>
+                ) : studentAttendances.length === 0 ? (
+                  <div className="py-12 text-center text-sm text-gray-500">
+                    No students in this class or no attendance sessions recorded.
+                  </div>
+                ) : sheetMeta && selectedClassInfo ? (
+                  <AttendanceSheetTable
+                    semester={selectedClassInfo.semester}
+                    year={selectedClassInfo.year}
+                    sheet={sheetMeta}
+                    students={studentAttendances}
+                  />
+                ) : (
+                  <div className="py-12 text-center text-sm text-gray-500">
+                    Sheet data unavailable. Try refreshing the report.
+                  </div>
+                )}
+              </div>
             ) : (
               <div className="px-5 py-12 text-center text-sm text-gray-500">
-                Select a class to view per-student attendance. Attendance marks (0-10) are used as 10% of the exam grade.
+                Select a class to view the attendance sheet. Marks use (total classes ÷ 12) × 10 for up to twelve dated sessions.
               </div>
             )
           ) : (
