@@ -49,10 +49,12 @@ type SheetMeta = {
   facultyLabel: string;
   courseLabel: string | null;
   lecturerName: string | null;
+  courseId?: number;
 };
 type Session = {
   id: number;
   class: { name: string; department: { code: string; name: string } };
+  course: { id: number; code: string; name: string };
   date: string;
   shift: string;
   takenBy: { name: string | null };
@@ -62,6 +64,7 @@ type Session = {
   excused: number;
   total: number;
 };
+type ScheduledCourse = { id: number; code: string; name: string };
 
 export default function AttendanceReportPage() {
   const [departments, setDepartments] = useState<Department[]>([]);
@@ -77,6 +80,8 @@ export default function AttendanceReportPage() {
   const [loading, setLoading] = useState(true);
   const [filterDept, setFilterDept] = useState("");
   const [filterClass, setFilterClass] = useState("");
+  const [filterCourse, setFilterCourse] = useState("");
+  const [scheduledCourses, setScheduledCourses] = useState<ScheduledCourse[]>([]);
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
   const [viewMode, setViewMode] = useState<"sessions" | "students">("students");
@@ -90,6 +95,7 @@ export default function AttendanceReportPage() {
       const params = new URLSearchParams();
       if (filterDept) params.set("departmentId", filterDept);
       if (filterClass) params.set("classId", filterClass);
+      if (filterCourse) params.set("courseId", filterCourse);
       if (dateFrom) params.set("dateFrom", dateFrom);
       if (dateTo) params.set("dateTo", dateTo);
       const res = await authFetch(`/api/reports/attendance?${params.toString()}`);
@@ -100,7 +106,7 @@ export default function AttendanceReportPage() {
       }
     } catch { /* empty */ }
     setLoading(false);
-  }, [filterDept, filterClass, dateFrom, dateTo]);
+  }, [filterDept, filterClass, filterCourse, dateFrom, dateTo]);
 
   useEffect(() => {
     authFetch("/api/departments").then((r) => { if (r.ok) r.json().then((d: Department[]) => setDepartments(d)); });
@@ -108,11 +114,34 @@ export default function AttendanceReportPage() {
   }, []);
 
   useEffect(() => {
+    if (!filterClass) {
+      setScheduledCourses([]);
+      setFilterCourse("");
+      return;
+    }
+    authFetch(`/api/classes/${filterClass}/scheduled-courses`).then((r) => {
+      if (!r.ok) {
+        setScheduledCourses([]);
+        setFilterCourse("");
+        return;
+      }
+      void r.json().then((d: { courses: { course: ScheduledCourse }[] }) => {
+        const list = (d.courses ?? []).map((row) => row.course);
+        setScheduledCourses(list);
+        setFilterCourse((prev) => {
+          if (prev && list.some((c) => String(c.id) === prev)) return prev;
+          return list[0] ? String(list[0].id) : "";
+        });
+      });
+    });
+  }, [filterClass]);
+
+  useEffect(() => {
     fetchReport();
   }, [fetchReport]);
 
   const fetchStudentAttendance = useCallback(async () => {
-    if (!filterClass) {
+    if (!filterClass || !filterCourse) {
       setStudentAttendances([]);
       setSelectedClassInfo(null);
       setSheetMeta(null);
@@ -120,7 +149,9 @@ export default function AttendanceReportPage() {
     }
     setLoading(true);
     try {
-      const res = await authFetch(`/api/reports/attendance-by-student?classId=${filterClass}`);
+      const res = await authFetch(
+        `/api/reports/attendance-by-student?classId=${encodeURIComponent(filterClass)}&courseId=${encodeURIComponent(filterCourse)}`
+      );
       if (res.ok) {
         const data = await res.json();
         setStudentAttendances(data.students || []);
@@ -137,7 +168,7 @@ export default function AttendanceReportPage() {
       setSheetMeta(null);
     }
     setLoading(false);
-  }, [filterClass]);
+  }, [filterClass, filterCourse]);
 
   useEffect(() => {
     if (viewMode === "students") fetchStudentAttendance();
@@ -148,6 +179,7 @@ export default function AttendanceReportPage() {
     const sheetReady =
       viewMode === "students" &&
       Boolean(filterClass) &&
+      Boolean(filterCourse) &&
       Boolean(sheetMeta) &&
       studentAttendances.length > 0 &&
       !loading;
@@ -160,7 +192,7 @@ export default function AttendanceReportPage() {
     return () => {
       root.classList.remove("print-attendance-sheet-only");
     };
-  }, [viewMode, filterClass, sheetMeta, studentAttendances.length, loading]);
+  }, [viewMode, filterClass, filterCourse, sheetMeta, studentAttendances.length, loading]);
 
   const filteredClasses = filterDept ? classes.filter((c) => c.department?.id === Number(filterDept)) : classes;
 
@@ -174,7 +206,7 @@ export default function AttendanceReportPage() {
     total: sessionsTotal,
     from: sessionsFrom,
     to: sessionsTo,
-  } = usePagination(sessions, [filterDept, filterClass, dateFrom, dateTo]);
+  } = usePagination(sessions, [filterDept, filterClass, filterCourse, dateFrom, dateTo]);
   const handlePrint = () => window.print();
 
   return (
@@ -221,6 +253,7 @@ export default function AttendanceReportPage() {
                 onChange={(e) => {
                   setFilterDept(e.target.value);
                   setFilterClass("");
+                  setFilterCourse("");
                 }}
                 className="h-10 w-full min-w-0 sm:w-auto sm:min-w-[180px] rounded-lg border border-gray-200 bg-transparent px-3 text-sm text-gray-800 outline-none focus:border-brand-300 dark:border-gray-700 dark:text-white/80"
               >
@@ -234,13 +267,34 @@ export default function AttendanceReportPage() {
               <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400">Class</label>
               <select
                 value={filterClass}
-                onChange={(e) => setFilterClass(e.target.value)}
+                onChange={(e) => {
+                  setFilterClass(e.target.value);
+                  setFilterCourse("");
+                }}
                 className="h-10 w-full min-w-0 sm:w-auto sm:min-w-[200px] rounded-lg border border-gray-200 bg-transparent px-3 text-sm text-gray-800 outline-none focus:border-brand-300 dark:border-gray-700 dark:text-white/80"
               >
                 <option value="">All Classes</option>
                 {filteredClasses.map((c) => (
                   <option key={c.id} value={c.id}>
                     {c.department?.code} - {c.name} ({c.semester} {c.year})
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400">Course (attendance / sheet)</label>
+              <select
+                value={filterCourse}
+                onChange={(e) => setFilterCourse(e.target.value)}
+                disabled={!filterClass || scheduledCourses.length === 0}
+                className="h-10 w-full min-w-0 sm:w-auto sm:min-w-[220px] rounded-lg border border-gray-200 bg-transparent px-3 text-sm text-gray-800 outline-none focus:border-brand-300 disabled:opacity-50 dark:border-gray-700 dark:text-white/80"
+              >
+                <option value="">
+                  {!filterClass ? "Select a class first" : scheduledCourses.length === 0 ? "No courses on timetable" : "Select course"}
+                </option>
+                {scheduledCourses.map((c) => (
+                  <option key={c.id} value={String(c.id)}>
+                    {c.code} — {c.name}
                   </option>
                 ))}
               </select>
@@ -290,9 +344,11 @@ export default function AttendanceReportPage() {
         ) : (
           <div className="flex flex-wrap gap-4 border-b border-gray-100 px-5 py-4 dark:border-gray-800">
             <div className="rounded-xl bg-brand-50 px-4 py-2 dark:bg-brand-500/10">
-              <span className="text-xs text-gray-500 dark:text-gray-400">Class</span>
+              <span className="text-xs text-gray-500 dark:text-gray-400">Class &amp; course</span>
               <p className="text-lg font-bold text-brand-600 dark:text-brand-400">
-                {selectedClassInfo ? `${selectedClassInfo.name} (${selectedClassInfo.semester} ${selectedClassInfo.year})` : "Select a class"}
+                {selectedClassInfo && sheetMeta?.courseLabel
+                  ? `${selectedClassInfo.name} · ${sheetMeta.courseLabel}`
+                  : "Select class and course"}
               </p>
             </div>
             <div className="rounded-xl bg-gray-50 px-4 py-2 dark:bg-white/5">
@@ -324,7 +380,7 @@ export default function AttendanceReportPage() {
 
         <div className="overflow-x-auto">
           {viewMode === "students" ? (
-            filterClass ? (
+            filterClass && filterCourse ? (
               <div className="px-3 py-4 sm:px-5">
                 {loading ? (
                   <div className="flex items-center justify-center gap-2 py-16">
@@ -355,7 +411,7 @@ export default function AttendanceReportPage() {
               </div>
             ) : (
               <div className="px-5 py-12 text-center text-sm text-gray-500">
-                Select a class to view the attendance sheet. Marks use (total classes ÷ 12) × 10 for up to twelve dated sessions.
+                Select a class and a course to view per-course attendance. The course list comes from the class schedule. Marks use (total classes ÷ 12) × 10 for up to twelve sessions for that course.
               </div>
             )
           ) : (
@@ -364,6 +420,7 @@ export default function AttendanceReportPage() {
             <TableHeader className="border-b border-gray-100 dark:border-gray-800">
               <TableRow>
                 <TableCell isHeader className="px-5 py-3 text-left text-xs font-medium uppercase text-gray-500 dark:text-gray-400">Class</TableCell>
+                <TableCell isHeader className="px-5 py-3 text-left text-xs font-medium uppercase text-gray-500 dark:text-gray-400">Course</TableCell>
                 <TableCell isHeader className="px-5 py-3 text-center text-xs font-medium uppercase text-gray-500 dark:text-gray-400">Date</TableCell>
                 <TableCell isHeader className="px-5 py-3 text-center text-xs font-medium uppercase text-gray-500 dark:text-gray-400">Shift</TableCell>
                 <TableCell isHeader className="px-5 py-3 text-center text-xs font-medium uppercase text-gray-500 dark:text-gray-400">Present</TableCell>
@@ -376,7 +433,7 @@ export default function AttendanceReportPage() {
             <TableBody>
               {loading ? (
                 <TableRow>
-                  <TableCell colSpan={8} className="px-5 py-10 text-center">
+                  <TableCell colSpan={9} className="px-5 py-10 text-center">
                     <div className="flex items-center justify-center gap-2">
                       <div className="h-5 w-5 animate-spin rounded-full border-2 border-brand-500 border-t-transparent" />
                       <span className="text-sm text-gray-500">Loading...</span>
@@ -385,7 +442,7 @@ export default function AttendanceReportPage() {
                 </TableRow>
               ) : sessions.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={8} className="px-5 py-10 text-center text-sm text-gray-500">
+                  <TableCell colSpan={9} className="px-5 py-10 text-center text-sm text-gray-500">
                     No attendance sessions match the selected filters.
                   </TableCell>
                 </TableRow>
@@ -395,6 +452,10 @@ export default function AttendanceReportPage() {
                     <TableCell className="px-5 py-3">
                       <p className="font-medium text-gray-800 dark:text-white/90">{s.class?.department?.code} - {s.class?.name}</p>
                       <p className="text-xs text-gray-500 dark:text-gray-400">{s.class?.department?.name}</p>
+                    </TableCell>
+                    <TableCell className="px-5 py-3">
+                      <p className="text-sm font-medium text-gray-800 dark:text-white/90">{s.course?.code}</p>
+                      <p className="line-clamp-2 text-xs text-gray-500 dark:text-gray-400">{s.course?.name}</p>
                     </TableCell>
                     <TableCell className="px-5 py-3 text-center text-sm text-gray-700 dark:text-gray-300">
                       {new Date(s.date).toLocaleDateString()}

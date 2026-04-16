@@ -11,11 +11,13 @@ export async function GET(req: NextRequest) {
 
     const { searchParams } = new URL(req.url);
     const classId = searchParams.get("classId");
+    const courseId = searchParams.get("courseId");
     const dateFrom = searchParams.get("dateFrom");
     const dateTo = searchParams.get("dateTo");
 
     const where: Record<string, unknown> = {};
     if (classId) where.classId = Number(classId);
+    if (courseId) where.courseId = Number(courseId);
     if (dateFrom || dateTo) {
       const dateFilter: Record<string, Date> = {};
       if (dateFrom) dateFilter.gte = new Date(dateFrom);
@@ -33,6 +35,7 @@ export async function GET(req: NextRequest) {
             department: { select: { id: true, name: true, code: true } },
           },
         },
+        course: { select: { id: true, code: true, name: true } },
         takenBy: { select: { id: true, name: true, email: true } },
         _count: { select: { records: true } },
         records: {
@@ -51,6 +54,8 @@ export async function GET(req: NextRequest) {
         return {
           id: s.id,
           classId: s.classId,
+          courseId: s.courseId,
+          course: s.course,
           class: s.class,
           date: s.date,
           shift: s.shift,
@@ -83,12 +88,44 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json();
-    const { classId, date, shift, note, records } = body;
+    const { classId, courseId, date, shift, note, records } = body;
 
     const parsedClassId = Number(classId);
-    if (!Number.isInteger(parsedClassId) || !date || !shift) {
+    const parsedCourseId = Number(courseId);
+    if (
+      !Number.isInteger(parsedClassId) ||
+      !Number.isInteger(parsedCourseId) ||
+      !date ||
+      !shift
+    ) {
       return NextResponse.json(
-        { error: "classId, date, and shift are required" },
+        { error: "classId, courseId, date, and shift are required" },
+        { status: 400 }
+      );
+    }
+
+    const cls = await prisma.class.findUnique({
+      where: { id: parsedClassId },
+      select: { id: true, semester: true, year: true },
+    });
+    if (!cls) {
+      return NextResponse.json({ error: "Class not found" }, { status: 404 });
+    }
+
+    const scheduled = await prisma.classSchedule.findFirst({
+      where: {
+        classId: parsedClassId,
+        courseId: parsedCourseId,
+        semester: cls.semester,
+        year: cls.year,
+      },
+    });
+    if (!scheduled) {
+      return NextResponse.json(
+        {
+          error:
+            "This course is not on this class timetable for the current semester. Add it in Schedule first.",
+        },
         { status: 400 }
       );
     }
@@ -108,11 +145,12 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Check for existing session
+    // Check for existing session (same class, course, date, shift)
     const existing = await prisma.attendanceSession.findUnique({
       where: {
-        classId_date_shift: {
+        classId_courseId_date_shift: {
           classId: parsedClassId,
+          courseId: parsedCourseId,
           date: new Date(date),
           shift,
         },
@@ -120,7 +158,9 @@ export async function POST(req: NextRequest) {
     });
     if (existing) {
       return NextResponse.json(
-        { error: `Attendance for this class on ${date} (${shift} shift) has already been taken` },
+        {
+          error: `Attendance for this course on ${date} (${shift} shift) has already been taken`,
+        },
         { status: 400 }
       );
     }
@@ -128,6 +168,7 @@ export async function POST(req: NextRequest) {
     const session = await prisma.attendanceSession.create({
       data: {
         classId: parsedClassId,
+        courseId: parsedCourseId,
         date: new Date(date),
         shift,
         takenById: auth.userId,
@@ -150,6 +191,7 @@ export async function POST(req: NextRequest) {
             department: { select: { id: true, name: true, code: true } },
           },
         },
+        course: { select: { id: true, code: true, name: true } },
         takenBy: { select: { id: true, name: true, email: true } },
         records: {
           include: {

@@ -5,6 +5,7 @@ import {
   computeAttendanceMarks,
   computeAttendancePercent,
 } from "@/lib/attendance";
+import { getSemesterDateRange } from "@/lib/semester-dates";
 
 export async function GET(req: NextRequest) {
   try {
@@ -73,35 +74,68 @@ export async function GET(req: NextRequest) {
       orderBy: [{ year: "desc" }, { semester: "asc" }, { student: { firstName: "asc" } }],
     });
 
-    // When filtering by class, enrich records with attendance (Present+Excused = 10% of exam)
+    // When filtering by class, enrich with per-course attendance (sessions for that exam's course)
     let enrichedRecords = records;
     if (classId) {
-      const sessionIds = (
-        await prisma.attendanceSession.findMany({
-          where: { classId: Number(classId) },
-          select: { id: true },
-        })
-      ).map((s) => s.id);
-      const totalSessions = sessionIds.length;
-      const attendanceRecords = await prisma.attendanceRecord.findMany({
-        where: {
-          sessionId: { in: sessionIds },
-          studentId: { in: [...new Set(records.map((r) => r.student.id))] },
-        },
-        select: { studentId: true, status: true },
+      const cls = await prisma.class.findUnique({
+        where: { id: Number(classId) },
+        select: { semester: true, year: true },
       });
-      const byStudent = new Map<
-        number,
+      const { start, end } = cls
+        ? getSemesterDateRange(cls.semester, cls.year)
+        : { start: new Date(0), end: new Date() };
+
+      const studentIds = [...new Set(records.map((r) => r.student.id))];
+      const courseIds = [...new Set(records.map((r) => r.courseId))];
+
+      const sessionsByCourse = new Map<number, number[]>();
+      for (const cid of courseIds) {
+        const ids = (
+          await prisma.attendanceSession.findMany({
+            where: {
+              classId: Number(classId),
+              courseId: cid,
+              date: { gte: start, lte: end },
+            },
+            select: { id: true },
+          })
+        ).map((s) => s.id);
+        sessionsByCourse.set(cid, ids);
+      }
+
+      const attendanceByCourseStudent = new Map<
+        string,
         { present: number; excused: number }
       >();
-      for (const r of attendanceRecords) {
-        if (!byStudent.has(r.studentId)) byStudent.set(r.studentId, { present: 0, excused: 0 });
-        const agg = byStudent.get(r.studentId)!;
-        if (r.status === "Present") agg.present++;
-        else if (r.status === "Excused") agg.excused++;
+      for (const cid of courseIds) {
+        const sessionIds = sessionsByCourse.get(cid) ?? [];
+        if (sessionIds.length === 0) continue;
+        const att = await prisma.attendanceRecord.findMany({
+          where: {
+            sessionId: { in: sessionIds },
+            studentId: { in: studentIds },
+          },
+          select: { studentId: true, status: true },
+        });
+        for (const row of att) {
+          const k = `${cid}:${row.studentId}`;
+          if (!attendanceByCourseStudent.has(k)) {
+            attendanceByCourseStudent.set(k, { present: 0, excused: 0 });
+          }
+          const agg = attendanceByCourseStudent.get(k)!;
+          if (row.status === "Present") agg.present++;
+          else if (row.status === "Excused") agg.excused++;
+        }
       }
+
       enrichedRecords = records.map((r) => {
-        const agg = byStudent.get(r.student.id) ?? { present: 0, excused: 0 };
+        const sessionIds = sessionsByCourse.get(r.courseId) ?? [];
+        const totalSessions = sessionIds.length;
+        const agg =
+          attendanceByCourseStudent.get(`${r.courseId}:${r.student.id}`) ?? {
+            present: 0,
+            excused: 0,
+          };
         const presentPlusExcused = agg.present + agg.excused;
         return {
           ...r,

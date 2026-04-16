@@ -18,6 +18,7 @@ import { CalenderIcon } from "@/icons";
 type AttendanceItem = {
   id: number;
   class: { name: string; department: { code: string; name: string } };
+  course: { code: string; name: string };
   date: string;
   shift: string;
   takenBy: { name: string | null };
@@ -80,6 +81,9 @@ export default function RecentAttendance() {
               <TableCell isHeader className="py-3 text-left text-xs font-medium uppercase text-gray-500 dark:text-gray-400">
                 Class
               </TableCell>
+              <TableCell isHeader className="py-3 text-left text-xs font-medium uppercase text-gray-500 dark:text-gray-400">
+                Course
+              </TableCell>
               <TableCell isHeader className="py-3 text-center text-xs font-medium uppercase text-gray-500 dark:text-gray-400">
                 Date
               </TableCell>
@@ -97,7 +101,7 @@ export default function RecentAttendance() {
           <TableBody className="divide-y divide-gray-100 dark:divide-gray-800">
             {loading ? (
               <TableRow>
-                <TableCell colSpan={5} className="py-8 text-center">
+                <TableCell colSpan={6} className="py-8 text-center">
                   <div className="flex items-center justify-center gap-2">
                     <div className="h-5 w-5 animate-spin rounded-full border-2 border-brand-500 border-t-transparent" />
                     <span className="text-sm text-gray-500">Loading...</span>
@@ -106,7 +110,7 @@ export default function RecentAttendance() {
               </TableRow>
             ) : sessions.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={5} className="py-8 text-center text-sm text-gray-500">
+                <TableCell colSpan={6} className="py-8 text-center text-sm text-gray-500">
                   No attendance sessions yet.
                 </TableCell>
               </TableRow>
@@ -122,6 +126,14 @@ export default function RecentAttendance() {
                         {s.class?.department?.name}
                       </span>
                     </div>
+                  </TableCell>
+                  <TableCell className="py-3">
+                    <p className="text-sm font-medium text-gray-800 dark:text-white/90">
+                      {s.course?.code ?? "—"}
+                    </p>
+                    <p className="line-clamp-2 text-xs text-gray-500 dark:text-gray-400">
+                      {s.course?.name ?? ""}
+                    </p>
                   </TableCell>
                   <TableCell className="py-3 text-center text-sm text-gray-600 dark:text-gray-300">
                     {new Date(s.date).toLocaleDateString()}

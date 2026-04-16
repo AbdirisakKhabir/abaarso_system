@@ -51,7 +51,11 @@ export async function GET(req: NextRequest) {
     // Compute attendance marks (0-10) for each student - semester-filtered
     const { start, end } = getSemesterDateRange(cls.semester, cls.year);
     const sessions = await prisma.attendanceSession.findMany({
-      where: { classId: Number(classId), date: { gte: start, lte: end } },
+      where: {
+        classId: Number(classId),
+        courseId: Number(courseId),
+        date: { gte: start, lte: end },
+      },
       select: { id: true },
     });
     const sessionIds = sessions.map((s) => s.id);

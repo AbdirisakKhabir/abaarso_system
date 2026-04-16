@@ -104,6 +104,7 @@ export async function GET(req: NextRequest) {
     const sessions = await prisma.attendanceSession.findMany({
       where: {
         classId: parsedClassId,
+        courseId: parsedCourseId,
         date: { gte: start, lte: end },
       },
       select: { id: true },

@@ -57,11 +57,19 @@ export async function GET(req: NextRequest) {
 
     // Attendance (semester-filtered)
     const { start, end } = getSemesterDateRange(cls.semester, cls.year);
+    const sessionWhere: {
+      classId: number;
+      date: { gte: Date; lte: Date };
+      courseId?: number;
+    } = {
+      classId: Number(classId),
+      date: { gte: start, lte: end },
+    };
+    if (courseId) {
+      sessionWhere.courseId = Number(courseId);
+    }
     const sessions = await prisma.attendanceSession.findMany({
-      where: {
-        classId: Number(classId),
-        date: { gte: start, lte: end },
-      },
+      where: sessionWhere,
       select: { id: true },
     });
     const sessionIds = sessions.map((s) => s.id);

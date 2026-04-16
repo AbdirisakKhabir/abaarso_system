@@ -56,6 +56,7 @@ export async function GET(req: NextRequest) {
               department: { select: { code: true, name: true } },
             },
           },
+          course: { select: { code: true, name: true } },
           takenBy: { select: { name: true } },
           _count: { select: { records: true } },
           records: { select: { status: true } },
@@ -153,6 +154,7 @@ export async function GET(req: NextRequest) {
       recentAttendance: recentAttendance.map((s) => ({
         id: s.id,
         class: s.class,
+        course: s.course,
         date: s.date,
         shift: s.shift,
         takenBy: s.takenBy,

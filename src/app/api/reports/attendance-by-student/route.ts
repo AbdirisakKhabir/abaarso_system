@@ -8,10 +8,9 @@ import {
 import { getSemesterDateRange } from "@/lib/semester-dates";
 
 /**
- * GET /api/reports/attendance-by-student?classId=X&semester=Y&year=Z
- * Returns per-student attendance for a class: Present, Absent, Late, Excused,
- * attendance %, and attendance marks (0-10) for exam integration.
- * If semester and year are omitted, uses the class's semester/year.
+ * GET /api/reports/attendance-by-student?classId=X&courseId=Y&semester=&year=
+ * Per-course attendance for students in the class (sessions filtered by course).
+ * courseId is required — must match a course on the class schedule.
  */
 export async function GET(req: NextRequest) {
   try {
@@ -22,6 +21,7 @@ export async function GET(req: NextRequest) {
 
     const { searchParams } = new URL(req.url);
     const classId = searchParams.get("classId");
+    const courseIdParam = searchParams.get("courseId");
     const semesterParam = searchParams.get("semester");
     const yearParam = searchParams.get("year");
 
@@ -31,6 +31,13 @@ export async function GET(req: NextRequest) {
         { status: 400 }
       );
     }
+    if (!courseIdParam || !Number.isInteger(Number(courseIdParam))) {
+      return NextResponse.json(
+        { error: "courseId is required" },
+        { status: 400 }
+      );
+    }
+    const filterCourseId = Number(courseIdParam);
 
     const cls = await prisma.class.findUnique({
       where: { id: Number(classId) },
@@ -47,12 +54,36 @@ export async function GET(req: NextRequest) {
     const year = yearParam ? Number(yearParam) : cls.year;
     const { start, end } = getSemesterDateRange(semester, year);
 
+    const scheduleMeta = await prisma.classSchedule.findFirst({
+      where: {
+        classId: Number(classId),
+        courseId: filterCourseId,
+        semester: cls.semester,
+        year: cls.year,
+      },
+      include: {
+        course: { select: { code: true, name: true } },
+        lecturer: { select: { name: true } },
+      },
+    });
+
+    if (!scheduleMeta) {
+      return NextResponse.json(
+        {
+          error:
+            "This course is not on the schedule for this class in this semester, or it was removed.",
+        },
+        { status: 400 }
+      );
+    }
+
     /** Up to 12 sessions map to W1–W6 (first half) and W1–W6 (second half), ordered by date. */
     const SHEET_SLOTS = 12;
 
     const sessionsOrdered = await prisma.attendanceSession.findMany({
       where: {
         classId: Number(classId),
+        courseId: filterCourseId,
         date: { gte: start, lte: end },
       },
       orderBy: [{ date: "asc" }, { shift: "asc" }],
@@ -65,18 +96,6 @@ export async function GET(req: NextRequest) {
       { length: SHEET_SLOTS },
       (_, i) => sessionsOrdered[i]?.id ?? null
     );
-
-    const scheduleMeta = await prisma.classSchedule.findFirst({
-      where: {
-        classId: Number(classId),
-        semester: cls.semester,
-        year: cls.year,
-      },
-      include: {
-        course: { select: { code: true, name: true } },
-        lecturer: { select: { name: true } },
-      },
-    });
 
     // Get all students in this class (from Student.classId)
     const students = await prisma.student.findMany({
@@ -98,10 +117,8 @@ export async function GET(req: NextRequest) {
         sheet: {
           slotSessionIds: Array.from({ length: SHEET_SLOTS }, () => null),
           facultyLabel: `FACULTY OF ${cls.department.code} — ${cls.department.name}`,
-          courseLabel: scheduleMeta
-            ? `${scheduleMeta.course.code} — ${scheduleMeta.course.name}`
-            : null,
-          lecturerName: scheduleMeta?.lecturer?.name ?? null,
+          courseLabel: `${scheduleMeta.course.code} — ${scheduleMeta.course.name}`,
+          lecturerName: scheduleMeta.lecturer?.name ?? null,
         },
       });
     }
@@ -214,10 +231,9 @@ export async function GET(req: NextRequest) {
       sheet: {
         slotSessionIds,
         facultyLabel: `FACULTY OF ${cls.department.code} — ${cls.department.name}`,
-        courseLabel: scheduleMeta
-          ? `${scheduleMeta.course.code} — ${scheduleMeta.course.name}`
-          : null,
-        lecturerName: scheduleMeta?.lecturer?.name ?? null,
+        courseLabel: `${scheduleMeta.course.code} — ${scheduleMeta.course.name}`,
+        lecturerName: scheduleMeta.lecturer?.name ?? null,
+        courseId: filterCourseId,
       },
     });
   } catch (e) {

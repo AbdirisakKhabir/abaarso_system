@@ -31,6 +31,8 @@ type ClassOption = {
 type SessionRow = {
   id: number;
   classId: number;
+  courseId: number;
+  course: { id: number; code: string; name: string };
   class: ClassOption;
   date: string;
   shift: string;
@@ -62,6 +64,7 @@ type RecordEntry = {
 type SessionDetail = {
   id: number;
   class: ClassOption;
+  course: { id: number; code: string; name: string };
   date: string;
   shift: string;
   takenBy: { id: number; name: string | null; email: string };
@@ -98,10 +101,15 @@ export default function AttendancePage() {
   const [showTake, setShowTake] = useState(false);
   const [takeForm, setTakeForm] = useState({
     classId: "",
+    courseId: "",
     date: new Date().toISOString().split("T")[0],
     shift: "Morning",
     note: "",
   });
+  const [scheduledCourses, setScheduledCourses] = useState<
+    { id: number; code: string; name: string }[]
+  >([]);
+  const [loadingCourses, setLoadingCourses] = useState(false);
   const [students, setStudents] = useState<RecordEntry[]>([]);
   const [loadingStudents, setLoadingStudents] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -139,6 +147,35 @@ export default function AttendancePage() {
       setLoading(false);
     })();
   }, []);
+
+  async function loadScheduledCourses(classId: string) {
+    if (!classId) {
+      setScheduledCourses([]);
+      return;
+    }
+    setLoadingCourses(true);
+    try {
+      const res = await authFetch(`/api/classes/${classId}/scheduled-courses`);
+      if (res.ok) {
+        const data = await res.json();
+        const list = (data.courses ?? []).map(
+          (row: { course: { id: number; code: string; name: string } }) =>
+            row.course
+        );
+        setScheduledCourses(list);
+        setTakeForm((f) => ({
+          ...f,
+          courseId: list[0] ? String(list[0].id) : "",
+        }));
+      } else {
+        setScheduledCourses([]);
+      }
+    } catch {
+      setScheduledCourses([]);
+    } finally {
+      setLoadingCourses(false);
+    }
+  }
 
   // Load students when class is selected
   async function loadStudentsForClass(classId: string) {
@@ -178,14 +215,19 @@ export default function AttendancePage() {
     const defaultClassId = classes[0] ? String(classes[0].id) : "";
     setTakeForm({
       classId: defaultClassId,
+      courseId: "",
       date: new Date().toISOString().split("T")[0],
       shift: "Morning",
       note: "",
     });
+    setScheduledCourses([]);
     setStudents([]);
     setSubmitError("");
     setShowTake(true);
-    if (defaultClassId) loadStudentsForClass(defaultClassId);
+    if (defaultClassId) {
+      void loadScheduledCourses(defaultClassId);
+      loadStudentsForClass(defaultClassId);
+    }
   }
 
   function updateStudentStatus(studentId: number, status: string) {
@@ -203,8 +245,8 @@ export default function AttendancePage() {
   async function handleTakeSubmit(e: React.FormEvent) {
     e.preventDefault();
     setSubmitError("");
-    if (!takeForm.classId || students.length === 0) {
-      setSubmitError("Select a class with students first.");
+    if (!takeForm.classId || !takeForm.courseId || students.length === 0) {
+      setSubmitError("Select a class, course, and ensure students are loaded.");
       return;
     }
     setSubmitting(true);
@@ -214,6 +256,7 @@ export default function AttendancePage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           classId: Number(takeForm.classId),
+          courseId: Number(takeForm.courseId),
           date: takeForm.date,
           shift: takeForm.shift,
           note: takeForm.note || undefined,
@@ -348,6 +391,7 @@ export default function AttendancePage() {
               <TableRow className="bg-transparent! hover:bg-transparent!">
                 <TableCell isHeader>#</TableCell>
                 <TableCell isHeader>Class</TableCell>
+                <TableCell isHeader>Course</TableCell>
                 <TableCell isHeader>Date</TableCell>
                 <TableCell isHeader>Shift</TableCell>
                 <TableCell isHeader>Taken By</TableCell>
@@ -369,6 +413,16 @@ export default function AttendancePage() {
                       </p>
                       <p className="text-xs text-gray-400 dark:text-gray-500">
                         {s.class.department.code}
+                      </p>
+                    </div>
+                  </TableCell>
+                  <TableCell>
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium text-gray-800 dark:text-white/90">
+                        {s.course.code}
+                      </p>
+                      <p className="line-clamp-2 text-xs text-gray-500 dark:text-gray-400">
+                        {s.course.name}
                       </p>
                     </div>
                   </TableCell>
@@ -488,7 +542,7 @@ export default function AttendancePage() {
                 )}
 
                 {/* Session Details */}
-                <div className="mb-5 grid grid-cols-2 gap-4 sm:grid-cols-4">
+                <div className="mb-5 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
                   <div>
                     <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">
                       Class <span className="text-error-500">*</span>
@@ -497,8 +551,10 @@ export default function AttendancePage() {
                       required
                       value={takeForm.classId}
                       onChange={(e) => {
-                        setTakeForm((f) => ({ ...f, classId: e.target.value }));
-                        loadStudentsForClass(e.target.value);
+                        const v = e.target.value;
+                        setTakeForm((f) => ({ ...f, classId: v, courseId: "" }));
+                        void loadScheduledCourses(v);
+                        loadStudentsForClass(v);
                       }}
                       className="h-11 w-full appearance-none rounded-lg border border-gray-200 bg-transparent px-3 py-2.5 text-sm text-gray-800 outline-none focus:border-brand-300 focus:ring-2 focus:ring-brand-500/20 dark:border-gray-700 dark:text-white dark:focus:border-brand-500/40"
                     >
@@ -509,6 +565,38 @@ export default function AttendancePage() {
                         </option>
                       ))}
                     </select>
+                  </div>
+                  <div>
+                    <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">
+                      Course <span className="text-error-500">*</span>
+                    </label>
+                    <select
+                      required
+                      disabled={!takeForm.classId || loadingCourses}
+                      value={takeForm.courseId}
+                      onChange={(e) =>
+                        setTakeForm((f) => ({ ...f, courseId: e.target.value }))
+                      }
+                      className="h-11 w-full appearance-none rounded-lg border border-gray-200 bg-transparent px-3 py-2.5 text-sm text-gray-800 outline-none focus:border-brand-300 focus:ring-2 focus:ring-brand-500/20 disabled:opacity-50 dark:border-gray-700 dark:text-white dark:focus:border-brand-500/40"
+                    >
+                      <option value="">
+                        {loadingCourses
+                          ? "Loading courses…"
+                          : takeForm.classId
+                            ? "Select course"
+                            : "Select class first"}
+                      </option>
+                      {scheduledCourses.map((c) => (
+                        <option key={c.id} value={String(c.id)}>
+                          {c.code} — {c.name}
+                        </option>
+                      ))}
+                    </select>
+                    {takeForm.classId && !loadingCourses && scheduledCourses.length === 0 && (
+                      <p className="mt-1 text-xs text-amber-600 dark:text-amber-400">
+                        No courses on this class timetable. Add schedule slots first.
+                      </p>
+                    )}
                   </div>
                   <DateInput
                     id="attendance-session-date"
@@ -523,6 +611,8 @@ export default function AttendancePage() {
                     required
                     inputClassName="h-11 w-full rounded-lg border border-gray-200 bg-transparent px-3 py-2.5 text-sm text-gray-800 outline-none focus:border-brand-300 focus:ring-2 focus:ring-brand-500/20 dark:border-gray-700 dark:text-white dark:focus:border-brand-500/40"
                   />
+                </div>
+                <div className="mb-5 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
                   <div>
                     <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">
                       Shift <span className="text-error-500">*</span>
@@ -709,7 +799,12 @@ export default function AttendancePage() {
                 </Button>
                 <Button
                   type="submit"
-                  disabled={submitting || students.length === 0}
+                  disabled={
+                    submitting ||
+                    students.length === 0 ||
+                    !takeForm.courseId ||
+                    scheduledCourses.length === 0
+                  }
                   size="sm"
                 >
                   {submitting ? "Saving..." : "Save Attendance"}
@@ -733,6 +828,7 @@ export default function AttendancePage() {
                   Attendance Details
                 </h2>
                 <p className="mt-0.5 text-xs text-gray-400 dark:text-gray-500">
+                  {viewSession.course.code} — {viewSession.course.name} &middot;{" "}
                   {viewSession.class.name} &middot; {viewSession.class.department.code} &middot;{" "}
                   {new Date(viewSession.date).toLocaleDateString("en-US", {
                     weekday: "long",

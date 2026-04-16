@@ -147,9 +147,10 @@ model Course {
   isActive       Boolean         @default(true)
   examRecords    ExamRecord[]
   lecturers      LecturerCourse[]
-  classSchedules ClassSchedule[]
-  createdAt      DateTime        @default(now())
-  updatedAt      DateTime        @updatedAt
+  classSchedules     ClassSchedule[]
+  attendanceSessions AttendanceSession[]
+  createdAt          DateTime        @default(now())
+  updatedAt          DateTime        @updatedAt
 
   @@unique([code, departmentId])
   @@unique([name, departmentId])
@@ -376,6 +377,8 @@ model AttendanceSession {
   id        Int                @id @default(autoincrement())
   classId   Int
   class     Class              @relation(fields: [classId], references: [id], onDelete: Restrict)
+  courseId  Int
+  course    Course             @relation(fields: [courseId], references: [id], onDelete: Restrict)
   date      DateTime           @db.Date
   shift     String // "Morning", "Afternoon", "Evening"
   takenById Int
@@ -386,7 +389,7 @@ model AttendanceSession {
   createdAt DateTime           @default(now())
   updatedAt DateTime           @updatedAt
 
-  @@unique([classId, date, shift])
+  @@unique([classId, courseId, date, shift])
   @@map("attendance_sessions")
 }
 

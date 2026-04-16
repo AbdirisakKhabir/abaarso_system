@@ -27,6 +27,7 @@ export async function GET(req: NextRequest, ctx: RouteContext) {
             department: { select: { id: true, name: true, code: true } },
           },
         },
+        course: { select: { id: true, code: true, name: true } },
         takenBy: { select: { id: true, name: true, email: true } },
         records: {
           include: {
@@ -118,6 +119,7 @@ export async function PATCH(req: NextRequest, ctx: RouteContext) {
             department: { select: { id: true, name: true, code: true } },
           },
         },
+        course: { select: { id: true, code: true, name: true } },
         takenBy: { select: { id: true, name: true, email: true } },
         records: {
           include: {
