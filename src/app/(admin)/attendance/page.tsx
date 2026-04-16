@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import Image from "next/image";
 import PageBreadCrumb from "@/components/common/PageBreadCrumb";
 import Button from "@/components/ui/button/Button";
@@ -114,6 +114,8 @@ export default function AttendancePage() {
   const [showTake, setShowTake] = useState(false);
   const [takeForm, setTakeForm] = useState({
     departmentId: "",
+    semesterName: "",
+    year: "",
     classId: "",
     courseId: "",
     date: new Date().toISOString().split("T")[0],
@@ -210,7 +212,7 @@ export default function AttendancePage() {
         setScheduledCourses(list);
         setTakeForm((f) => ({
           ...f,
-          courseId: list[0] ? String(list[0].id) : "",
+          courseId: "",
         }));
       } else {
         setScheduledCourses([]);
@@ -285,6 +287,8 @@ export default function AttendancePage() {
         setTakeContextSemesters(data.semesters ?? []);
         setTakeForm((f) => ({
           ...f,
+          semesterName: "",
+          year: "",
           classId: "",
           courseId: "",
         }));
@@ -307,6 +311,8 @@ export default function AttendancePage() {
   function openTakeAttendance() {
     setTakeForm({
       departmentId: "",
+      semesterName: "",
+      year: "",
       classId: "",
       courseId: "",
       date: new Date().toISOString().split("T")[0],
@@ -339,12 +345,14 @@ export default function AttendancePage() {
     setSubmitError("");
     if (
       !takeForm.departmentId ||
+      !takeForm.semesterName ||
+      !takeForm.year ||
       !takeForm.classId ||
       !takeForm.courseId ||
       students.length === 0
     ) {
       setSubmitError(
-        "Select department, class, and course, and ensure students are loaded."
+        "Select department, semester, year, class, and course, and ensure students are loaded."
       );
       return;
     }
@@ -392,6 +400,32 @@ export default function AttendancePage() {
       alert(data.error || "Failed to delete");
     }
   }
+
+  const semesterSelectOptions = useMemo(() => {
+    if (takeContextSemesters.length > 0) {
+      return [...takeContextSemesters]
+        .sort((a, b) => a.sortOrder - b.sortOrder)
+        .map((s) => ({ value: s.name, label: s.name }));
+    }
+    const names = [...new Set(takeClasses.map((c) => c.semester))].sort();
+    return names.map((name) => ({ value: name, label: name }));
+  }, [takeContextSemesters, takeClasses]);
+
+  const yearOptions = useMemo(() => {
+    const pool = takeForm.semesterName
+      ? takeClasses.filter((c) => c.semester === takeForm.semesterName)
+      : takeClasses;
+    return [...new Set(pool.map((c) => c.year))].sort((a, b) => b - a);
+  }, [takeClasses, takeForm.semesterName]);
+
+  const filteredTakeClasses = useMemo(() => {
+    return takeClasses.filter((c) => {
+      if (takeForm.semesterName && c.semester !== takeForm.semesterName)
+        return false;
+      if (takeForm.year && String(c.year) !== takeForm.year) return false;
+      return true;
+    });
+  }, [takeClasses, takeForm.semesterName, takeForm.year]);
 
   const filtered = sessions.filter((s) => {
     if (filterDepartmentId !== "all" && String(s.class.department.id) !== filterDepartmentId)
@@ -673,6 +707,8 @@ export default function AttendancePage() {
                         setTakeForm((f) => ({
                           ...f,
                           departmentId: v,
+                          semesterName: "",
+                          year: "",
                           classId: "",
                           courseId: "",
                         }));
@@ -692,27 +728,93 @@ export default function AttendancePage() {
                     )}
                   </div>
                 </div>
-                {takeForm.departmentId &&
-                  (takeContextCourses.length > 0 || takeContextSemesters.length > 0) && (
+                {takeForm.departmentId && takeContextCourses.length > 0 && (
                     <div className="mb-4 rounded-lg border border-gray-100 bg-gray-50 px-3 py-2.5 text-xs text-gray-600 dark:border-gray-700 dark:bg-gray-800/40 dark:text-gray-400">
-                      {takeContextCourses.length > 0 && (
-                        <p className="mb-1">
-                          <span className="font-semibold text-gray-700 dark:text-gray-300">
-                            Courses in department:
-                          </span>{" "}
-                          {takeContextCourses.map((c) => c.code).join(", ")}
-                        </p>
-                      )}
-                      {takeContextSemesters.length > 0 && (
-                        <p>
-                          <span className="font-semibold text-gray-700 dark:text-gray-300">
-                            Semesters:
-                          </span>{" "}
-                          {takeContextSemesters.map((s) => s.name).join(", ")}
-                        </p>
-                      )}
+                      <p>
+                        <span className="font-semibold text-gray-700 dark:text-gray-300">
+                          Courses in department:
+                        </span>{" "}
+                        {takeContextCourses.map((c) => c.code).join(", ")}
+                      </p>
                     </div>
                   )}
+
+                {/* Semester & year — narrow which active class you take attendance for */}
+                <div className="mb-5 grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  <div>
+                    <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">
+                      Semester <span className="text-error-500">*</span>
+                    </label>
+                    <select
+                      required
+                      disabled={!takeForm.departmentId || loadingTakeContext}
+                      value={takeForm.semesterName}
+                      onChange={(e) => {
+                        const v = e.target.value;
+                        setTakeForm((f) => ({
+                          ...f,
+                          semesterName: v,
+                          year: "",
+                          classId: "",
+                          courseId: "",
+                        }));
+                        setScheduledCourses([]);
+                        setStudents([]);
+                      }}
+                      className="h-11 w-full appearance-none rounded-lg border border-gray-200 bg-transparent px-3 py-2.5 text-sm text-gray-800 outline-none focus:border-brand-300 focus:ring-2 focus:ring-brand-500/20 disabled:opacity-50 dark:border-gray-700 dark:text-white dark:focus:border-brand-500/40"
+                    >
+                      <option value="">
+                        {!takeForm.departmentId
+                          ? "Select department first"
+                          : "Select semester"}
+                      </option>
+                      {semesterSelectOptions.map((opt) => (
+                        <option key={opt.value} value={opt.value}>
+                          {opt.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">
+                      Academic year <span className="text-error-500">*</span>
+                    </label>
+                    <select
+                      required
+                      disabled={
+                        !takeForm.departmentId ||
+                        !takeForm.semesterName ||
+                        loadingTakeContext
+                      }
+                      value={takeForm.year}
+                      onChange={(e) => {
+                        const v = e.target.value;
+                        setTakeForm((f) => ({
+                          ...f,
+                          year: v,
+                          classId: "",
+                          courseId: "",
+                        }));
+                        setScheduledCourses([]);
+                        setStudents([]);
+                      }}
+                      className="h-11 w-full appearance-none rounded-lg border border-gray-200 bg-transparent px-3 py-2.5 text-sm text-gray-800 outline-none focus:border-brand-300 focus:ring-2 focus:ring-brand-500/20 disabled:opacity-50 dark:border-gray-700 dark:text-white dark:focus:border-brand-500/40"
+                    >
+                      <option value="">
+                        {!takeForm.semesterName
+                          ? "Select semester first"
+                          : yearOptions.length === 0
+                            ? "No classes for this semester"
+                            : "Select year"}
+                      </option>
+                      {yearOptions.map((y) => (
+                        <option key={y} value={String(y)}>
+                          {y}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
 
                 {/* Session Details */}
                 <div className="mb-5 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -722,7 +824,12 @@ export default function AttendancePage() {
                     </label>
                     <select
                       required
-                      disabled={!takeForm.departmentId || loadingTakeContext}
+                      disabled={
+                        !takeForm.departmentId ||
+                        !takeForm.semesterName ||
+                        !takeForm.year ||
+                        loadingTakeContext
+                      }
                       value={takeForm.classId}
                       onChange={(e) => {
                         const v = e.target.value;
@@ -735,11 +842,13 @@ export default function AttendancePage() {
                       <option value="">
                         {!takeForm.departmentId
                           ? "Select department first"
-                          : takeClasses.length === 0
-                            ? "No active classes in this department"
-                            : "Select class"}
+                          : !takeForm.semesterName || !takeForm.year
+                            ? "Select semester and year first"
+                            : filteredTakeClasses.length === 0
+                              ? "No active classes for this term"
+                              : "Select class"}
                       </option>
-                      {takeClasses.map((c) => (
+                      {filteredTakeClasses.map((c) => (
                         <option key={c.id} value={String(c.id)}>
                           {c.name} · {c.semester} {c.year}
                         </option>
@@ -752,7 +861,13 @@ export default function AttendancePage() {
                     </label>
                     <select
                       required
-                      disabled={!takeForm.departmentId || !takeForm.classId || loadingCourses}
+                      disabled={
+                        !takeForm.departmentId ||
+                        !takeForm.semesterName ||
+                        !takeForm.year ||
+                        !takeForm.classId ||
+                        loadingCourses
+                      }
                       value={takeForm.courseId}
                       onChange={(e) =>
                         setTakeForm((f) => ({ ...f, courseId: e.target.value }))
@@ -764,7 +879,7 @@ export default function AttendancePage() {
                           ? "Loading courses…"
                           : takeForm.classId
                             ? "Select course"
-                            : "Select department and class first"}
+                            : "Select class first"}
                       </option>
                       {scheduledCourses.map((c) => (
                         <option key={c.id} value={String(c.id)}>
@@ -863,7 +978,7 @@ export default function AttendancePage() {
                     <div className="py-12 text-center text-sm text-gray-400 dark:text-gray-500">
                       {takeForm.classId
                         ? "No admitted students found."
-                        : "Select department and an active class to load students."}
+                        : "Select department, semester, year, and class to load students."}
                     </div>
                   ) : (
                     <table className="min-w-full divide-y divide-gray-100 dark:divide-gray-800">
@@ -983,8 +1098,10 @@ export default function AttendancePage() {
                     submitting ||
                     students.length === 0 ||
                     !takeForm.departmentId ||
+                    !takeForm.semesterName ||
+                    !takeForm.year ||
                     !takeForm.courseId ||
-                    takeClasses.length === 0 ||
+                    filteredTakeClasses.length === 0 ||
                     scheduledCourses.length === 0
                   }
                   size="sm"
