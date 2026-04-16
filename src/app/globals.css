@@ -925,4 +925,34 @@ span.flatpickr-weekday,
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
   }
+
+  /**
+   * Attendance report (By Student): print only the sheet — hide layout, filters,
+   * stats cards, and browser chrome area. Toggle class `print-attendance-sheet-only`
+   * on documentElement from the attendance report page when the sheet is visible.
+   */
+  html.print-attendance-sheet-only body {
+    background: #fff !important;
+  }
+  html.print-attendance-sheet-only body * {
+    visibility: hidden !important;
+  }
+  html.print-attendance-sheet-only body .attendance-sheet-print-area,
+  html.print-attendance-sheet-only body .attendance-sheet-print-area * {
+    visibility: visible !important;
+  }
+  html.print-attendance-sheet-only body .attendance-sheet-print-area {
+    position: absolute !important;
+    left: 0 !important;
+    top: 0 !important;
+    width: 100% !important;
+    max-width: none !important;
+    margin: 0 !important;
+    padding: 6mm !important;
+    box-shadow: none !important;
+    border: none !important;
+    background: #fff !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
 }

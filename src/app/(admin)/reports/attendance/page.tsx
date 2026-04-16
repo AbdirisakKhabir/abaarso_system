@@ -143,6 +143,25 @@ export default function AttendanceReportPage() {
     if (viewMode === "students") fetchStudentAttendance();
   }, [viewMode, fetchStudentAttendance]);
 
+  /** When the sheet is on screen, printing isolates it (see globals.css `.print-attendance-sheet-only`). */
+  useEffect(() => {
+    const sheetReady =
+      viewMode === "students" &&
+      Boolean(filterClass) &&
+      Boolean(sheetMeta) &&
+      studentAttendances.length > 0 &&
+      !loading;
+    const root = document.documentElement;
+    if (sheetReady) {
+      root.classList.add("print-attendance-sheet-only");
+    } else {
+      root.classList.remove("print-attendance-sheet-only");
+    }
+    return () => {
+      root.classList.remove("print-attendance-sheet-only");
+    };
+  }, [viewMode, filterClass, sheetMeta, studentAttendances.length, loading]);
+
   const filteredClasses = filterDept ? classes.filter((c) => c.department?.id === Number(filterDept)) : classes;
 
   const {
@@ -163,10 +182,6 @@ export default function AttendanceReportPage() {
       <div className="mb-6 flex flex-wrap items-center justify-between gap-4 no-print">
         <PageBreadCrumb pageTitle="Attendance Report" />
         <Button size="sm" onClick={handlePrint}>Print</Button>
-      </div>
-
-      <div className="mb-4 hidden print:mb-2 print:block">
-        <p className="text-sm text-gray-600">Generated: {new Date().toLocaleDateString()}</p>
       </div>
 
       <div className="min-w-0 overflow-hidden rounded-2xl border border-gray-200 bg-white dark:border-gray-800 dark:bg-white/5">
@@ -321,12 +336,17 @@ export default function AttendanceReportPage() {
                     No students in this class or no attendance sessions recorded.
                   </div>
                 ) : sheetMeta && selectedClassInfo ? (
-                  <AttendanceSheetTable
-                    semester={selectedClassInfo.semester}
-                    year={selectedClassInfo.year}
-                    sheet={sheetMeta}
-                    students={studentAttendances}
-                  />
+                  <div className="attendance-sheet-print-area">
+                    <p className="mb-2 hidden text-right text-xs text-gray-600 print:mb-3 print:block">
+                      Generated: {new Date().toLocaleDateString()}
+                    </p>
+                    <AttendanceSheetTable
+                      semester={selectedClassInfo.semester}
+                      year={selectedClassInfo.year}
+                      sheet={sheetMeta}
+                      students={studentAttendances}
+                    />
+                  </div>
                 ) : (
                   <div className="py-12 text-center text-sm text-gray-500">
                     Sheet data unavailable. Try refreshing the report.
