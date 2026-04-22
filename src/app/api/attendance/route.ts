@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAuthUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { isAllowedAttendanceStatus } from "@/lib/attendanceConstants";
 
 export async function GET(req: NextRequest) {
   try {
@@ -141,6 +142,18 @@ export async function POST(req: NextRequest) {
         { error: "At least one attendance record is required" },
         { status: 400 }
       );
+    }
+
+    for (const r of records as { status?: string }[]) {
+      if (!r.status || !isAllowedAttendanceStatus(r.status)) {
+        return NextResponse.json(
+          {
+            error:
+              "Each record status must be one of: Present, Absent, Excused",
+          },
+          { status: 400 }
+        );
+      }
     }
 
     // Check for existing session (same class, course, date, shift)

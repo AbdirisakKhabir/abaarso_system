@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAuthUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { isAllowedAttendanceStatus } from "@/lib/attendanceConstants";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -86,6 +87,17 @@ export async function PATCH(req: NextRequest, ctx: RouteContext) {
 
     // Update records if provided
     if (Array.isArray(records)) {
+      for (const r of records) {
+        if (!r.status || !isAllowedAttendanceStatus(String(r.status))) {
+          return NextResponse.json(
+            {
+              error:
+                "Each record status must be one of: Present, Absent, Excused",
+            },
+            { status: 400 }
+          );
+        }
+      }
       for (const r of records) {
         await prisma.attendanceRecord.upsert({
           where: {

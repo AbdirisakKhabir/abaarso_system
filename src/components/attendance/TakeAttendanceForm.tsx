@@ -6,6 +6,7 @@ import Link from "next/link";
 import Button from "@/components/ui/button/Button";
 import { DateInput } from "@/components/form/DateInput";
 import SearchableSingleSelect from "@/components/form/SearchableSingleSelect";
+import { ATTENDANCE_RECORD_STATUSES } from "@/lib/attendanceConstants";
 import { authFetch } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 
@@ -42,7 +43,6 @@ type RecordEntry = {
 };
 
 const SHIFTS = ["Morning", "Afternoon", "Evening"];
-const ATTENDANCE_STATUSES = ["Present", "Absent", "Late", "Excused"];
 
 type TakeAttendanceFormProps = {
   onSuccess?: () => void;
@@ -536,7 +536,7 @@ export default function TakeAttendanceForm({ onSuccess }: TakeAttendanceFormProp
               <span className="text-xs font-medium text-gray-500 dark:text-gray-400">
                 Mark all:
               </span>
-              {ATTENDANCE_STATUSES.map((st) => (
+              {ATTENDANCE_RECORD_STATUSES.map((st) => (
                 <button
                   key={st}
                   type="button"
@@ -546,9 +546,7 @@ export default function TakeAttendanceForm({ onSuccess }: TakeAttendanceFormProp
                       ? "bg-success-50 text-success-600 hover:bg-success-100 dark:bg-success-500/10 dark:text-success-400"
                       : st === "Absent"
                         ? "bg-error-50 text-error-600 hover:bg-error-100 dark:bg-error-500/10 dark:text-error-400"
-                        : st === "Late"
-                          ? "bg-warning-50 text-warning-600 hover:bg-warning-100 dark:bg-warning-500/10 dark:text-warning-400"
-                          : "bg-blue-light-50 text-blue-light-600 hover:bg-blue-light-100 dark:bg-blue-light-500/10 dark:text-blue-light-400"
+                        : "bg-blue-light-50 text-blue-light-600 hover:bg-blue-light-100 dark:bg-blue-light-500/10 dark:text-blue-light-400"
                   }`}
                 >
                   {st}
@@ -617,7 +615,7 @@ export default function TakeAttendanceForm({ onSuccess }: TakeAttendanceFormProp
                       </td>
                       <td className="px-4 py-3">
                         <div className="flex items-center justify-center gap-1">
-                          {ATTENDANCE_STATUSES.map((st) => (
+                          {ATTENDANCE_RECORD_STATUSES.map((st) => (
                             <button
                               key={st}
                               type="button"
@@ -628,9 +626,7 @@ export default function TakeAttendanceForm({ onSuccess }: TakeAttendanceFormProp
                                     ? "bg-success-500 text-white shadow-sm"
                                     : st === "Absent"
                                       ? "bg-error-500 text-white shadow-sm"
-                                      : st === "Late"
-                                        ? "bg-warning-500 text-white shadow-sm"
-                                        : "bg-blue-light-500 text-white shadow-sm"
+                                      : "bg-blue-light-500 text-white shadow-sm"
                                   : "bg-gray-100 text-gray-500 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-400 dark:hover:bg-gray-700"
                               }`}
                             >
@@ -656,9 +652,6 @@ export default function TakeAttendanceForm({ onSuccess }: TakeAttendanceFormProp
               </span>
               <span className="text-error-600 dark:text-error-400">
                 Absent: {students.filter((r) => r.status === "Absent").length}
-              </span>
-              <span className="text-warning-600 dark:text-warning-400">
-                Late: {students.filter((r) => r.status === "Late").length}
               </span>
               <span className="text-blue-light-600 dark:text-blue-light-400">
                 Excused: {students.filter((r) => r.status === "Excused").length}
