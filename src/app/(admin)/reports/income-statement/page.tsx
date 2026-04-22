@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/table";
 import { usePagination } from "@/hooks/usePagination";
 import { authFetch } from "@/lib/api";
+import { DateInput } from "@/components/form/DateInput";
 import { DownloadIcon } from "@/icons";
 import {
   FinanceReportBar,
@@ -26,6 +27,8 @@ const CURRENT_YEAR = new Date().getFullYear();
 export default function IncomeStatementReportPage() {
   const [data, setData] = useState<{
     year: number;
+    dateFrom: string;
+    dateTo: string;
     revenue: { tuition: number; paymentCount: number };
     expenses: {
       approvedExpenses: number;
@@ -39,18 +42,21 @@ export default function IncomeStatementReportPage() {
     generatedAt: string;
   } | null>(null);
   const [loading, setLoading] = useState(true);
-  const [year, setYear] = useState(String(CURRENT_YEAR));
+  const [presetYear, setPresetYear] = useState(String(CURRENT_YEAR));
+  const [dateFrom, setDateFrom] = useState(`${CURRENT_YEAR}-01-01`);
+  const [dateTo, setDateTo] = useState(`${CURRENT_YEAR}-12-31`);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await authFetch(`/api/finance/income-statement?year=${year}`);
+      const params = new URLSearchParams({ dateFrom, dateTo });
+      const res = await authFetch(`/api/finance/income-statement?${params}`);
       if (res.ok) setData(await res.json());
     } catch {
       /* empty */
     }
     setLoading(false);
-  }, [year]);
+  }, [dateFrom, dateTo]);
 
   useEffect(() => {
     fetchData();
@@ -67,14 +73,15 @@ export default function IncomeStatementReportPage() {
     total: expenseCategoriesTotal,
     from,
     to,
-  } = usePagination(expenseCategoryRows, [year, data]);
+  } = usePagination(expenseCategoryRows, [dateFrom, dateTo, data]);
 
   const handlePrint = () => window.print();
   const handleExportCSV = () => {
     if (!data) return;
     const lines = [
       ["Income Statement", ""],
-      ["Year", data.year],
+      ["Period from", data.dateFrom],
+      ["Period to", data.dateTo],
       ["Generated", data.generatedAt],
       ["", ""],
       ["REVENUE", ""],
@@ -95,7 +102,7 @@ export default function IncomeStatementReportPage() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `Income_Statement_${data.year}.csv`;
+    a.download = `Income_Statement_${data.dateFrom}_to_${data.dateTo}.csv`;
     a.click();
     URL.revokeObjectURL(url);
   };
@@ -107,15 +114,40 @@ export default function IncomeStatementReportPage() {
     <div className="report-print-area">
       <div className="mb-6 flex flex-wrap items-center justify-between gap-4 no-print">
         <PageBreadCrumb pageTitle="Income Statement" />
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <DateInput
+              id="income-stmt-from"
+              value={dateFrom}
+              onChange={setDateFrom}
+              max={dateTo}
+              aria-label="Period start date"
+              inputClassName="h-10 w-auto min-w-[140px] rounded-lg border border-gray-200 px-3 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-white"
+            />
+            <span className="text-gray-500">–</span>
+            <DateInput
+              id="income-stmt-to"
+              value={dateTo}
+              onChange={setDateTo}
+              min={dateFrom}
+              aria-label="Period end date"
+              inputClassName="h-10 w-auto min-w-[140px] rounded-lg border border-gray-200 px-3 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-white"
+            />
+          </div>
           <select
-            value={year}
-            onChange={(e) => setYear(e.target.value)}
+            value={presetYear}
+            onChange={(e) => {
+              const y = e.target.value;
+              setPresetYear(y);
+              setDateFrom(`${y}-01-01`);
+              setDateTo(`${y}-12-31`);
+            }}
+            aria-label="Quick select calendar year"
             className="h-10 rounded-lg border border-gray-200 px-3 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-white"
           >
             {[CURRENT_YEAR, CURRENT_YEAR - 1, CURRENT_YEAR - 2].map((y) => (
-              <option key={y} value={y}>
-                {y}
+              <option key={y} value={String(y)}>
+                Year {y}
               </option>
             ))}
           </select>
@@ -141,7 +173,10 @@ export default function IncomeStatementReportPage() {
       <div className="mb-4 hidden print:block">
         <h1 className="text-xl font-bold text-gray-900">Income Statement</h1>
         <p className="text-sm text-gray-600">
-          Year: {year} | Generated:{" "}
+          {data?.dateFrom && data?.dateTo
+            ? `Period: ${data.dateFrom} – ${data.dateTo}`
+            : "Income statement"}{" "}
+          | Generated:{" "}
           {data?.generatedAt
             ? new Date(data.generatedAt).toLocaleString()
             : "—"}
@@ -157,10 +192,11 @@ export default function IncomeStatementReportPage() {
           <>
             <div className="border-b border-gray-200 px-6 py-4 dark:border-gray-800">
               <h2 className="text-base font-semibold text-gray-900 dark:text-white">
-                Income statement — fiscal year {data.year}
+                Income statement
               </h2>
               <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
-                Abaarso Tech University ·{" "}
+                Period {data.dateFrom} to {data.dateTo} · Tuition by payment date
+                (paidAt) · Abaarso Tech University ·{" "}
                 {new Date(data.generatedAt).toLocaleString()}
               </p>
             </div>
