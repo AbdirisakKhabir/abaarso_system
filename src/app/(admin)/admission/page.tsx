@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import Image from "next/image";
 import PageBreadCrumb from "@/components/common/PageBreadCrumb";
 import Button from "@/components/ui/button/Button";
@@ -19,9 +19,19 @@ import Link from "next/link";
 import { authFetch } from "@/lib/api";
 import { ModalOverlayGate } from "@/context/ModalOverlayContext";
 import { useAuth } from "@/context/AuthContext";
-import { ArrowUpIcon, DownloadIcon, PencilIcon, PlusIcon, TrashBinIcon, UserCircleIcon } from "@/icons";
+import { buildTermSequence } from "@/lib/semester-term-sequence";
+import { perSemesterTuition } from "@/lib/tuition-amount";
+import {
+  ArrowUpIcon,
+  DollarLineIcon,
+  DownloadIcon,
+  PencilIcon,
+  PlusIcon,
+  TrashBinIcon,
+  UserCircleIcon,
+} from "@/icons";
 
-type Department = { id: number; name: string; code: string };
+type Department = { id: number; name: string; code: string; tuitionFee?: number | null };
 
 type ClassInfo = {
   id: number;
@@ -94,6 +104,15 @@ export default function AdmissionPage() {
   const [importLoading, setImportLoading] = useState(false);
   const [importResult, setImportResult] = useState<{ created: number; errors?: string[] } | null>(null);
   const [statusCounts, setStatusCounts] = useState<Record<string, number>>({});
+  const [chargeModalOpen, setChargeModalOpen] = useState(false);
+  const [semestersForCharge, setSemestersForCharge] = useState<{ id: number; name: string; sortOrder: number }[]>(
+    []
+  );
+  const [chargeSemesterCount, setChargeSemesterCount] = useState(1);
+  const [chargeStartSemester, setChargeStartSemester] = useState("");
+  const [chargeStartYear, setChargeStartYear] = useState(() => new Date().getFullYear());
+  const [chargeSubmitting, setChargeSubmitting] = useState(false);
+  const [chargeError, setChargeError] = useState("");
 
   const {
     page,
@@ -186,6 +205,39 @@ export default function AdmissionPage() {
     setSelectedIds(new Set());
   }, [page]);
 
+  const selectedStudentRows = useMemo(
+    () => students.filter((s) => selectedIds.has(s.id)),
+    [students, selectedIds]
+  );
+
+  const chargePreviewPeriods = useMemo(() => {
+    if (!chargeStartSemester || semestersForCharge.length === 0) return [];
+    const order = semestersForCharge.map((s) => s.name);
+    try {
+      return buildTermSequence(
+        order,
+        chargeStartSemester,
+        chargeStartYear,
+        chargeSemesterCount
+      );
+    } catch {
+      return [];
+    }
+  }, [
+    chargeStartSemester,
+    chargeStartYear,
+    chargeSemesterCount,
+    semestersForCharge,
+  ]);
+
+  useEffect(() => {
+    if (!chargeModalOpen || semestersForCharge.length === 0) return;
+    setChargeStartSemester((prev) => {
+      if (prev && semestersForCharge.some((s) => s.name === prev)) return prev;
+      return semestersForCharge[0]?.name ?? "";
+    });
+  }, [chargeModalOpen, semestersForCharge]);
+
   async function handleDownloadTemplate() {
     setImportLoading(true);
     setImportResult(null);
@@ -264,6 +316,142 @@ export default function AdmissionPage() {
       setSelectedIds(new Set());
     } else {
       setSelectedIds(new Set(students.map((s) => s.id)));
+    }
+  }
+
+  async function ensureSemestersForChargeLoaded() {
+    if (semestersForCharge.length > 0) return;
+    const res = await authFetch("/api/semesters?active=true");
+    if (res.ok) {
+      const data = await res.json();
+      if (Array.isArray(data)) {
+        setSemestersForCharge(
+          data.map((r: { id: number; name: string; sortOrder?: number }) => ({
+            id: r.id,
+            name: r.name,
+            sortOrder: r.sortOrder ?? 0,
+          }))
+        );
+      }
+    }
+  }
+
+  async function openChargeModal() {
+    if (selectedIds.size === 0) return;
+    setChargeError("");
+    await ensureSemestersForChargeLoaded();
+    setChargeModalOpen(true);
+  }
+
+  function escapeHtml(text: string) {
+    return text
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;");
+  }
+
+  function printTuitionInvoice() {
+    if (selectedStudentRows.length === 0) return;
+    if (!chargeStartSemester || chargePreviewPeriods.length === 0) {
+      alert("Choose a valid starting semester and number of semesters.");
+      return;
+    }
+    const periodRows = chargePreviewPeriods
+      .map((p) => `<li>${escapeHtml(p.semester)} ${p.year}</li>`)
+      .join("");
+    const bodyRows = selectedStudentRows
+      .map((s) => {
+        const per = perSemesterTuition(
+          s.department.tuitionFee ?? 0,
+          s.paymentStatus
+        );
+        const line = per * chargeSemesterCount;
+        return `<tr>
+          <td>${escapeHtml(s.studentId)}</td>
+          <td>${escapeHtml(`${s.firstName} ${s.lastName}`)}</td>
+          <td>${escapeHtml(s.department.code)}</td>
+          <td>${escapeHtml(s.paymentStatus || "Fully Paid")}</td>
+          <td style="text-align:right">$${per.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+          <td style="text-align:right">$${line.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+        </tr>`;
+      })
+      .join("");
+    const total = selectedStudentRows.reduce((sum, s) => {
+      const per = perSemesterTuition(
+        s.department.tuitionFee ?? 0,
+        s.paymentStatus
+      );
+      return sum + per * chargeSemesterCount;
+    }, 0);
+    const w = window.open("", "_blank");
+    if (!w) return;
+    w.document.write(`<!DOCTYPE html><html><head><title>Tuition invoice</title>
+      <style>
+        body { font-family: system-ui, sans-serif; padding: 24px; color: #111; }
+        h1 { font-size: 1.25rem; margin-bottom: 8px; }
+        .meta { color: #444; font-size: 0.875rem; margin-bottom: 20px; }
+        table { width: 100%; border-collapse: collapse; font-size: 0.875rem; }
+        th, td { border: 1px solid #ccc; padding: 8px; text-align: left; }
+        th { background: #f5f5f5; }
+        .total { margin-top: 16px; font-weight: 700; }
+      </style></head><body>
+      <h1>Tuition assessment / invoice</h1>
+      <p class="meta">Issued: ${new Date().toLocaleString()} · ${chargeSemesterCount} semester(s) · Per-student rate × count (scholarship rules apply)</p>
+      <p><strong>Periods covered:</strong></p>
+      <ul>${periodRows}</ul>
+      <table>
+        <thead><tr><th>Student ID</th><th>Name</th><th>Dept</th><th>Payment status</th><th>Per semester</th><th>Line total</th></tr></thead>
+        <tbody>${bodyRows}</tbody>
+      </table>
+      <p class="total">Grand total: $${total.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+      </body></html>`);
+    w.document.close();
+    w.print();
+    w.close();
+  }
+
+  async function handleApplyTuitionCharge() {
+    if (selectedIds.size === 0) return;
+    if (!chargeStartSemester || chargePreviewPeriods.length === 0) {
+      setChargeError("Choose a valid starting semester and number of semesters.");
+      return;
+    }
+    const ids = Array.from(selectedIds);
+    setChargeSubmitting(true);
+    setChargeError("");
+    try {
+      const res = await authFetch("/api/students/bulk-tuition-charge", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          studentIds: ids,
+          semesterCount: chargeSemesterCount,
+          startingSemester: chargeStartSemester,
+          startingYear: chargeStartYear,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setChargeError(data.error || "Failed to apply charge");
+        return;
+      }
+      let msg = `Updated balance for ${data.charged} student(s).`;
+      if (data.skipped?.length) {
+        msg += ` Skipped ${data.skipped.length} (e.g. full scholarship or zero fee).`;
+      }
+      if (data.notFound?.length) {
+        msg += ` ${data.notFound.length} id(s) not found.`;
+      }
+      alert(msg);
+      setSelectedIds(new Set());
+      setChargeModalOpen(false);
+      await loadStudents();
+      void refreshStatusStats();
+    } catch {
+      setChargeError("Request failed");
+    } finally {
+      setChargeSubmitting(false);
     }
   }
 
@@ -410,13 +598,29 @@ export default function AdmissionPage() {
         <div className="flex flex-col gap-3 border-b border-gray-200 px-5 py-4 dark:border-gray-800 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-2">
             <h3 className="text-base font-semibold text-gray-800 dark:text-white/90">
-              Students
+              Admission list
             </h3>
             <span className="inline-flex h-5 min-w-[20px] items-center justify-center rounded-full bg-brand-50 px-1.5 text-xs font-semibold text-brand-600 dark:bg-brand-500/10 dark:text-brand-400">
               {total}
             </span>
+            {(canEdit || canDelete) && total > 0 && (
+              <span className="text-xs text-gray-500 dark:text-gray-400">
+                Select all applies to this page only.
+              </span>
+            )}
           </div>
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
+            {canEdit && total > 0 && (
+              <Button
+                variant="outline"
+                size="sm"
+                startIcon={<DollarLineIcon />}
+                onClick={() => void openChargeModal()}
+                disabled={selectedIds.size === 0}
+              >
+                Charge / Invoice ({selectedIds.size})
+              </Button>
+            )}
             {canDelete && total > 0 && (
               <div className="flex items-center gap-2">
                 <Button
@@ -501,14 +705,14 @@ export default function AdmissionPage() {
           <Table>
             <TableHeader>
               <TableRow className="bg-transparent! hover:bg-transparent!">
-                {canDelete && total > 0 && (
+                {(canDelete || canEdit) && total > 0 && (
                   <TableCell isHeader className="w-12 px-3">
                     <input
                       type="checkbox"
                       checked={selectedIds.size === students.length && students.length > 0}
                       onChange={toggleSelectAll}
                       className="h-4 w-4 rounded border-gray-300 text-brand-500 focus:ring-brand-500 dark:border-gray-600 dark:bg-gray-700"
-                      aria-label="Select all"
+                      aria-label="Select all on this page"
                     />
                   </TableCell>
                 )}
@@ -527,7 +731,7 @@ export default function AdmissionPage() {
             <TableBody>
               {students.map((s, idx) => (
                 <TableRow key={s.id}>
-                  {canDelete && total > 0 && (
+                  {(canDelete || canEdit) && total > 0 && (
                     <TableCell className="w-12 px-3">
                       <input
                         type="checkbox"
@@ -651,6 +855,170 @@ export default function AdmissionPage() {
           </>
         )}
       </div>
+
+      {/* Tuition charge / invoice (selected students) */}
+      {chargeModalOpen && (
+        <ModalOverlayGate>
+          <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/60 p-4 pt-8 backdrop-blur-sm">
+            <div className="w-full max-w-3xl rounded-2xl border border-gray-200 bg-white shadow-xl dark:border-gray-700 dark:bg-gray-900">
+              <div className="flex items-center justify-between border-b border-gray-200 px-6 py-4 dark:border-gray-700">
+                <h2 className="text-lg font-semibold text-gray-800 dark:text-white/90">
+                  Tuition charge &amp; invoice
+                </h2>
+                <button
+                  type="button"
+                  onClick={() => setChargeModalOpen(false)}
+                  className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-gray-800 dark:hover:text-gray-300"
+                >
+                  <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+              <div className="max-h-[calc(100vh-8rem)] space-y-4 overflow-y-auto px-6 py-5">
+                <p className="text-sm text-gray-600 dark:text-gray-400">
+                  {selectedStudentRows.length} student(s) selected. Set how many semesters to bill and the first term.
+                  Each student is charged (department tuition per semester × count), using the same rules as registration
+                  (half scholar = 50%, full scholarship = $0).
+                </p>
+                {chargeError && (
+                  <div className="rounded-lg bg-error-50 px-4 py-3 text-sm text-error-600 dark:bg-error-500/10 dark:text-error-400">
+                    {chargeError}
+                  </div>
+                )}
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+                  <div>
+                    <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">
+                      Number of semesters
+                    </label>
+                    <input
+                      type="number"
+                      min={1}
+                      max={24}
+                      value={chargeSemesterCount}
+                      onChange={(e) => {
+                        const n = parseInt(e.target.value, 10);
+                        setChargeSemesterCount(
+                          Number.isFinite(n) ? Math.min(24, Math.max(1, n)) : 1
+                        );
+                      }}
+                      className="h-10 w-full rounded-lg border border-gray-200 bg-transparent px-3 text-sm text-gray-800 outline-none focus:border-brand-300 focus:ring-2 focus:ring-brand-500/20 dark:border-gray-700 dark:text-white dark:focus:border-brand-500/40"
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">
+                      First semester
+                    </label>
+                    <select
+                      value={chargeStartSemester}
+                      onChange={(e) => setChargeStartSemester(e.target.value)}
+                      className="h-10 w-full rounded-lg border border-gray-200 bg-transparent px-3 text-sm text-gray-700 outline-none focus:border-brand-300 focus:ring-2 focus:ring-brand-500/20 dark:border-gray-700 dark:text-gray-300 dark:focus:border-brand-500/40"
+                    >
+                      {semestersForCharge.length === 0 ? (
+                        <option value="">Loading semesters…</option>
+                      ) : (
+                        semestersForCharge.map((sem) => (
+                          <option key={sem.id} value={sem.name}>
+                            {sem.name}
+                          </option>
+                        ))
+                      )}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">
+                      First year
+                    </label>
+                    <input
+                      type="number"
+                      min={2000}
+                      max={2100}
+                      value={chargeStartYear}
+                      onChange={(e) => {
+                        const y = parseInt(e.target.value, 10);
+                        setChargeStartYear(Number.isFinite(y) ? y : new Date().getFullYear());
+                      }}
+                      className="h-10 w-full rounded-lg border border-gray-200 bg-transparent px-3 text-sm text-gray-800 outline-none focus:border-brand-300 focus:ring-2 focus:ring-brand-500/20 dark:border-gray-700 dark:text-white dark:focus:border-brand-500/40"
+                    />
+                  </div>
+                </div>
+                {chargePreviewPeriods.length > 0 && (
+                  <div className="rounded-lg border border-gray-100 bg-gray-50 px-3 py-2 text-xs text-gray-600 dark:border-gray-700 dark:bg-gray-800/50 dark:text-gray-400">
+                    <span className="font-semibold text-gray-700 dark:text-gray-300">Periods on invoice: </span>
+                    {chargePreviewPeriods.map((p, i) => (
+                      <span key={`${p.semester}-${p.year}-${i}`}>
+                        {i > 0 ? " · " : ""}
+                        {p.semester} {p.year}
+                      </span>
+                    ))}
+                  </div>
+                )}
+                {chargeStartSemester && chargePreviewPeriods.length === 0 && semestersForCharge.length > 0 && (
+                  <p className="text-xs text-amber-600 dark:text-amber-400">
+                    Could not build term list — check that the first semester matches an active semester in Settings.
+                  </p>
+                )}
+                <div className="overflow-x-auto rounded-xl border border-gray-200 dark:border-gray-700">
+                  <table className="min-w-full divide-y divide-gray-100 text-sm dark:divide-gray-800">
+                    <thead className="bg-gray-50 dark:bg-white/5">
+                      <tr>
+                        <th className="px-3 py-2 text-left font-semibold text-gray-600 dark:text-gray-400">Student</th>
+                        <th className="px-3 py-2 text-left font-semibold text-gray-600 dark:text-gray-400">Dept</th>
+                        <th className="px-3 py-2 text-right font-semibold text-gray-600 dark:text-gray-400">Per semester</th>
+                        <th className="px-3 py-2 text-right font-semibold text-gray-600 dark:text-gray-400">Charge ({chargeSemesterCount}×)</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
+                      {selectedStudentRows.map((s) => {
+                        const per = perSemesterTuition(
+                          s.department.tuitionFee ?? 0,
+                          s.paymentStatus
+                        );
+                        const line = per * chargeSemesterCount;
+                        return (
+                          <tr key={s.id}>
+                            <td className="px-3 py-2 text-gray-800 dark:text-white/90">
+                              <span className="font-mono text-xs text-gray-500 dark:text-gray-400">{s.studentId}</span>
+                              <br />
+                              {s.firstName} {s.lastName}
+                            </td>
+                            <td className="px-3 py-2 text-gray-600 dark:text-gray-400">{s.department.code}</td>
+                            <td className="px-3 py-2 text-right tabular-nums">
+                              ${per.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            </td>
+                            <td className="px-3 py-2 text-right font-medium tabular-nums text-gray-800 dark:text-white/90">
+                              ${line.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+                <div className="flex flex-wrap items-center justify-end gap-2 border-t border-gray-200 pt-4 dark:border-gray-700">
+                  <Button variant="outline" size="sm" onClick={() => setChargeModalOpen(false)}>
+                    Close
+                  </Button>
+                  <Button variant="outline" size="sm" startIcon={<DollarLineIcon />} onClick={printTuitionInvoice}>
+                    Print invoice
+                  </Button>
+                  <Button
+                    size="sm"
+                    onClick={() => void handleApplyTuitionCharge()}
+                    disabled={
+                      chargeSubmitting ||
+                      selectedStudentRows.length === 0 ||
+                      chargePreviewPeriods.length === 0
+                    }
+                  >
+                    {chargeSubmitting ? "Applying…" : "Charge selected (add to balance)"}
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </ModalOverlayGate>
+      )}
 
       {/* Import Modal */}
       {modal === "import" && (

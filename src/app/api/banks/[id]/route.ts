@@ -86,3 +86,60 @@ export async function PATCH(req: NextRequest, ctx: RouteContext) {
     return NextResponse.json({ error: "Something went wrong" }, { status: 500 });
   }
 }
+
+/**
+ * DELETE /api/banks/[id]
+ * Only allowed when balance is zero and there is no activity that blocks FK (withdrawals, transfers, ledger rows).
+ */
+export async function DELETE(req: NextRequest, ctx: RouteContext) {
+  try {
+    const auth = await getAuthUser(req);
+    if (!auth) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const { id } = await ctx.params;
+    const bankId = Number(id);
+    if (!Number.isInteger(bankId)) {
+      return NextResponse.json({ error: "Invalid ID" }, { status: 400 });
+    }
+
+    const bank = await prisma.bank.findUnique({
+      where: { id: bankId },
+      select: { id: true, name: true, code: true, balance: true },
+    });
+    if (!bank) {
+      return NextResponse.json({ error: "Bank not found" }, { status: 404 });
+    }
+
+    if (Math.abs(bank.balance ?? 0) > 0.009) {
+      return NextResponse.json(
+        { error: "Bank balance must be zero before deletion. Withdraw or transfer funds first." },
+        { status: 400 }
+      );
+    }
+
+    const [withdrawals, transfersFrom, transfersTo, ledgerRows] = await Promise.all([
+      prisma.bankWithdrawal.count({ where: { bankId } }),
+      prisma.bankTransfer.count({ where: { fromBankId: bankId } }),
+      prisma.bankTransfer.count({ where: { toBankId: bankId } }),
+      prisma.transactionHistory.count({ where: { bankId } }),
+    ]);
+
+    if (withdrawals > 0 || transfersFrom > 0 || transfersTo > 0 || ledgerRows > 0) {
+      return NextResponse.json(
+        {
+          error:
+            "This bank has withdrawals, transfers, or ledger history and cannot be deleted. Deactivate it instead (edit bank).",
+        },
+        { status: 400 }
+      );
+    }
+
+    await prisma.bank.delete({ where: { id: bankId } });
+    return NextResponse.json({ ok: true });
+  } catch (e) {
+    console.error("Delete bank error:", e);
+    return NextResponse.json({ error: "Something went wrong" }, { status: 500 });
+  }
+}

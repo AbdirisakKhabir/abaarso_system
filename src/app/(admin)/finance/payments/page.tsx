@@ -14,7 +14,7 @@ import {
 import { DEFAULT_PAGE_SIZE, PAGE_SIZE_OPTIONS } from "@/hooks/usePagination";
 import { authFetch } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
-import { DollarLineIcon, ListIcon } from "@/icons";
+import { DollarLineIcon, ListIcon, TrashBinIcon } from "@/icons";
 
 export type FinancePaymentRow = {
   id: number;
@@ -62,6 +62,9 @@ export default function FinancePaymentsPage() {
   const [financePage, setFinancePage] = useState(1);
   const [financePageSize, setFinancePageSize] = useState(DEFAULT_PAGE_SIZE);
   const [financeLoading, setFinanceLoading] = useState(false);
+  const [deletingPaymentId, setDeletingPaymentId] = useState<number | null>(null);
+
+  const canDeletePayment = hasPermission("finance.create");
 
   const fetchFinancePayments = useCallback(
     async (opts?: { page?: number; pageSize?: number }) => {
@@ -106,6 +109,30 @@ export default function FinancePaymentsPage() {
       setFinancePage(financeTotalPages);
     }
   }, [financeTotal, financePage, financeTotalPages]);
+
+  async function handleDeletePayment(p: FinancePaymentRow) {
+    if (
+      !confirm(
+        `Remove this payment of $${Number(p.amount).toLocaleString()} for ${p.student.firstName} ${p.student.lastName} (${p.semester} ${p.year})? Student balance and bank balance will be reversed.`
+      )
+    ) {
+      return;
+    }
+    setDeletingPaymentId(p.id);
+    try {
+      const res = await authFetch(`/api/tuition-payments/${p.id}`, { method: "DELETE" });
+      const data = await res.json();
+      if (!res.ok) {
+        alert(data.error || "Could not delete payment");
+        return;
+      }
+      await fetchFinancePayments();
+    } catch {
+      alert("Could not delete payment");
+    } finally {
+      setDeletingPaymentId(null);
+    }
+  }
 
   if (!hasPermission("finance.view") && !hasPermission("admission.view") && !hasPermission("dashboard.view")) {
     return (
@@ -182,6 +209,7 @@ export default function FinancePaymentsPage() {
                       <TableCell isHeader>Bank</TableCell>
                       <TableCell isHeader>Reference</TableCell>
                       <TableCell isHeader>Recorded by</TableCell>
+                      {canDeletePayment && <TableCell isHeader className="text-right">Actions</TableCell>}
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -219,6 +247,20 @@ export default function FinancePaymentsPage() {
                         <TableCell className="text-sm text-gray-600 dark:text-gray-400">
                           {p.recordedBy?.name || "—"}
                         </TableCell>
+                        {canDeletePayment && (
+                          <TableCell className="text-right">
+                            <button
+                              type="button"
+                              onClick={() => void handleDeletePayment(p)}
+                              disabled={deletingPaymentId === p.id}
+                              className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-gray-400 transition-colors hover:bg-error-50 hover:text-error-500 disabled:opacity-50 dark:hover:bg-error-500/10"
+                              aria-label="Delete payment"
+                              title="Delete payment (reverses balance)"
+                            >
+                              <TrashBinIcon className="h-4 w-4" />
+                            </button>
+                          </TableCell>
+                        )}
                       </TableRow>
                     ))}
                   </TableBody>

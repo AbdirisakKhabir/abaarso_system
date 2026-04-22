@@ -25,7 +25,7 @@ async function generateStudentId(): Promise<string> {
 
 const studentListInclude = {
   department: {
-    select: { id: true, name: true, code: true },
+    select: { id: true, name: true, code: true, tuitionFee: true },
   },
   admissionAcademicYear: {
     select: { id: true, name: true, startYear: true, endYear: true },

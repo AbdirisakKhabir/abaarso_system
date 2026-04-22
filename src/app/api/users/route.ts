@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import type { Prisma } from "@prisma/client";
 import bcrypt from "bcryptjs";
 import { getAuthUser } from "@/lib/auth";
+import { logActivity } from "@/lib/activity-log";
 import { prisma } from "@/lib/prisma";
 import { parsePaginationParams } from "@/lib/pagination";
 
@@ -110,6 +111,15 @@ export async function POST(req: NextRequest) {
         createdAt: true,
         role: { select: { name: true } },
       },
+    });
+
+    await logActivity({
+      userId: auth.userId,
+      action: "user.create",
+      module: "users",
+      summary: `Created user account for ${user.email}`,
+      metadata: { newUserId: user.id, role: user.role.name },
+      req,
     });
 
     return NextResponse.json(user);

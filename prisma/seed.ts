@@ -72,6 +72,7 @@ const DEFAULT_PERMISSIONS = [
   { name: "payroll.view", description: "View payroll requests", module: "hr" },
   { name: "payroll.create", description: "Request payroll (HR)", module: "hr" },
   { name: "payroll.approve", description: "Approve or reject payroll (President)", module: "hr" },
+  { name: "settings.view", description: "View system settings and activity log", module: "settings" },
 ];
 
 async function main() {

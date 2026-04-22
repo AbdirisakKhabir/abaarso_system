@@ -16,7 +16,7 @@ import { usePagination } from "@/hooks/usePagination";
 import { authFetch } from "@/lib/api";
 import { ModalOverlayGate } from "@/context/ModalOverlayContext";
 import { useAuth } from "@/context/AuthContext";
-import { ChevronLeftIcon, PlusIcon } from "@/icons";
+import { ChevronLeftIcon, PlusIcon, TrashBinIcon } from "@/icons";
 
 type Bank = { id: number; name: string; code: string; balance: number; accountNumber?: string | null; isActive: boolean };
 
@@ -51,6 +51,8 @@ export default function BanksPage() {
   const canCreate = hasPermission("banks.create");
   const canWithdraw = hasPermission("banks.withdraw");
   const canTransfer = hasPermission("banks.transfer");
+  const canDeleteBank = hasPermission("banks.delete");
+  const [deletingBankId, setDeletingBankId] = useState<number | null>(null);
 
   async function loadBanks() {
     setLoading(true);
@@ -161,6 +163,30 @@ export default function BanksPage() {
       setTransferSubmitting(false);
     }
   };
+
+  async function handleDeleteBank(bankId: number, code: string) {
+    if (
+      !confirm(
+        `Delete bank “${code}”? Only unused banks with $0 balance and no transfers or ledger history can be removed. Otherwise, deactivate the bank instead.`
+      )
+    ) {
+      return;
+    }
+    setDeletingBankId(bankId);
+    try {
+      const res = await authFetch(`/api/banks/${bankId}`, { method: "DELETE" });
+      const data = await res.json();
+      if (!res.ok) {
+        alert(data.error || "Could not delete bank");
+        return;
+      }
+      await loadBanks();
+    } catch {
+      alert("Could not delete bank");
+    } finally {
+      setDeletingBankId(null);
+    }
+  }
 
   const handleOpenWithdraw = (bankId: number) => {
     setSelectedBankId(bankId);
@@ -278,15 +304,29 @@ export default function BanksPage() {
                     ${(b.balance ?? 0).toLocaleString()}
                   </TableCell>
                   <TableCell className="text-right">
-                    {canWithdraw && (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => handleOpenWithdraw(b.id)}
-                      >
-                        Withdraw
-                      </Button>
-                    )}
+                    <div className="inline-flex flex-wrap items-center justify-end gap-1">
+                      {canWithdraw && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleOpenWithdraw(b.id)}
+                        >
+                          Withdraw
+                        </Button>
+                      )}
+                      {canDeleteBank && (
+                        <button
+                          type="button"
+                          onClick={() => void handleDeleteBank(b.id, b.code)}
+                          disabled={deletingBankId === b.id}
+                          className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-gray-400 transition-colors hover:bg-error-50 hover:text-error-500 disabled:opacity-50 dark:hover:bg-error-500/10"
+                          aria-label={`Delete bank ${b.code}`}
+                          title="Delete bank (only if unused)"
+                        >
+                          <TrashBinIcon className="h-4 w-4" />
+                        </button>
+                      )}
+                    </div>
                   </TableCell>
                 </TableRow>
               ))}

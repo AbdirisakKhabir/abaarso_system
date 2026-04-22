@@ -27,10 +27,29 @@ model User {
   expensesApproved   Expense[]            @relation("ExpenseApprovedBy")
   payrollsRequested  Payroll[]            @relation("PayrollRequestedBy")
   payrollsApproved   Payroll[]            @relation("PayrollApprovedBy")
+  activityLogs       ActivityLog[]
   createdAt          DateTime             @default(now())
   updatedAt          DateTime             @updatedAt
 
   @@map("users")
+}
+
+model ActivityLog {
+  id        Int      @id @default(autoincrement())
+  userId    Int?
+  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  action    String
+  module    String?
+  summary   String   @db.Text
+  metadata  String?  @db.Text
+  ipAddress String?  @db.VarChar(64)
+  userAgent String?  @db.VarChar(512)
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([userId])
+  @@index([action])
+  @@map("activity_logs")
 }
 
 model Role {

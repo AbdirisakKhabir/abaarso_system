@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import React from "react";
 import Link from "next/link";
 import PageBreadCrumb from "@/components/common/PageBreadCrumb";
-import { DollarLineIcon, ListIcon } from "@/icons";
+import { BoltIcon, DollarLineIcon, ListIcon } from "@/icons";
 
 export const metadata: Metadata = {
   title: "Finance Reports | Abaarso Tech University",
@@ -18,6 +18,7 @@ const paymentReportLinks = [
   { name: "Transaction History", path: "/reports/transaction-history", icon: ListIcon, description: "Unified log of all financial transactions (auto-created)" },
   { name: "Treasury Summary", path: "/reports/treasury", icon: DollarLineIcon, description: "Overview of bank balance, receivables, revenue, and withdrawals" },
   { name: "Daily Revenue", path: "/reports/daily-revenue", icon: DollarLineIcon, description: "Revenue collected per day within a date range" },
+  { name: "Activity Log Report", path: "/reports/activity-log", icon: BoltIcon, description: "System audit trail by date range; requires Settings permission" },
 ];
 
 export default function PaymentReportsIndexPage() {

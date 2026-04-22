@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/prisma";
 import { signToken } from "@/lib/jwt";
+import { logActivity } from "@/lib/activity-log";
 
 export async function POST(req: NextRequest) {
   try {
@@ -50,6 +51,15 @@ export async function POST(req: NextRequest) {
     });
 
     const permissions = user.role.permissions.map((rp) => rp.permission.name);
+
+    await logActivity({
+      userId: user.id,
+      action: "auth.login",
+      module: "auth",
+      summary: `Signed in as ${user.email} (${user.role.name})`,
+      metadata: { role: user.role.name },
+      req,
+    });
 
     return NextResponse.json({
       token,

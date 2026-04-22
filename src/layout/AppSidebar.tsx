@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 import { useSidebar } from "../context/SidebarContext";
 import { useAuth } from "../context/AuthContext";
 import {
+  BoltIcon,
   BoxCubeIcon,
   CalenderIcon,
   ChevronDownIcon,
@@ -39,7 +40,7 @@ type NavItem = {
   subItems?: SubItem[];
 };
 
-type MenuCategory = "academics" | "reports" | "hr" | "activities";
+type MenuCategory = "academics" | "reports" | "hr" | "activities" | "settings";
 
 // --- Data Structures ---
 
@@ -182,6 +183,12 @@ const reportsItems: NavItem[] = [
     permission: "hr.view",
   },
   {
+    icon: <BoltIcon />,
+    name: "Activity Log Report",
+    path: "/reports/activity-log",
+    permission: "settings.view",
+  },
+  {
     icon: <DollarLineIcon />,
     name: "Finance Reports",
     path: "/reports/payment",
@@ -197,6 +204,7 @@ const reportsItems: NavItem[] = [
       { name: "Daily Revenue", path: "/reports/daily-revenue", permission: "finance.view" },
       { name: "Expense Report", path: "/reports/expenses", permission: "expenses.view" },
       { name: "Income Statement", path: "/reports/income-statement", permission: "finance.view" },
+      { name: "Activity Log Report", path: "/reports/activity-log", permission: "settings.view" },
     ],
   },
 ];
@@ -220,6 +228,21 @@ const activitiesItems: NavItem[] = [
     name: "Permissions",
     path: "/permissions",
     permission: "permissions.view",
+  },
+];
+
+const settingsItems: NavItem[] = [
+  {
+    icon: <BoltIcon />,
+    name: "Settings",
+    permission: "settings.view",
+    subItems: [
+      {
+        name: "Activity log",
+        path: "/settings/activity-log",
+        permission: "settings.view",
+      },
+    ],
   },
 ];
 
@@ -253,6 +276,7 @@ const AppSidebar: React.FC = () => {
   const reportsNav = useMemo(() => filterByPermission(reportsItems, hasPermission), [hasPermission]);
   const hrNav = useMemo(() => filterByPermission(hrItems, hasPermission), [hasPermission]);
   const activitiesNav = useMemo(() => filterByPermission(activitiesItems, hasPermission), [hasPermission]);
+  const settingsNav = useMemo(() => filterByPermission(settingsItems, hasPermission), [hasPermission]);
 
   // State
   const [openSubmenu, setOpenSubmenu] = useState<{
@@ -277,13 +301,14 @@ const AppSidebar: React.FC = () => {
   useEffect(() => {
     let submenuMatched = false;
     let matchedState: { type: MenuCategory; index: number } | null = null;
-    const categories: MenuCategory[] = ["academics", "reports", "hr", "activities"];
+    const categories: MenuCategory[] = ["academics", "reports", "hr", "activities", "settings"];
 
     categories.forEach((menuType) => {
       const items =
         menuType === "academics" ? academicsNav :
         menuType === "reports" ? reportsNav :
-        menuType === "hr" ? hrNav : activitiesNav;
+        menuType === "hr" ? hrNav :
+        menuType === "settings" ? settingsNav : activitiesNav;
 
       items.forEach((nav, index) => {
         if (nav.subItems) {
@@ -305,7 +330,7 @@ const AppSidebar: React.FC = () => {
       if (!submenuMatched && prev === null) return prev;
       return null;
     });
-  }, [pathname, academicsNav, reportsNav, hrNav, activitiesNav]);
+  }, [pathname, academicsNav, reportsNav, hrNav, activitiesNav, settingsNav]);
 
   // Effect: Update height for transitions (measure after DOM update)
   useEffect(() => {
@@ -486,6 +511,15 @@ const AppSidebar: React.FC = () => {
                   {isExpanded || isHovered || isMobileOpen ? "Activities" : <HorizontaLDots />}
                 </h2>
                 {renderMenuItems(activitiesNav, "activities")}
+              </div>
+            )}
+
+            {settingsNav.length > 0 && (
+              <div>
+                <h2 className={`mb-4 text-xs uppercase flex text-gray-400 ${!isExpanded && !isHovered ? "lg:justify-center" : "justify-start"}`}>
+                  {isExpanded || isHovered || isMobileOpen ? "Settings" : <HorizontaLDots />}
+                </h2>
+                {renderMenuItems(settingsNav, "settings")}
               </div>
             )}
           </div>

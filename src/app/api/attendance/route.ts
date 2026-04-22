@@ -106,25 +106,23 @@ export async function POST(req: NextRequest) {
 
     const cls = await prisma.class.findUnique({
       where: { id: parsedClassId },
-      select: { id: true, semester: true, year: true },
+      select: { id: true, semester: true, year: true, departmentId: true },
     });
     if (!cls) {
       return NextResponse.json({ error: "Class not found" }, { status: 404 });
     }
 
-    const scheduled = await prisma.classSchedule.findFirst({
-      where: {
-        classId: parsedClassId,
-        courseId: parsedCourseId,
-        semester: cls.semester,
-        year: cls.year,
-      },
+    const course = await prisma.course.findUnique({
+      where: { id: parsedCourseId },
+      select: { id: true, departmentId: true, isActive: true },
     });
-    if (!scheduled) {
+    if (!course || !course.isActive) {
+      return NextResponse.json({ error: "Course not found or inactive" }, { status: 404 });
+    }
+    if (course.departmentId !== cls.departmentId) {
       return NextResponse.json(
         {
-          error:
-            "This course is not on this class timetable for the current semester. Add it in Schedule first.",
+          error: "Course must belong to the same department as the class.",
         },
         { status: 400 }
       );
