@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import PageBreadCrumb from "@/components/common/PageBreadCrumb";
 import Button from "@/components/ui/button/Button";
@@ -17,6 +17,7 @@ import Badge from "@/components/ui/badge/Badge";
 import { authFetch } from "@/lib/api";
 import { DateInput } from "@/components/form/DateInput";
 import { DownloadIcon } from "@/icons";
+import { FinanceReportBarHorizontal } from "@/components/reports/FinanceReportChart";
 
 type Department = { id: number; name: string; code: string };
 type ClassItem = {
@@ -108,6 +109,17 @@ export default function StudentTransactionsReportPage() {
     filterDateFrom,
     filterDateTo,
   ]);
+
+  const paidByDept = useMemo(() => {
+    if (!transactions.length) return { categories: [] as string[], values: [] as number[] };
+    const m = new Map<string, number>();
+    for (const t of transactions) {
+      const k = `${t.department?.code ?? "—"} · ${t.department?.name ?? ""}`.trim();
+      m.set(k, (m.get(k) ?? 0) + t.totalPaid);
+    }
+    const entries = [...m.entries()].sort((a, b) => b[1] - a[1]).slice(0, 12);
+    return { categories: entries.map(([k]) => k), values: entries.map(([, v]) => v) };
+  }, [transactions]);
 
   const handlePrint = () => window.print();
 
@@ -231,23 +243,27 @@ export default function StudentTransactionsReportPage() {
           </div>
         </div>
         <div className="px-5 py-4">
-          <div className="mb-4 flex flex-wrap items-center justify-between gap-4">
-            <h4 className="text-base font-semibold text-gray-800 dark:text-white/90">Student Transactions</h4>
+          <div className="mb-4 flex flex-wrap items-baseline justify-between gap-2">
+            <h4 className="text-base font-semibold text-gray-900 dark:text-white">Student transactions</h4>
             {!loading && transactions.length > 0 && (
-              <div className="flex flex-wrap gap-4 rounded-xl bg-brand-50 px-4 py-2 dark:bg-brand-500/10">
-                <span className="text-sm">
-                  <span className="font-medium text-gray-600 dark:text-gray-400">Students: </span>
-                  <span className="font-bold text-brand-600 dark:text-brand-400">{transactions.length}</span>
+              <p className="text-sm text-gray-600 dark:text-gray-400">
+                {transactions.length} students · Total paid{" "}
+                <span className="font-semibold tabular-nums text-gray-900 dark:text-white">
+                  ${transactions.reduce((s, t) => s + t.totalPaid, 0).toLocaleString()}
                 </span>
-                <span className="text-sm">
-                  <span className="font-medium text-gray-600 dark:text-gray-400">Total Paid: </span>
-                  <span className="font-bold text-green-600 dark:text-green-400">
-                    ${transactions.reduce((s, t) => s + t.totalPaid, 0).toLocaleString()}
-                  </span>
-                </span>
-              </div>
+              </p>
             )}
           </div>
+          {!loading && paidByDept.categories.length > 0 && (
+            <div className="no-print mb-6">
+              <FinanceReportBarHorizontal
+                title="Total paid by department"
+                categories={paidByDept.categories}
+                data={paidByDept.values}
+                height={Math.min(380, 120 + paidByDept.categories.length * 26)}
+              />
+            </div>
+          )}
           {loading ? (
             <div className="flex justify-center py-16">
               <div className="h-8 w-8 animate-spin rounded-full border-4 border-gray-200 border-t-brand-500" />

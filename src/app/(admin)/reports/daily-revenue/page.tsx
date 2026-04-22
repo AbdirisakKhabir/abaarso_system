@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import PageBreadCrumb from "@/components/common/PageBreadCrumb";
 import Button from "@/components/ui/button/Button";
@@ -16,6 +16,7 @@ import {
 import { usePagination } from "@/hooks/usePagination";
 import { authFetch } from "@/lib/api";
 import { DownloadIcon } from "@/icons";
+import { FinanceReportLine } from "@/components/reports/FinanceReportChart";
 
 export default function DailyRevenueReportPage() {
   const [data, setData] = useState<{
@@ -55,6 +56,16 @@ export default function DailyRevenueReportPage() {
     from,
     to,
   } = usePagination(dailySummaryRows, [dateFrom, dateTo]);
+
+  const lineChart = useMemo(() => {
+    if (!data?.dailySummary.length) return { categories: [] as string[], values: [] as number[] };
+    return {
+      categories: data.dailySummary.map((d) =>
+        new Date(d.date).toLocaleDateString(undefined, { month: "short", day: "numeric" })
+      ),
+      values: data.dailySummary.map((d) => d.total),
+    };
+  }, [data]);
 
   const handlePrint = () => window.print();
   const handleExportCSV = () => {
@@ -115,18 +126,22 @@ export default function DailyRevenueReportPage() {
           </div>
         ) : data ? (
           <>
-            <div className="border-b border-gray-200 px-6 py-5 dark:border-gray-800">
-              <div className="flex flex-wrap items-center justify-between gap-4">
-                <h3 className="text-lg font-semibold text-gray-800 dark:text-white/90">Daily Revenue Summary</h3>
-                <div className="rounded-xl bg-brand-50 px-5 py-3 dark:bg-brand-500/10">
-                  <span className="text-sm font-medium text-gray-600 dark:text-gray-400">Total Revenue: </span>
-                  <span className="text-xl font-bold text-brand-600 dark:text-brand-400">
-                    ${data.totalRevenue.toLocaleString()}
-                  </span>
-                  <span className="ml-2 text-sm text-gray-500">({data.totalCount} payments)</span>
-                </div>
-              </div>
+            <div className="border-b border-gray-200 px-6 py-4 dark:border-gray-800">
+              <h3 className="text-sm font-semibold text-gray-900 dark:text-white">Daily revenue</h3>
+              <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
+                Total ${data.totalRevenue.toLocaleString()} · {data.totalCount} payments
+              </p>
             </div>
+            {lineChart.categories.length > 0 && (
+              <div className="no-print border-b border-gray-200 px-6 py-6 dark:border-gray-800">
+                <FinanceReportLine
+                  title="Revenue by day"
+                  categories={lineChart.categories}
+                  data={lineChart.values}
+                  height={280}
+                />
+              </div>
+            )}
             <div className="overflow-x-auto">
               <Table>
                 <TableHeader>

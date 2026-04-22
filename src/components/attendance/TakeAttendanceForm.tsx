@@ -478,6 +478,7 @@ export default function TakeAttendanceForm({ onSuccess }: TakeAttendanceFormProp
                     ? "Select class first."
                     : "No courses in this department."
                 }
+                searchPlaceholder="Search course code or name…"
               />
             </div>
             <DateInput

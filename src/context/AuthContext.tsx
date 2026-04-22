@@ -29,6 +29,11 @@ type AuthContextType = {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+/** Matches seeded role name "Admin"; bypasses permission list so sidebar/API stay in sync. */
+function isBuiltInAdminRole(roleName: string | null | undefined): boolean {
+  return (roleName ?? "").trim().toLowerCase() === "admin";
+}
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const [user, setUser] = useState<AuthUser | null>(null);
@@ -142,7 +147,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const hasPermission = useCallback(
     (permission: string): boolean => {
-      if (!user?.permissions) return false;
+      if (!user) return false;
+      if (isBuiltInAdminRole(user.roleName)) return true;
+      if (!user.permissions) return false;
       if (user.permissions.includes("admin") || user.permissions.includes("*"))
         return true;
       return user.permissions.includes(permission);

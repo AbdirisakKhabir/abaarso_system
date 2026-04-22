@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import PageBreadCrumb from "@/components/common/PageBreadCrumb";
 import Button from "@/components/ui/button/Button";
 import {
@@ -15,6 +15,7 @@ import { usePagination } from "@/hooks/usePagination";
 import Badge from "@/components/ui/badge/Badge";
 import { authFetch } from "@/lib/api";
 import { DownloadIcon } from "@/icons";
+import { FinanceReportBarHorizontal } from "@/components/reports/FinanceReportChart";
 
 type Department = { id: number; name: string; code: string };
 type SemesterOption = { id: number; name: string; sortOrder: number; isActive: boolean };
@@ -80,6 +81,15 @@ export default function ClassRevenueReportPage() {
   } = usePagination(revenue, [filterYear, filterDept, filterSemester]);
 
   const totalRevenue = revenue.reduce((sum, r) => sum + r.revenue, 0);
+
+  const classRevenueChart = useMemo(() => {
+    if (!revenue.length) return { categories: [] as string[], values: [] as number[] };
+    const sorted = [...revenue].sort((a, b) => b.revenue - a.revenue).slice(0, 15);
+    return {
+      categories: sorted.map((r) => `${r.name} (${r.semester} ${r.year})`),
+      values: sorted.map((r) => r.revenue),
+    };
+  }, [revenue]);
 
   const handlePrint = () => window.print();
 
@@ -169,19 +179,30 @@ export default function ClassRevenueReportPage() {
           </div>
         </div>
         <div className="px-5 py-4">
-          <h4 className="mb-4 text-base font-semibold text-gray-800 dark:text-white/90">Class Revenue</h4>
+          <div className="mb-4 flex flex-wrap items-baseline justify-between gap-2">
+            <h4 className="text-base font-semibold text-gray-900 dark:text-white">Class revenue</h4>
+            {!loading && revenue.length > 0 && (
+              <p className="text-sm text-gray-600 dark:text-gray-400">
+                Total <span className="font-semibold tabular-nums text-gray-900 dark:text-white">${totalRevenue.toLocaleString()}</span>
+              </p>
+            )}
+          </div>
           {loading ? (
             <div className="flex justify-center py-16">
               <div className="h-8 w-8 animate-spin rounded-full border-4 border-gray-200 border-t-brand-500" />
             </div>
           ) : (
             <>
-              <div className="mb-4 rounded-lg bg-brand-50 px-4 py-3 dark:bg-brand-500/10">
-                <span className="text-sm font-medium text-gray-600 dark:text-gray-400">Total Revenue: </span>
-                <span className="text-lg font-bold text-brand-600 dark:text-brand-400">
-                  ${totalRevenue.toLocaleString()}
-                </span>
-              </div>
+              {classRevenueChart.categories.length > 0 && (
+                <div className="no-print mb-6">
+                  <FinanceReportBarHorizontal
+                    title="Top classes by revenue"
+                    categories={classRevenueChart.categories}
+                    data={classRevenueChart.values}
+                    height={Math.min(400, 140 + classRevenueChart.categories.length * 24)}
+                  />
+                </div>
+              )}
               <div className="overflow-x-auto">
                 <Table>
                   <TableHeader>

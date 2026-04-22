@@ -60,6 +60,7 @@ export async function userHasPermission(
     select: {
       role: {
         select: {
+          name: true,
           permissions: {
             select: { permission: { select: { name: true } } },
           },
@@ -67,7 +68,9 @@ export async function userHasPermission(
       },
     },
   });
-  if (!row?.role?.permissions) return false;
+  if (!row?.role) return false;
+  if (isAdminRoleName(row.role.name)) return true;
+  if (!row.role.permissions) return false;
   return row.role.permissions.some(
     (rp) => rp.permission.name === permissionName
   );

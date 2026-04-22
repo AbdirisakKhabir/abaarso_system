@@ -15,6 +15,11 @@ import {
 import { usePagination } from "@/hooks/usePagination";
 import { authFetch } from "@/lib/api";
 import { DownloadIcon } from "@/icons";
+import {
+  FinanceReportBar,
+  FinanceReportBarHorizontal,
+  FinanceReportDonut,
+} from "@/components/reports/FinanceReportChart";
 
 const CURRENT_YEAR = new Date().getFullYear();
 
@@ -41,7 +46,9 @@ export default function IncomeStatementReportPage() {
     try {
       const res = await authFetch(`/api/finance/income-statement?year=${year}`);
       if (res.ok) setData(await res.json());
-    } catch { /* empty */ }
+    } catch {
+      /* empty */
+    }
     setLoading(false);
   }, [year]);
 
@@ -81,7 +88,9 @@ export default function IncomeStatementReportPage() {
       ["", ""],
       ["NET INCOME", `$${data.netIncome.toLocaleString()}`],
     ];
-    const csv = lines.map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(",")).join("\n");
+    const csv = lines
+      .map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(","))
+      .join("\n");
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
@@ -91,176 +100,254 @@ export default function IncomeStatementReportPage() {
     URL.revokeObjectURL(url);
   };
 
+  const catLabels = expenseCategoryRows.map((c) => c.category);
+  const catAmounts = expenseCategoryRows.map((c) => c.amount);
+
   return (
     <div className="report-print-area">
       <div className="mb-6 flex flex-wrap items-center justify-between gap-4 no-print">
         <PageBreadCrumb pageTitle="Income Statement" />
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <select
             value={year}
             onChange={(e) => setYear(e.target.value)}
             className="h-10 rounded-lg border border-gray-200 px-3 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-white"
           >
             {[CURRENT_YEAR, CURRENT_YEAR - 1, CURRENT_YEAR - 2].map((y) => (
-              <option key={y} value={y}>{y}</option>
+              <option key={y} value={y}>
+                {y}
+              </option>
             ))}
           </select>
           <Link href="/reports/payment">
-            <Button variant="outline" size="sm">← All Reports</Button>
+            <Button variant="outline" size="sm">
+              ← All Reports
+            </Button>
           </Link>
-          <Button variant="outline" size="sm" startIcon={<DownloadIcon />} onClick={handleExportCSV}>
+          <Button
+            variant="outline"
+            size="sm"
+            startIcon={<DownloadIcon />}
+            onClick={handleExportCSV}
+          >
             Export CSV
           </Button>
-          <Button size="sm" onClick={handlePrint}>Print</Button>
+          <Button size="sm" onClick={handlePrint}>
+            Print
+          </Button>
         </div>
       </div>
 
-      <div className="mb-4 print:block hidden">
+      <div className="mb-4 hidden print:block">
         <h1 className="text-xl font-bold text-gray-900">Income Statement</h1>
-        <p className="text-sm text-gray-600">Year: {year} | Generated: {data?.generatedAt ? new Date(data.generatedAt).toLocaleString() : "—"}</p>
+        <p className="text-sm text-gray-600">
+          Year: {year} | Generated:{" "}
+          {data?.generatedAt
+            ? new Date(data.generatedAt).toLocaleString()
+            : "—"}
+        </p>
       </div>
 
-      <div className="min-w-0 overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm dark:border-gray-800 dark:bg-white/5 dark:shadow-none">
+      <div className="min-w-0 overflow-hidden rounded-xl border border-gray-200 bg-white dark:border-gray-800 dark:bg-white/5">
         {loading ? (
           <div className="flex justify-center py-16">
             <div className="h-8 w-8 animate-spin rounded-full border-4 border-gray-200 border-t-brand-500" />
           </div>
         ) : data ? (
-          <div className="overflow-hidden">
-            {/* Header */}
-            <div className="border-b border-gray-200 bg-gradient-to-r from-brand-500/10 to-brand-600/5 px-8 py-6 dark:border-gray-800 dark:from-brand-500/20 dark:to-brand-600/10">
-              <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
-                Income Statement
+          <>
+            <div className="border-b border-gray-200 px-6 py-4 dark:border-gray-800">
+              <h2 className="text-base font-semibold text-gray-900 dark:text-white">
+                Income statement — fiscal year {data.year}
               </h2>
               <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
-                Abaarso Tech University · Fiscal Year {data.year}
+                Abaarso Tech University ·{" "}
+                {new Date(data.generatedAt).toLocaleString()}
               </p>
             </div>
 
-            {/* Revenue Section */}
-            <div className="border-b border-gray-200 px-8 py-6 dark:border-gray-800">
-              <h3 className="mb-4 flex items-center gap-2 text-lg font-semibold text-gray-800 dark:text-white">
-                <span className="flex h-8 w-1 rounded-full bg-green-500" />
-                Revenue
+            <div className="no-print grid gap-6 border-b border-gray-200 px-6 py-6 lg:grid-cols-2 dark:border-gray-800">
+              <FinanceReportBar
+                title="Tuition, total expenses, and net income"
+                categories={["Tuition revenue", "Total expenses", "Net income"]}
+                data={[
+                  data.revenue.tuition,
+                  data.expenses.total,
+                  data.netIncome,
+                ]}
+                color="#1e40af"
+              />
+              <FinanceReportDonut
+                title="Expense components"
+                labels={["Approved expenses", "Bank withdrawals"]}
+                series={[
+                  data.expenses.approvedExpenses,
+                  data.expenses.withdrawals,
+                ]}
+              />
+            </div>
+
+            {catLabels.length > 0 && (
+              <div className="no-print border-b border-gray-200 px-6 py-6 dark:border-gray-800">
+                <FinanceReportBarHorizontal
+                  title="Approved expenses by category"
+                  categories={catLabels}
+                  data={catAmounts}
+                  height={Math.min(420, 120 + catLabels.length * 28)}
+                />
+              </div>
+            )}
+
+            <div className="overflow-x-auto px-6 py-6">
+              <h3 className="mb-3 text-sm font-semibold text-gray-900 dark:text-white">
+                Figures
               </h3>
-              <div className="rounded-xl border border-green-200 bg-green-50/50 p-6 dark:border-green-900/50 dark:bg-green-900/10">
-                <div className="flex flex-wrap items-end justify-between gap-4">
-                  <div>
-                    <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Tuition Revenue</p>
-                    <p className="mt-1 text-3xl font-bold text-green-600 dark:text-green-400">
+              <Table>
+                <TableHeader>
+                  <TableRow className="bg-transparent! hover:bg-transparent!">
+                    <TableCell isHeader>Section</TableCell>
+                    <TableCell isHeader>Item</TableCell>
+                    <TableCell isHeader className="text-right">
+                      Amount
+                    </TableCell>
+                    <TableCell isHeader className="text-center">
+                      Count
+                    </TableCell>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  <TableRow className="bg-gray-50 dark:bg-white/5">
+                    <TableCell
+                      colSpan={4}
+                      className="text-xs font-semibold uppercase tracking-wide text-gray-600 dark:text-gray-400"
+                    >
+                      Revenue
+                    </TableCell>
+                  </TableRow>
+                  <TableRow>
+                    <TableCell className="text-gray-500">Revenue</TableCell>
+                    <TableCell>Tuition revenue</TableCell>
+                    <TableCell className="text-right font-medium tabular-nums">
                       ${data.revenue.tuition.toLocaleString()}
-                    </p>
-                    <p className="mt-1 text-xs text-gray-500">{data.revenue.paymentCount} payments received</p>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Expenses Section */}
-            <div className="border-b border-gray-200 px-8 py-6 dark:border-gray-800">
-              <h3 className="mb-4 flex items-center gap-2 text-lg font-semibold text-gray-800 dark:text-white">
-                <span className="flex h-8 w-1 rounded-full bg-red-500" />
-                Expenses
-              </h3>
-              <div className="space-y-4">
-                <div className="rounded-xl border border-gray-200 bg-gray-50/50 p-5 dark:border-gray-700 dark:bg-gray-800/30">
-                  <div className="flex flex-wrap items-center justify-between gap-4">
-                    <div>
-                      <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Approved Expenses</p>
-                      <p className="mt-1 text-xl font-bold text-red-600 dark:text-red-400">
-                        ${data.expenses.approvedExpenses.toLocaleString()}
-                      </p>
-                      <p className="text-xs text-gray-500">{data.expenses.approvedCount} expenses</p>
-                    </div>
-                    <div className="text-right">
-                      <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Bank Withdrawals</p>
-                      <p className="mt-1 text-xl font-bold text-red-600 dark:text-red-400">
-                        ${data.expenses.withdrawals.toLocaleString()}
-                      </p>
-                      <p className="text-xs text-gray-500">{data.expenses.withdrawalCount} withdrawals</p>
-                    </div>
-                  </div>
-                </div>
-                {data.expenseCategories.length > 0 && (
-                  <div className="rounded-xl border border-gray-200 p-4 dark:border-gray-700">
-                    <p className="mb-3 text-sm font-medium text-gray-600 dark:text-gray-400">Expense by Category</p>
-                    <Table>
-                      <TableHeader>
-                        <TableRow className="bg-transparent! hover:bg-transparent!">
-                          <TableCell isHeader>Category</TableCell>
-                          <TableCell isHeader className="text-right">Amount</TableCell>
-                          <TableCell isHeader className="text-center">Count</TableCell>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {paginatedExpenseCategories.map((c) => (
-                          <TableRow key={c.category}>
-                            <TableCell>{c.category}</TableCell>
-                            <TableCell className="text-right font-medium text-red-600 dark:text-red-400">
-                              ${c.amount.toLocaleString()}
-                            </TableCell>
-                            <TableCell className="text-center">{c.count}</TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                    <TablePagination
-                      className="no-print"
-                      page={page}
-                      totalPages={totalPages}
-                      total={expenseCategoriesTotal}
-                      from={from}
-                      to={to}
-                      pageSize={pageSize}
-                      onPageChange={setPage}
-                      onPageSizeChange={setPageSize}
-                    />
-                  </div>
-                )}
-                <div className="rounded-xl border-2 border-red-200 bg-red-50/50 px-5 py-4 dark:border-red-900/50 dark:bg-red-900/10">
-                  <div className="flex items-center justify-between">
-                    <span className="font-semibold text-gray-800 dark:text-white">Total Expenses</span>
-                    <span className="text-2xl font-bold text-red-600 dark:text-red-400">
+                    </TableCell>
+                    <TableCell className="text-center tabular-nums">
+                      {data.revenue.paymentCount}
+                    </TableCell>
+                  </TableRow>
+                  <TableRow className="bg-gray-50 dark:bg-white/5">
+                    <TableCell
+                      colSpan={4}
+                      className="text-xs font-semibold uppercase tracking-wide text-gray-600 dark:text-gray-400"
+                    >
+                      Expenses
+                    </TableCell>
+                  </TableRow>
+                  <TableRow>
+                    <TableCell className="text-gray-500">Expenses</TableCell>
+                    <TableCell>Approved expenses</TableCell>
+                    <TableCell className="text-right font-medium tabular-nums">
+                      ${data.expenses.approvedExpenses.toLocaleString()}
+                    </TableCell>
+                    <TableCell className="text-center tabular-nums">
+                      {data.expenses.approvedCount}
+                    </TableCell>
+                  </TableRow>
+                  <TableRow>
+                    <TableCell className="text-gray-500">Expenses</TableCell>
+                    <TableCell>Bank withdrawals</TableCell>
+                    <TableCell className="text-right font-medium tabular-nums">
+                      ${data.expenses.withdrawals.toLocaleString()}
+                    </TableCell>
+                    <TableCell className="text-center tabular-nums">
+                      {data.expenses.withdrawalCount}
+                    </TableCell>
+                  </TableRow>
+                  <TableRow>
+                    <TableCell className="text-gray-500">Expenses</TableCell>
+                    <TableCell className="font-medium">Total expenses</TableCell>
+                    <TableCell className="text-right font-semibold tabular-nums">
                       ${data.expenses.total.toLocaleString()}
-                    </span>
-                  </div>
-                </div>
-              </div>
+                    </TableCell>
+                    <TableCell className="text-center">—</TableCell>
+                  </TableRow>
+                  <TableRow className="bg-gray-50 dark:bg-white/5">
+                    <TableCell
+                      colSpan={4}
+                      className="text-xs font-semibold uppercase tracking-wide text-gray-600 dark:text-gray-400"
+                    >
+                      Result
+                    </TableCell>
+                  </TableRow>
+                  <TableRow>
+                    <TableCell className="text-gray-500">Result</TableCell>
+                    <TableCell className="font-semibold">Net income</TableCell>
+                    <TableCell
+                      className={`text-right text-base font-semibold tabular-nums ${
+                        data.netIncome >= 0
+                          ? "text-gray-900 dark:text-white"
+                          : "text-red-600 dark:text-red-400"
+                      }`}
+                    >
+                      ${data.netIncome.toLocaleString()}
+                      {data.netIncome < 0 ? " (deficit)" : ""}
+                    </TableCell>
+                    <TableCell className="text-center">—</TableCell>
+                  </TableRow>
+                </TableBody>
+              </Table>
             </div>
 
-            {/* Net Income */}
-            <div className="px-8 py-8">
-              <div className={`rounded-2xl border-2 px-8 py-6 ${
-                data.netIncome >= 0
-                  ? "border-green-300 bg-green-50 dark:border-green-800 dark:bg-green-900/20"
-                  : "border-red-300 bg-red-50 dark:border-red-800 dark:bg-red-900/20"
-              }`}>
-                <div className="flex flex-wrap items-center justify-between gap-4">
-                  <div>
-                    <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Net Income</p>
-                    <p className="mt-1 text-2xl font-bold text-gray-900 dark:text-white">
-                      Revenue − Expenses
-                    </p>
-                  </div>
-                  <p className={`text-4xl font-bold ${
-                    data.netIncome >= 0
-                      ? "text-green-600 dark:text-green-400"
-                      : "text-red-600 dark:text-red-400"
-                  }`}>
-                    ${Math.abs(data.netIncome).toLocaleString()}
-                    {data.netIncome < 0 && " (Deficit)"}
-                  </p>
-                </div>
+            {data.expenseCategories.length > 0 && (
+              <div className="border-t border-gray-200 px-6 py-6 dark:border-gray-800">
+                <h3 className="mb-3 text-sm font-semibold text-gray-900 dark:text-white">
+                  Expense by category
+                </h3>
+                <Table>
+                  <TableHeader>
+                    <TableRow className="bg-transparent! hover:bg-transparent!">
+                      <TableCell isHeader>Category</TableCell>
+                      <TableCell isHeader className="text-right">
+                        Amount
+                      </TableCell>
+                      <TableCell isHeader className="text-center">
+                        Count
+                      </TableCell>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {paginatedExpenseCategories.map((c) => (
+                      <TableRow key={c.category}>
+                        <TableCell>{c.category}</TableCell>
+                        <TableCell className="text-right font-medium tabular-nums">
+                          ${c.amount.toLocaleString()}
+                        </TableCell>
+                        <TableCell className="text-center tabular-nums">
+                          {c.count}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+                <TablePagination
+                  className="no-print"
+                  page={page}
+                  totalPages={totalPages}
+                  total={expenseCategoriesTotal}
+                  from={from}
+                  to={to}
+                  pageSize={pageSize}
+                  onPageChange={setPage}
+                  onPageSizeChange={setPageSize}
+                />
               </div>
-            </div>
+            )}
 
-            {/* Footer */}
-            <div className="border-t border-gray-200 px-8 py-4 dark:border-gray-800">
-              <p className="text-xs text-gray-500">
-                Generated on {new Date(data.generatedAt).toLocaleString()} · Abaarso Tech University
+            <div className="border-t border-gray-200 px-6 py-3 dark:border-gray-800">
+              <p className="text-xs text-gray-500 dark:text-gray-400">
+                Generated {new Date(data.generatedAt).toLocaleString()} ·
+                Abaarso Tech University
               </p>
             </div>
-          </div>
+          </>
         ) : (
           <div className="py-16 text-center text-gray-500">No data available.</div>
         )}

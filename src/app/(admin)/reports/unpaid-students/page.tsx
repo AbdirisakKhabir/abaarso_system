@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import PageBreadCrumb from "@/components/common/PageBreadCrumb";
 import Button from "@/components/ui/button/Button";
@@ -15,6 +15,7 @@ import {
 import { usePagination } from "@/hooks/usePagination";
 import { authFetch } from "@/lib/api";
 import { DownloadIcon } from "@/icons";
+import { FinanceReportBar } from "@/components/reports/FinanceReportChart";
 
 type SemesterOption = { id: number; name: string; sortOrder: number; isActive: boolean };
 type ClassOption = { id: number; name: string; semester: string; year: number; department: { id: number; code: string; name: string } };
@@ -108,6 +109,17 @@ export default function UnpaidStudentsReportPage() {
     from,
     to,
   } = usePagination(unpaidStudents, [unpaidSemester, unpaidYear, unpaidClassId, unpaidStudents]);
+
+  const unpaidByDept = useMemo(() => {
+    if (!unpaidStudents.length) return { categories: [] as string[], values: [] as number[] };
+    const m = new Map<string, number>();
+    for (const s of unpaidStudents) {
+      const k = `${s.department.code} · ${s.department.name}`;
+      m.set(k, (m.get(k) ?? 0) + (s.tuitionFee ?? 0));
+    }
+    const entries = [...m.entries()].sort((a, b) => b[1] - a[1]);
+    return { categories: entries.map(([k]) => k), values: entries.map(([, v]) => v) };
+  }, [unpaidStudents]);
 
   const handleExportCSV = () => {
     if (unpaidStudents.length === 0) return;
@@ -217,20 +229,25 @@ export default function UnpaidStudentsReportPage() {
               </div>
             ) : (
               <>
-                <div className="mb-4 flex flex-wrap gap-4 rounded-xl bg-amber-50 px-4 py-3 dark:bg-amber-500/10">
-                  <span className="text-sm">
-                    <span className="font-medium text-gray-600 dark:text-gray-400">Students: </span>
-                    <span className="font-bold text-amber-700 dark:text-amber-400">{unpaidStudents.length}</span>
+                <p className="mb-4 text-sm text-gray-600 dark:text-gray-400">
+                  {unpaidStudents.length} students · Total due{" "}
+                  <span className="font-semibold tabular-nums text-gray-900 dark:text-white">
+                    $
+                    {unpaidStudents
+                      .reduce((s, t) => s + (t.tuitionFee ?? 0), 0)
+                      .toLocaleString()}
                   </span>
-                  <span className="text-sm">
-                    <span className="font-medium text-gray-600 dark:text-gray-400">Total Amount Due: </span>
-                    <span className="font-bold text-amber-700 dark:text-amber-400">
-                      ${unpaidStudents
-                        .reduce((s, t) => s + (t.tuitionFee ?? 0), 0)
-                        .toLocaleString()}
-                    </span>
-                  </span>
-                </div>
+                </p>
+                {unpaidByDept.categories.length > 0 && (
+                  <div className="no-print mb-6">
+                    <FinanceReportBar
+                      title="Amount due by department"
+                      categories={unpaidByDept.categories}
+                      data={unpaidByDept.values}
+                      color="#b45309"
+                    />
+                  </div>
+                )}
                 <div className="overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-700">
                   <Table>
                     <TableHeader>

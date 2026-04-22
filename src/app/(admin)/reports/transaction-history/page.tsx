@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import PageBreadCrumb from "@/components/common/PageBreadCrumb";
 import Button from "@/components/ui/button/Button";
@@ -17,6 +17,10 @@ import Badge from "@/components/ui/badge/Badge";
 import { authFetch } from "@/lib/api";
 import { DateInput } from "@/components/form/DateInput";
 import { DownloadIcon } from "@/icons";
+import {
+  FinanceReportBar,
+  FinanceReportDonut,
+} from "@/components/reports/FinanceReportChart";
 
 type Bank = { id: number; name: string; code: string };
 type Transaction = {
@@ -73,6 +77,35 @@ export default function TransactionHistoryReportPage() {
     from,
     to,
   } = usePagination(transactions, [bankId, type, dateFrom, dateTo]);
+
+  const txSummary = useMemo(() => {
+    const totalIn = transactions
+      .filter((t) => t.type === "deposit" || t.type === "transfer_in")
+      .reduce((s, t) => s + t.amount, 0);
+    const totalOut = transactions
+      .filter((t) => t.type === "withdrawal" || t.type === "transfer_out")
+      .reduce((s, t) => s + t.amount, 0);
+    const byType = new Map<string, number>();
+    const label: Record<string, string> = {
+      deposit: "Deposit",
+      withdrawal: "Withdrawal",
+      transfer_out: "Transfer out",
+      transfer_in: "Transfer in",
+    };
+    for (const t of transactions) {
+      const k = label[t.type] || t.type;
+      byType.set(k, (byType.get(k) ?? 0) + t.amount);
+    }
+    const entries = [...byType.entries()].sort((a, b) => b[1] - a[1]);
+    return {
+      totalIn,
+      totalOut,
+      net: totalIn - totalOut,
+      count: transactions.length,
+      typeCategories: entries.map(([k]) => k),
+      typeValues: entries.map(([, v]) => v),
+    };
+  }, [transactions]);
 
   const handlePrint = () => window.print();
   const handleExportCSV = () => {
@@ -182,47 +215,51 @@ export default function TransactionHistoryReportPage() {
       </div>
 
       {!loading && transactions.length > 0 && (
-        <div className="mb-6 flex flex-wrap gap-4 rounded-xl border border-gray-200 bg-white p-4 dark:border-gray-800 dark:bg-white/5">
-          <div className="rounded-lg bg-green-50 px-4 py-2 dark:bg-green-500/10">
-            <span className="text-sm text-gray-600 dark:text-gray-400">Total In (Deposits + Transfers In): </span>
-            <span className="font-bold text-green-600 dark:text-green-400">
-              ${transactions
-                .filter((t) => t.type === "deposit" || t.type === "transfer_in")
-                .reduce((s, t) => s + t.amount, 0)
-                .toLocaleString()}
-            </span>
+        <div className="mb-6 overflow-hidden rounded-xl border border-gray-200 bg-white dark:border-gray-800 dark:bg-white/5">
+          <div className="overflow-x-auto border-b border-gray-200 px-4 py-4 dark:border-gray-800">
+            <h3 className="mb-3 text-sm font-semibold text-gray-900 dark:text-white">Summary</h3>
+            <Table>
+              <TableHeader>
+                <TableRow className="bg-transparent! hover:bg-transparent!">
+                  <TableCell isHeader>Item</TableCell>
+                  <TableCell isHeader className="text-right">Amount</TableCell>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                <TableRow>
+                  <TableCell>Total in (deposits + transfers in)</TableCell>
+                  <TableCell className="text-right tabular-nums">${txSummary.totalIn.toLocaleString()}</TableCell>
+                </TableRow>
+                <TableRow>
+                  <TableCell>Total out (withdrawals + transfers out)</TableCell>
+                  <TableCell className="text-right tabular-nums">${txSummary.totalOut.toLocaleString()}</TableCell>
+                </TableRow>
+                <TableRow>
+                  <TableCell className="font-medium">Net</TableCell>
+                  <TableCell className="text-right font-medium tabular-nums">${txSummary.net.toLocaleString()}</TableCell>
+                </TableRow>
+                <TableRow>
+                  <TableCell>Row count</TableCell>
+                  <TableCell className="text-right tabular-nums">{txSummary.count}</TableCell>
+                </TableRow>
+              </TableBody>
+            </Table>
           </div>
-          <div className="rounded-lg bg-red-50 px-4 py-2 dark:bg-red-500/10">
-            <span className="text-sm text-gray-600 dark:text-gray-400">Total Out (Withdrawals + Transfers Out): </span>
-            <span className="font-bold text-red-600 dark:text-red-400">
-              ${transactions
-                .filter((t) => t.type === "withdrawal" || t.type === "transfer_out")
-                .reduce((s, t) => s + t.amount, 0)
-                .toLocaleString()}
-            </span>
-          </div>
-          <div className="rounded-lg bg-brand-50 px-4 py-2 dark:bg-brand-500/10">
-            <span className="text-sm text-gray-600 dark:text-gray-400">Net: </span>
-            <span
-              className={`font-bold ${
-                transactions.filter((t) => t.type === "deposit" || t.type === "transfer_in").reduce((s, t) => s + t.amount, 0) -
-                  transactions.filter((t) => t.type === "withdrawal" || t.type === "transfer_out").reduce((s, t) => s + t.amount, 0) >=
-                0
-                  ? "text-green-600"
-                  : "text-red-600"
-              }`}
-            >
-              $
-              {(
-                transactions.filter((t) => t.type === "deposit" || t.type === "transfer_in").reduce((s, t) => s + t.amount, 0) -
-                transactions.filter((t) => t.type === "withdrawal" || t.type === "transfer_out").reduce((s, t) => s + t.amount, 0)
-              ).toLocaleString()}
-            </span>
-          </div>
-          <div className="rounded-lg bg-gray-50 px-4 py-2 dark:bg-gray-800/50">
-            <span className="text-sm text-gray-600 dark:text-gray-400">Transactions: </span>
-            <span className="font-bold text-gray-800 dark:text-white/90">{transactions.length}</span>
-          </div>
+          {txSummary.typeCategories.length > 0 && (
+            <div className="no-print grid gap-6 px-4 py-6 lg:grid-cols-2">
+              <FinanceReportDonut
+                title="Amount by type"
+                labels={txSummary.typeCategories}
+                series={txSummary.typeValues}
+              />
+              <FinanceReportBar
+                title="Amount by type"
+                categories={txSummary.typeCategories}
+                data={txSummary.typeValues}
+                color="#1e40af"
+              />
+            </div>
+          )}
         </div>
       )}
 

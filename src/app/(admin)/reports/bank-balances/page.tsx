@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import PageBreadCrumb from "@/components/common/PageBreadCrumb";
 import Button from "@/components/ui/button/Button";
@@ -15,6 +15,7 @@ import {
 import { usePagination } from "@/hooks/usePagination";
 import { authFetch } from "@/lib/api";
 import { DownloadIcon } from "@/icons";
+import { FinanceReportBar } from "@/components/reports/FinanceReportChart";
 
 type Bank = { id: number; name: string; code: string; balance: number; accountNumber?: string | null };
 
@@ -47,6 +48,15 @@ export default function BankBalancesReportPage() {
     from,
     to,
   } = usePagination(banksList, [data]);
+
+  const bankChart = useMemo(() => {
+    if (!data?.banks.length) return { categories: [] as string[], values: [] as number[] };
+    const sorted = [...data.banks].sort((a, b) => (b.balance ?? 0) - (a.balance ?? 0));
+    return {
+      categories: sorted.map((b) => b.code),
+      values: sorted.map((b) => b.balance ?? 0),
+    };
+  }, [data]);
 
   const handlePrint = () => window.print();
   const handleExportCSV = () => {
@@ -90,17 +100,25 @@ export default function BankBalancesReportPage() {
           </div>
         ) : data ? (
           <>
-            <div className="border-b border-gray-200 px-6 py-5 dark:border-gray-800">
-              <div className="flex flex-wrap items-center justify-between gap-4">
-                <h3 className="text-lg font-semibold text-gray-800 dark:text-white/90">Bank Account Balances</h3>
-                <div className="rounded-xl bg-brand-50 px-5 py-3 dark:bg-brand-500/10">
-                  <span className="text-sm font-medium text-gray-600 dark:text-gray-400">Total Balance: </span>
-                  <span className="text-xl font-bold text-brand-600 dark:text-brand-400">
-                    ${data.totalBalance.toLocaleString()}
-                  </span>
-                </div>
-              </div>
+            <div className="border-b border-gray-200 px-6 py-4 dark:border-gray-800">
+              <h3 className="text-sm font-semibold text-gray-900 dark:text-white">Bank balances</h3>
+              <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
+                Total balance{" "}
+                <span className="font-semibold tabular-nums text-gray-900 dark:text-white">
+                  ${data.totalBalance.toLocaleString()}
+                </span>
+              </p>
             </div>
+            {bankChart.categories.length > 0 && (
+              <div className="no-print border-b border-gray-200 px-6 py-6 dark:border-gray-800">
+                <FinanceReportBar
+                  title="Balance by bank code"
+                  categories={bankChart.categories}
+                  data={bankChart.values}
+                  color="#0f766e"
+                />
+              </div>
+            )}
             <div className="overflow-x-auto">
               <Table>
                 <TableHeader>

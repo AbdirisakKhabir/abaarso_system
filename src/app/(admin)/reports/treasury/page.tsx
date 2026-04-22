@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import PageBreadCrumb from "@/components/common/PageBreadCrumb";
 import Button from "@/components/ui/button/Button";
@@ -15,6 +15,10 @@ import {
 import { usePagination } from "@/hooks/usePagination";
 import { authFetch } from "@/lib/api";
 import { DownloadIcon } from "@/icons";
+import {
+  FinanceReportBar,
+  FinanceReportDonut,
+} from "@/components/reports/FinanceReportChart";
 
 const CURRENT_YEAR = new Date().getFullYear();
 
@@ -56,6 +60,15 @@ export default function TreasuryReportPage() {
     from,
     to,
   } = usePagination(treasuryBanks, [year, data]);
+
+  const bankChart = useMemo(() => {
+    if (!data?.banks.length) return { categories: [] as string[], values: [] as number[] };
+    const sorted = [...data.banks].sort((a, b) => (b.balance ?? 0) - (a.balance ?? 0));
+    return {
+      categories: sorted.map((b) => b.code),
+      values: sorted.map((b) => b.balance ?? 0),
+    };
+  }, [data]);
 
   const handlePrint = () => window.print();
   const handleExportCSV = () => {
@@ -118,33 +131,67 @@ export default function TreasuryReportPage() {
           </div>
         ) : data ? (
           <>
-            <div className="grid gap-4 p-6 sm:grid-cols-2 lg:grid-cols-4">
-              <div className="rounded-xl border border-gray-200 bg-gray-50 p-5 dark:border-gray-700 dark:bg-gray-800/50">
-                <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Total Bank Balance</p>
-                <p className="mt-1 text-2xl font-bold text-green-600 dark:text-green-400">
-                  ${data.totalBankBalance.toLocaleString()}
-                </p>
-              </div>
-              <div className="rounded-xl border border-gray-200 bg-gray-50 p-5 dark:border-gray-700 dark:bg-gray-800/50">
-                <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Student Receivables</p>
-                <p className="mt-1 text-2xl font-bold text-amber-600 dark:text-amber-400">
-                  ${data.totalReceivables.toLocaleString()}
-                </p>
-              </div>
-              <div className="rounded-xl border border-gray-200 bg-gray-50 p-5 dark:border-gray-700 dark:bg-gray-800/50">
-                <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Revenue ({data.year})</p>
-                <p className="mt-1 text-2xl font-bold text-brand-600 dark:text-brand-400">
-                  ${data.revenue.totalPayments.toLocaleString()}
-                </p>
-                <p className="text-xs text-gray-500">{data.revenue.paymentCount} payments</p>
-              </div>
-              <div className="rounded-xl border border-gray-200 bg-gray-50 p-5 dark:border-gray-700 dark:bg-gray-800/50">
-                <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Withdrawals ({data.year})</p>
-                <p className="mt-1 text-2xl font-bold text-red-600 dark:text-red-400">
-                  ${data.withdrawals.total.toLocaleString()}
-                </p>
-                <p className="text-xs text-gray-500">{data.withdrawals.count} withdrawals</p>
-              </div>
+            <div className="overflow-x-auto border-b border-gray-200 px-6 py-5 dark:border-gray-800">
+              <h3 className="mb-3 text-sm font-semibold text-gray-900 dark:text-white">Summary ({data.year})</h3>
+              <Table>
+                <TableHeader>
+                  <TableRow className="bg-transparent! hover:bg-transparent!">
+                    <TableCell isHeader>Metric</TableCell>
+                    <TableCell isHeader className="text-right">Amount</TableCell>
+                    <TableCell isHeader className="text-center">Count</TableCell>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  <TableRow>
+                    <TableCell>Total bank balance</TableCell>
+                    <TableCell className="text-right font-medium tabular-nums">
+                      ${data.totalBankBalance.toLocaleString()}
+                    </TableCell>
+                    <TableCell className="text-center">—</TableCell>
+                  </TableRow>
+                  <TableRow>
+                    <TableCell>Student receivables</TableCell>
+                    <TableCell className="text-right font-medium tabular-nums">
+                      ${data.totalReceivables.toLocaleString()}
+                    </TableCell>
+                    <TableCell className="text-center">—</TableCell>
+                  </TableRow>
+                  <TableRow>
+                    <TableCell>Tuition revenue</TableCell>
+                    <TableCell className="text-right font-medium tabular-nums">
+                      ${data.revenue.totalPayments.toLocaleString()}
+                    </TableCell>
+                    <TableCell className="text-center tabular-nums">{data.revenue.paymentCount}</TableCell>
+                  </TableRow>
+                  <TableRow>
+                    <TableCell>Withdrawals</TableCell>
+                    <TableCell className="text-right font-medium tabular-nums">
+                      ${data.withdrawals.total.toLocaleString()}
+                    </TableCell>
+                    <TableCell className="text-center tabular-nums">{data.withdrawals.count}</TableCell>
+                  </TableRow>
+                </TableBody>
+              </Table>
+            </div>
+
+            <div className="no-print grid gap-6 border-b border-gray-200 px-6 py-6 lg:grid-cols-2 dark:border-gray-800">
+              <FinanceReportDonut
+                title="Revenue vs withdrawals"
+                labels={["Tuition revenue", "Withdrawals"]}
+                series={[data.revenue.totalPayments, data.withdrawals.total]}
+              />
+              {bankChart.categories.length > 0 ? (
+                <FinanceReportBar
+                  title="Balance by bank (code)"
+                  categories={bankChart.categories}
+                  data={bankChart.values}
+                  color="#0f766e"
+                />
+              ) : (
+                <div className="rounded-lg border border-gray-200 p-6 text-sm text-gray-500 dark:border-gray-700">
+                  No bank rows to chart.
+                </div>
+              )}
             </div>
 
             <div className="border-t border-gray-200 px-6 py-4 dark:border-gray-800">

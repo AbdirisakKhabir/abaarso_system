@@ -15,7 +15,10 @@ import {
 import { usePagination } from "@/hooks/usePagination";
 import { authFetch } from "@/lib/api";
 import { DateInput } from "@/components/form/DateInput";
-import { DownloadIcon } from "@/icons";
+import {
+  FinanceReportBar,
+  FinanceReportDonut,
+} from "@/components/reports/FinanceReportChart";
 
 type Bank = { id: number; name: string; code: string };
 
@@ -97,6 +100,15 @@ export default function BankTransactionsReportPage() {
     to: transfersTo,
   } = usePagination(transfersSorted, transferResetDeps);
 
+  const depositTotal = useMemo(
+    () => (data ? data.deposits.reduce((s, d) => s + d.amount, 0) : 0),
+    [data]
+  );
+  const withdrawalTotal = useMemo(
+    () => (data ? data.withdrawals.reduce((s, w) => s + w.amount, 0) : 0),
+    [data]
+  );
+
   const handlePrint = () => window.print();
 
   return (
@@ -149,24 +161,50 @@ export default function BankTransactionsReportPage() {
       </div>
 
       {data && (data.deposits.length > 0 || data.withdrawals.length > 0) && (
-        <div className="mb-6 flex flex-wrap gap-4 rounded-xl border border-gray-200 bg-white p-4 dark:border-gray-800 dark:bg-white/5">
-          <div className="rounded-lg bg-green-50 px-4 py-2 dark:bg-green-500/10">
-            <span className="text-sm text-gray-600 dark:text-gray-400">Total Deposits: </span>
-            <span className="font-bold text-green-600 dark:text-green-400">
-              ${data.deposits.reduce((s, d) => s + d.amount, 0).toLocaleString()}
-            </span>
+        <div className="mb-6 overflow-hidden rounded-xl border border-gray-200 bg-white dark:border-gray-800 dark:bg-white/5">
+          <div className="overflow-x-auto border-b border-gray-200 px-4 py-4 dark:border-gray-800">
+            <h3 className="mb-3 text-sm font-semibold text-gray-900 dark:text-white">Period summary</h3>
+            <Table>
+              <TableHeader>
+                <TableRow className="bg-transparent! hover:bg-transparent!">
+                  <TableCell isHeader>Item</TableCell>
+                  <TableCell isHeader className="text-right">Amount</TableCell>
+                  <TableCell isHeader className="text-center">Transactions</TableCell>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                <TableRow>
+                  <TableCell>Deposits</TableCell>
+                  <TableCell className="text-right tabular-nums">${depositTotal.toLocaleString()}</TableCell>
+                  <TableCell className="text-center tabular-nums">{data.deposits.length}</TableCell>
+                </TableRow>
+                <TableRow>
+                  <TableCell>Withdrawals</TableCell>
+                  <TableCell className="text-right tabular-nums">${withdrawalTotal.toLocaleString()}</TableCell>
+                  <TableCell className="text-center tabular-nums">{data.withdrawals.length}</TableCell>
+                </TableRow>
+                <TableRow>
+                  <TableCell className="font-medium">Net (deposits − withdrawals)</TableCell>
+                  <TableCell className="text-right font-medium tabular-nums">
+                    ${(depositTotal - withdrawalTotal).toLocaleString()}
+                  </TableCell>
+                  <TableCell className="text-center">—</TableCell>
+                </TableRow>
+              </TableBody>
+            </Table>
           </div>
-          <div className="rounded-lg bg-red-50 px-4 py-2 dark:bg-red-500/10">
-            <span className="text-sm text-gray-600 dark:text-gray-400">Total Withdrawals: </span>
-            <span className="font-bold text-red-600 dark:text-red-400">
-              ${data.withdrawals.reduce((s, w) => s + w.amount, 0).toLocaleString()}
-            </span>
-          </div>
-          <div className="rounded-lg bg-brand-50 px-4 py-2 dark:bg-brand-500/10">
-            <span className="text-sm text-gray-600 dark:text-gray-400">Net: </span>
-            <span className={`font-bold ${data.deposits.reduce((s, d) => s + d.amount, 0) - data.withdrawals.reduce((s, w) => s + w.amount, 0) >= 0 ? "text-green-600" : "text-red-600"}`}>
-              ${(data.deposits.reduce((s, d) => s + d.amount, 0) - data.withdrawals.reduce((s, w) => s + w.amount, 0)).toLocaleString()}
-            </span>
+          <div className="no-print grid gap-6 px-4 py-6 lg:grid-cols-2">
+            <FinanceReportDonut
+              title="Deposits vs withdrawals"
+              labels={["Deposits", "Withdrawals"]}
+              series={[depositTotal, withdrawalTotal]}
+            />
+            <FinanceReportBar
+              title="Volume comparison"
+              categories={["Deposits", "Withdrawals"]}
+              data={[depositTotal, withdrawalTotal]}
+              color="#1e40af"
+            />
           </div>
         </div>
       )}
@@ -176,10 +214,10 @@ export default function BankTransactionsReportPage() {
           <>
             <div className="min-w-0 overflow-hidden rounded-2xl border border-gray-200 bg-white dark:border-gray-800 dark:bg-white/5">
               <div className="flex flex-wrap items-center justify-between gap-4 border-b border-gray-200 px-6 py-4 dark:border-gray-800">
-                <h3 className="font-semibold text-gray-800 dark:text-white/90">Deposits (Tuition Payments)</h3>
+                <h3 className="text-sm font-semibold text-gray-900 dark:text-white">Deposits (tuition payments)</h3>
                 {data.deposits.length > 0 && (
-                  <span className="rounded-lg bg-green-50 px-3 py-1.5 text-sm font-bold text-green-600 dark:bg-green-500/10 dark:text-green-400">
-                    Total: ${data.deposits.reduce((s, d) => s + d.amount, 0).toLocaleString()} ({data.deposits.length})
+                  <span className="text-sm text-gray-600 dark:text-gray-400">
+                    Total ${depositTotal.toLocaleString()} · {data.deposits.length} items
                   </span>
                 )}
               </div>
@@ -234,10 +272,10 @@ export default function BankTransactionsReportPage() {
 
             <div className="min-w-0 overflow-hidden rounded-2xl border border-gray-200 bg-white dark:border-gray-800 dark:bg-white/5">
               <div className="flex flex-wrap items-center justify-between gap-4 border-b border-gray-200 px-6 py-4 dark:border-gray-800">
-                <h3 className="font-semibold text-gray-800 dark:text-white/90">Withdrawals</h3>
+                <h3 className="text-sm font-semibold text-gray-900 dark:text-white">Withdrawals</h3>
                 {data.withdrawals.length > 0 && (
-                  <span className="rounded-lg bg-red-50 px-3 py-1.5 text-sm font-bold text-red-600 dark:bg-red-500/10 dark:text-red-400">
-                    Total: ${data.withdrawals.reduce((s, w) => s + w.amount, 0).toLocaleString()} ({data.withdrawals.length})
+                  <span className="text-sm text-gray-600 dark:text-gray-400">
+                    Total ${withdrawalTotal.toLocaleString()} · {data.withdrawals.length} items
                   </span>
                 )}
               </div>

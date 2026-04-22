@@ -16,6 +16,10 @@ import {
 import { usePagination } from "@/hooks/usePagination";
 import { authFetch } from "@/lib/api";
 import { DownloadIcon } from "@/icons";
+import {
+  FinanceReportBar,
+  FinanceReportDonut,
+} from "@/components/reports/FinanceReportChart";
 
 const STATUS_COLOR: Record<string, "warning" | "success" | "error"> = {
   pending: "warning",
@@ -145,35 +149,52 @@ export default function ExpenseReportPage() {
           </div>
         ) : data ? (
           <>
-            <div className="grid gap-4 p-6 sm:grid-cols-2 lg:grid-cols-4">
-              <div className="rounded-xl border border-gray-200 bg-gray-50 p-5 dark:border-gray-700 dark:bg-gray-800/50">
-                <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Pending</p>
-                <p className="mt-1 text-2xl font-bold text-amber-600 dark:text-amber-400">
-                  ${data.totals.pending.toLocaleString()}
-                </p>
-              </div>
-              <div className="rounded-xl border border-gray-200 bg-gray-50 p-5 dark:border-gray-700 dark:bg-gray-800/50">
-                <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Approved</p>
-                <p className="mt-1 text-2xl font-bold text-green-600 dark:text-green-400">
-                  ${data.totals.approved.toLocaleString()}
-                </p>
-              </div>
-              <div className="rounded-xl border border-gray-200 bg-gray-50 p-5 dark:border-gray-700 dark:bg-gray-800/50">
-                <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Rejected</p>
-                <p className="mt-1 text-2xl font-bold text-red-600 dark:text-red-400">
-                  ${data.totals.rejected.toLocaleString()}
-                </p>
-              </div>
-              <div className="rounded-xl border border-gray-200 bg-gray-50 p-5 dark:border-gray-700 dark:bg-gray-800/50">
-                <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Total</p>
-                <p className="mt-1 text-2xl font-bold text-gray-800 dark:text-white">
-                  ${data.totals.total.toLocaleString()}
-                </p>
-              </div>
+            <div className="overflow-x-auto border-b border-gray-200 px-6 py-5 dark:border-gray-800">
+              <h3 className="mb-3 text-sm font-semibold text-gray-900 dark:text-white">Totals ({data.year})</h3>
+              <Table>
+                <TableHeader>
+                  <TableRow className="bg-transparent! hover:bg-transparent!">
+                    <TableCell isHeader>Status</TableCell>
+                    <TableCell isHeader className="text-right">Amount</TableCell>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  <TableRow>
+                    <TableCell>Pending</TableCell>
+                    <TableCell className="text-right tabular-nums">${data.totals.pending.toLocaleString()}</TableCell>
+                  </TableRow>
+                  <TableRow>
+                    <TableCell>Approved</TableCell>
+                    <TableCell className="text-right tabular-nums">${data.totals.approved.toLocaleString()}</TableCell>
+                  </TableRow>
+                  <TableRow>
+                    <TableCell>Rejected</TableCell>
+                    <TableCell className="text-right tabular-nums">${data.totals.rejected.toLocaleString()}</TableCell>
+                  </TableRow>
+                  <TableRow>
+                    <TableCell className="font-semibold">All requests</TableCell>
+                    <TableCell className="text-right font-semibold tabular-nums">${data.totals.total.toLocaleString()}</TableCell>
+                  </TableRow>
+                </TableBody>
+              </Table>
+            </div>
+
+            <div className="no-print grid gap-6 border-b border-gray-200 px-6 py-6 lg:grid-cols-2 dark:border-gray-800">
+              <FinanceReportBar
+                title="Amount by status"
+                categories={["Pending", "Approved", "Rejected"]}
+                data={[data.totals.pending, data.totals.approved, data.totals.rejected]}
+                color="#1e40af"
+              />
+              <FinanceReportDonut
+                title="Share of total by status"
+                labels={["Pending", "Approved", "Rejected"]}
+                series={[data.totals.pending, data.totals.approved, data.totals.rejected]}
+              />
             </div>
 
             <div className="border-t border-gray-200 px-6 py-4 dark:border-gray-800">
-              <h3 className="mb-4 font-semibold text-gray-800 dark:text-white/90">Expense Details</h3>
+              <h3 className="mb-4 text-sm font-semibold text-gray-900 dark:text-white">Expense lines</h3>
               <Table>
                 <TableHeader>
                   <TableRow className="bg-transparent! hover:bg-transparent!">
