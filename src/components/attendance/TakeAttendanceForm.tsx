@@ -5,6 +5,7 @@ import Image from "next/image";
 import Link from "next/link";
 import Button from "@/components/ui/button/Button";
 import { DateInput } from "@/components/form/DateInput";
+import SearchableSingleSelect from "@/components/form/SearchableSingleSelect";
 import { authFetch } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 
@@ -77,6 +78,19 @@ export default function TakeAttendanceForm({ onSuccess }: TakeAttendanceFormProp
         a.code.localeCompare(b.code, undefined, { sensitivity: "base" })
       ),
     [takeContextCourses]
+  );
+
+  const courseSelectOptions = useMemo(
+    () =>
+      departmentCoursesSorted.map((c) => ({
+        id: c.id,
+        primary: `${c.code} — ${c.name}`,
+        secondary:
+          c.creditHours != null
+            ? `${c.creditHours} credit hour${c.creditHours === 1 ? "" : "s"}`
+            : undefined,
+      })),
+    [departmentCoursesSorted]
   );
 
   async function loadDepartments() {
@@ -436,11 +450,21 @@ export default function TakeAttendanceForm({ onSuccess }: TakeAttendanceFormProp
               <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">
                 Course <span className="text-error-500">*</span>
               </label>
-              <p className="mb-1 text-xs text-gray-500 dark:text-gray-400">
-                All active courses for the selected department.
-              </p>
-              <select
-                required
+              <SearchableSingleSelect
+                key={takeForm.classId || "no-class"}
+                options={
+                  takeForm.classId &&
+                  takeForm.departmentId &&
+                  takeForm.semesterName &&
+                  takeForm.year &&
+                  !loadingTakeContext
+                    ? courseSelectOptions
+                    : []
+                }
+                value={takeForm.courseId}
+                onChange={(courseId) =>
+                  setTakeForm((f) => ({ ...f, courseId }))
+                }
                 disabled={
                   !takeForm.departmentId ||
                   !takeForm.semesterName ||
@@ -449,25 +473,12 @@ export default function TakeAttendanceForm({ onSuccess }: TakeAttendanceFormProp
                   loadingTakeContext ||
                   departmentCoursesSorted.length === 0
                 }
-                value={takeForm.courseId}
-                onChange={(e) =>
-                  setTakeForm((f) => ({ ...f, courseId: e.target.value }))
+                noOptionsHint={
+                  !takeForm.classId
+                    ? "Select class first."
+                    : "No courses in this department."
                 }
-                className="h-11 w-full appearance-none rounded-lg border border-gray-200 bg-transparent px-3 py-2.5 text-sm text-gray-800 outline-none focus:border-brand-300 focus:ring-2 focus:ring-brand-500/20 disabled:opacity-50 dark:border-gray-700 dark:text-white dark:focus:border-brand-500/40"
-              >
-                <option value="">
-                  {!takeForm.classId
-                    ? "Select class first"
-                    : departmentCoursesSorted.length === 0
-                      ? "No courses in this department"
-                      : "Select course"}
-                </option>
-                {departmentCoursesSorted.map((c) => (
-                  <option key={c.id} value={String(c.id)}>
-                    {c.code} — {c.name}
-                  </option>
-                ))}
-              </select>
+              />
             </div>
             <DateInput
               id="take-attendance-date"

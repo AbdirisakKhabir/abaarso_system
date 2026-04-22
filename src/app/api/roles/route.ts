@@ -2,6 +2,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { getAuthUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { parsePaginationParams } from "@/lib/pagination";
+import {
+  ensureAdminRoleHasActivityLogAccess,
+  mergeActivityLogPermissionForAdminRole,
+} from "@/lib/permissions";
 
 export async function GET(req: NextRequest) {
   try {
@@ -82,28 +86,38 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    const trimmedName = String(name).trim();
     const role = await prisma.role.create({
       data: {
-        name: String(name).trim(),
+        name: trimmedName,
         description: description || null,
       },
     });
 
+    let parsedPermissionIds: number[] = [];
     if (Array.isArray(permissionIds) && permissionIds.length > 0) {
-      const parsedPermissionIds = permissionIds.map((pid: unknown) => Number(pid));
+      parsedPermissionIds = permissionIds.map((pid: unknown) => Number(pid));
       if (parsedPermissionIds.some((pid) => !Number.isInteger(pid))) {
         return NextResponse.json(
           { error: "Invalid permissionIds" },
           { status: 400 }
         );
       }
+    }
+    parsedPermissionIds = await mergeActivityLogPermissionForAdminRole(
+      trimmedName,
+      parsedPermissionIds
+    );
+    if (parsedPermissionIds.length > 0) {
       await prisma.rolePermission.createMany({
-        data: parsedPermissionIds.map((pid) => ({
+        data: parsedPermissionIds.map((permissionId) => ({
           roleId: role.id,
-          permissionId: pid,
+          permissionId,
         })),
       });
     }
+
+    await ensureAdminRoleHasActivityLogAccess(role.id);
 
     const roleWithPerms = await prisma.role.findUnique({
       where: { id: role.id },

@@ -95,7 +95,7 @@ async function main() {
     update: {},
   });
 
-  // Assign all permissions to Admin
+  // Assign all permissions to Admin (includes settings.view → Settings + Activity log)
   for (const perm of allPermissions) {
     await prisma.rolePermission.upsert({
       where: {

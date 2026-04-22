@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAuthUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import {
+  ensureAdminRoleHasActivityLogAccess,
+  mergeActivityLogPermissionForAdminRole,
+} from "@/lib/permissions";
 
 export async function GET(
   req: NextRequest,
@@ -53,24 +57,35 @@ export async function PATCH(
     const body = await req.json();
     const { name, description, permissionIds } = body;
 
+    const existing = await prisma.role.findUnique({ where: { id: parsedId } });
+    if (!existing) {
+      return NextResponse.json({ error: "Role not found" }, { status: 404 });
+    }
+
     const data: { name?: string; description?: string | null } = {};
     if (typeof name === "string") data.name = name.trim();
     if (typeof description !== "undefined") data.description = description || null;
 
     if (Array.isArray(permissionIds)) {
-      const parsedPermissionIds = permissionIds.map((pid: unknown) => Number(pid));
+      let parsedPermissionIds = permissionIds.map((pid: unknown) => Number(pid));
       if (parsedPermissionIds.some((pid) => !Number.isInteger(pid))) {
         return NextResponse.json(
           { error: "Invalid permissionIds" },
           { status: 400 }
         );
       }
+      const nameForMerge =
+        typeof data.name === "string" ? data.name : existing.name;
+      parsedPermissionIds = await mergeActivityLogPermissionForAdminRole(
+        nameForMerge,
+        parsedPermissionIds
+      );
       await prisma.rolePermission.deleteMany({ where: { roleId: parsedId } });
-      if (permissionIds.length > 0) {
+      if (parsedPermissionIds.length > 0) {
         await prisma.rolePermission.createMany({
-          data: parsedPermissionIds.map((pid) => ({
+          data: parsedPermissionIds.map((permissionId) => ({
             roleId: parsedId,
-            permissionId: pid,
+            permissionId,
           })),
         });
       }
@@ -83,6 +98,9 @@ export async function PATCH(
         permissions: { include: { permission: true } },
       },
     });
+
+    await ensureAdminRoleHasActivityLogAccess(role.id);
+
     return NextResponse.json({
       ...role,
       permissions: role.permissions.map((rp) => rp.permission),
