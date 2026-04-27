@@ -31,7 +31,12 @@ import {
   UserCircleIcon,
 } from "@/icons";
 
-type Department = { id: number; name: string; code: string; tuitionFee?: number | null };
+type Department = {
+  id: number;
+  name: string;
+  code: string;
+  tuitionFee?: number | null;
+};
 
 type ClassInfo = {
   id: number;
@@ -113,6 +118,8 @@ export default function AdmissionPage() {
   const [chargeStartYear, setChargeStartYear] = useState(() => new Date().getFullYear());
   const [chargeSubmitting, setChargeSubmitting] = useState(false);
   const [chargeError, setChargeError] = useState("");
+  /** Per-semester $ amount per internal student id (editable; charged × semester count and added to balance) */
+  const [chargePerSemesterInputs, setChargePerSemesterInputs] = useState<Record<number, string>>({});
 
   const {
     page,
@@ -336,10 +343,36 @@ export default function AdmissionPage() {
     }
   }
 
+  function seedChargePerSemesterInputs(rows: StudentRow[]) {
+    const next: Record<number, string> = {};
+    for (const s of rows) {
+      const per = perSemesterTuition(
+        s.department.tuitionFee ?? 0,
+        s.paymentStatus
+      );
+      next[s.id] = String(per);
+    }
+    setChargePerSemesterInputs(next);
+  }
+
+  function effectivePerSemester(s: StudentRow): number {
+    const raw = chargePerSemesterInputs[s.id];
+    if (raw != null && String(raw).trim() !== "") {
+      const n = Number(raw);
+      if (Number.isFinite(n) && n >= 0) return n;
+    }
+    return perSemesterTuition(
+      s.department.tuitionFee ?? 0,
+      s.paymentStatus
+    );
+  }
+
   async function openChargeModal() {
     if (selectedIds.size === 0) return;
     setChargeError("");
     await ensureSemestersForChargeLoaded();
+    const rows = students.filter((s) => selectedIds.has(s.id));
+    seedChargePerSemesterInputs(rows);
     setChargeModalOpen(true);
   }
 
@@ -362,10 +395,7 @@ export default function AdmissionPage() {
       .join("");
     const bodyRows = selectedStudentRows
       .map((s) => {
-        const per = perSemesterTuition(
-          s.department.tuitionFee ?? 0,
-          s.paymentStatus
-        );
+        const per = effectivePerSemester(s);
         const line = per * chargeSemesterCount;
         return `<tr>
           <td>${escapeHtml(s.studentId)}</td>
@@ -378,11 +408,7 @@ export default function AdmissionPage() {
       })
       .join("");
     const total = selectedStudentRows.reduce((sum, s) => {
-      const per = perSemesterTuition(
-        s.department.tuitionFee ?? 0,
-        s.paymentStatus
-      );
-      return sum + per * chargeSemesterCount;
+      return sum + effectivePerSemester(s) * chargeSemesterCount;
     }, 0);
     const w = window.open("", "_blank");
     if (!w) return;
@@ -397,7 +423,7 @@ export default function AdmissionPage() {
         .total { margin-top: 16px; font-weight: 700; }
       </style></head><body>
       <h1>Tuition assessment / invoice</h1>
-      <p class="meta">Issued: ${new Date().toLocaleString()} · ${chargeSemesterCount} semester(s) · Per-student rate × count (scholarship rules apply)</p>
+      <p class="meta">Issued: ${new Date().toLocaleString()} · ${chargeSemesterCount} semester(s) · Per-student per-semester amount × count (edit amounts in the charge dialog as needed)</p>
       <p><strong>Periods covered:</strong></p>
       <ul>${periodRows}</ul>
       <table>
@@ -420,6 +446,11 @@ export default function AdmissionPage() {
     const ids = Array.from(selectedIds);
     setChargeSubmitting(true);
     setChargeError("");
+    const perStudentPerSemester: Record<string, number> = {};
+    for (const s of selectedStudentRows) {
+      perStudentPerSemester[String(s.id)] = effectivePerSemester(s);
+    }
+
     try {
       const res = await authFetch("/api/students/bulk-tuition-charge", {
         method: "POST",
@@ -429,6 +460,7 @@ export default function AdmissionPage() {
           semesterCount: chargeSemesterCount,
           startingSemester: chargeStartSemester,
           startingYear: chargeStartYear,
+          perStudentPerSemester,
         }),
       });
       const data = await res.json();
@@ -877,9 +909,10 @@ export default function AdmissionPage() {
               </div>
               <div className="max-h-[calc(100vh-8rem)] space-y-4 overflow-y-auto px-6 py-5">
                 <p className="text-sm text-gray-600 dark:text-gray-400">
-                  {selectedStudentRows.length} student(s) selected. Set how many semesters to bill and the first term.
-                  Each student is charged (department tuition per semester × count), using the same rules as registration
-                  (half scholar = 50%, full scholarship = $0).
+                  {selectedStudentRows.length} student(s) selected. Set the first term and how many semesters to bill.
+                  Default <strong>Per semester</strong> comes from the department fee and payment status (half scholar = 50%,
+                  full scholarship = $0). You can type a different amount for any student; the{" "}
+                  <strong>line total</strong> (per semester × semester count) is added to their balance.
                 </p>
                 {chargeError && (
                   <div className="rounded-lg bg-error-50 px-4 py-3 text-sm text-error-600 dark:bg-error-500/10 dark:text-error-400">
@@ -964,16 +997,17 @@ export default function AdmissionPage() {
                       <tr>
                         <th className="px-3 py-2 text-left font-semibold text-gray-600 dark:text-gray-400">Student</th>
                         <th className="px-3 py-2 text-left font-semibold text-gray-600 dark:text-gray-400">Dept</th>
-                        <th className="px-3 py-2 text-right font-semibold text-gray-600 dark:text-gray-400">Per semester</th>
-                        <th className="px-3 py-2 text-right font-semibold text-gray-600 dark:text-gray-400">Charge ({chargeSemesterCount}×)</th>
+                        <th className="px-3 py-2 text-right font-semibold text-gray-600 dark:text-gray-400">
+                          Per semester ($)
+                        </th>
+                        <th className="px-3 py-2 text-right font-semibold text-gray-600 dark:text-gray-400">
+                          Balance charge ({chargeSemesterCount}×)
+                        </th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
                       {selectedStudentRows.map((s) => {
-                        const per = perSemesterTuition(
-                          s.department.tuitionFee ?? 0,
-                          s.paymentStatus
-                        );
+                        const per = effectivePerSemester(s);
                         const line = per * chargeSemesterCount;
                         return (
                           <tr key={s.id}>
@@ -981,10 +1015,26 @@ export default function AdmissionPage() {
                               <span className="font-mono text-xs text-gray-500 dark:text-gray-400">{s.studentId}</span>
                               <br />
                               {s.firstName} {s.lastName}
+                              <div className="mt-0.5 text-[11px] text-gray-500 dark:text-gray-500">
+                                {s.paymentStatus}
+                              </div>
                             </td>
                             <td className="px-3 py-2 text-gray-600 dark:text-gray-400">{s.department.code}</td>
-                            <td className="px-3 py-2 text-right tabular-nums">
-                              ${per.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            <td className="px-3 py-2 text-right">
+                              <input
+                                type="number"
+                                min={0}
+                                step={0.01}
+                                value={chargePerSemesterInputs[s.id] ?? ""}
+                                onChange={(e) =>
+                                  setChargePerSemesterInputs((prev) => ({
+                                    ...prev,
+                                    [s.id]: e.target.value,
+                                  }))
+                                }
+                                className="h-9 w-full min-w-[6.5rem] rounded-lg border border-gray-200 bg-white px-2 text-right text-sm tabular-nums text-gray-800 outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-500/20 dark:border-gray-600 dark:bg-gray-900 dark:text-white dark:focus:border-brand-500/50"
+                                aria-label={`Per semester tuition for ${s.firstName} ${s.lastName}`}
+                              />
                             </td>
                             <td className="px-3 py-2 text-right font-medium tabular-nums text-gray-800 dark:text-white/90">
                               ${line.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}

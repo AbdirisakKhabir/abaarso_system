@@ -7,7 +7,10 @@ import { perSemesterTuition } from "@/lib/tuition-amount";
 /**
  * POST /api/students/bulk-tuition-charge
  * Adds (per-semester amount × semesterCount) to each student's balance.
- * Body: { studentIds: number[], semesterCount: number, startingSemester: string, startingYear: number }
+ * Body: { studentIds, semesterCount, startingSemester, startingYear,
+ *   perStudentPerSemester?: Record<string, number> } — optional map keyed by internal student id
+ *   (string or number in JSON). When set for a student, that amount is used as the per-semester
+ *   rate (admin override, including for scholarship students). Omitted ids use department fee + payment status rules.
  */
 export async function POST(req: NextRequest) {
   try {
@@ -25,6 +28,18 @@ export async function POST(req: NextRequest) {
     const semesterCount = Number(body.semesterCount);
     const startingSemester = String(body.startingSemester ?? "").trim();
     const startingYear = Number(body.startingYear);
+
+    const rawCustom = body.perStudentPerSemester;
+    const customById: Record<number, number> = {};
+    if (rawCustom != null && typeof rawCustom === "object" && !Array.isArray(rawCustom)) {
+      for (const [k, v] of Object.entries(rawCustom)) {
+        const id = Number(k);
+        const amt = Number(v);
+        if (Number.isInteger(id) && id > 0 && Number.isFinite(amt) && amt >= 0) {
+          customById[id] = amt;
+        }
+      }
+    }
 
     if (studentIds.length === 0) {
       return NextResponse.json({ error: "Select at least one student" }, { status: 400 });
@@ -77,23 +92,29 @@ export async function POST(req: NextRequest) {
       studentId: string;
       firstName: string;
       lastName: string;
+      perSemester: number;
       charge: number;
       newBalance: number;
+      usedCustomAmount: boolean;
     }[] = [];
     const skipped: { id: number; reason: string }[] = [];
 
     await prisma.$transaction(async (tx) => {
       for (const s of students) {
-        const per = perSemesterTuition(
-          s.department.tuitionFee ?? 0,
-          s.paymentStatus
-        );
+        const hasOverride = Object.prototype.hasOwnProperty.call(customById, s.id);
+        const per = hasOverride
+          ? customById[s.id]
+          : perSemesterTuition(
+              s.department.tuitionFee ?? 0,
+              s.paymentStatus
+            );
         const charge = per * semesterCount;
         if (charge <= 0) {
           skipped.push({
             id: s.id,
-            reason:
-              s.paymentStatus === "Full Scholarship"
+            reason: hasOverride
+              ? "Custom per-semester amount is zero"
+              : s.paymentStatus === "Full Scholarship"
                 ? "Full scholarship (no tuition)"
                 : "Zero department fee",
           });
@@ -115,8 +136,10 @@ export async function POST(req: NextRequest) {
           studentId: updated.studentId,
           firstName: updated.firstName,
           lastName: updated.lastName,
+          perSemester: per,
           charge,
           newBalance: updated.balance,
+          usedCustomAmount: hasOverride,
         });
       }
     });

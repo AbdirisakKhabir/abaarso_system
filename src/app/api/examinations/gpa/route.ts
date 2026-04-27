@@ -1,8 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAuthUser } from "@/lib/auth";
-import { prisma } from "@/lib/prisma";
-import { calculateGPA } from "@/lib/grades";
-import { sortExamRecordsBySemesterChronologically } from "@/lib/semester-sort";
+import { buildStudentAcademicReport } from "@/lib/studentAcademicReport";
 
 export async function GET(req: NextRequest) {
   try {
@@ -18,66 +16,21 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: "studentId is required" }, { status: 400 });
     }
 
-    const student = await prisma.student.findUnique({
-      where: { id: Number(studentId) },
-      select: {
-        id: true,
-        studentId: true,
-        firstName: true,
-        lastName: true,
-        imageUrl: true,
-        admissionDate: true,
-        department: {
-          select: {
-            id: true,
-            name: true,
-            code: true,
-            faculty: { select: { id: true, name: true, code: true } },
-          },
-        },
-      },
-    });
+    const parsed = Number(studentId);
+    if (!Number.isInteger(parsed) || parsed <= 0) {
+      return NextResponse.json({ error: "Invalid studentId" }, { status: 400 });
+    }
 
-    if (!student) {
+    const report = await buildStudentAcademicReport(parsed, "all");
+    if (!report) {
       return NextResponse.json({ error: "Student not found" }, { status: 404 });
     }
 
-    const recordsRaw = await prisma.examRecord.findMany({
-      where: { studentId: Number(studentId) },
-      include: {
-        course: {
-          select: { id: true, name: true, code: true, creditHours: true },
-        },
-      },
-    });
-
-    const semesters = await prisma.semester.findMany({
-      where: { isActive: true },
-      orderBy: { sortOrder: "asc" },
-      select: { name: true, sortOrder: true },
-    });
-    const semOrderMap = semesters.reduce<Record<string, number>>((acc, s, i) => {
-      acc[s.name] = s.sortOrder ?? i;
-      return acc;
-    }, {});
-
-    const records = sortExamRecordsBySemesterChronologically(recordsRaw, semOrderMap);
-
-    const gpaData = calculateGPA(
-      records.map((r) => ({
-        semester: r.semester,
-        year: r.year,
-        gradePoints: r.gradePoints,
-        creditHours: r.course.creditHours,
-      })),
-      semOrderMap
-    );
-
     return NextResponse.json({
-      student,
-      records,
-      gpa: gpaData,
-      semesterSortMap: semOrderMap,
+      student: report.student,
+      records: report.records,
+      gpa: report.gpa,
+      semesterSortMap: report.semesterSortMap,
     });
   } catch (e) {
     console.error("GPA calculation error:", e);
