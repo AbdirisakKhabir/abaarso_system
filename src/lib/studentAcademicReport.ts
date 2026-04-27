@@ -23,7 +23,7 @@ const studentSelect = {
 
 /**
  * Load exam records + GPA for transcript / examination views.
- * @param examFilter — public callers should use "approved" only.
+ * @param examFilter — `approved` (only finalized rows). `all` = every row on file (student portal + staff GPA).
  */
 export async function buildStudentAcademicReport(
   internalStudentId: number,
@@ -85,19 +85,26 @@ export async function buildStudentAcademicReport(
 export async function resolveStudentInternalId(
   param: string
 ): Promise<number | null> {
-  const trimmed = param.trim();
-  if (!trimmed) return null;
+  const normalized = param
+    .trim()
+    .replace(/\u200B/g, "")
+    .replace(/\s+/g, "");
+  if (!normalized) return null;
 
   const byCode = await prisma.student.findFirst({
     where: {
-      studentId: trimmed,
+      OR: [
+        { studentId: normalized },
+        { studentId: normalized.toUpperCase() },
+        { studentId: normalized.toLowerCase() },
+      ],
       status: { in: ["Admitted", "Graduated"] },
     },
     select: { id: true },
   });
   if (byCode) return byCode.id;
 
-  const n = Number(trimmed);
+  const n = Number(normalized);
   if (Number.isInteger(n) && n > 0) {
     const byPk = await prisma.student.findFirst({
       where: {

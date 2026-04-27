@@ -16,7 +16,7 @@ function corsHeaders(): HeadersInit {
 /**
  * Public read-only report: examination rows + transcript GPA for a student.
  * Query: studentId — institutional ID (e.g. STD-2026-0001) or numeric internal id.
- * Only Admitted / Graduated students. Only approved exam rows.
+ * Only Admitted / Graduated students. Examination rows: all stored marks (any status — matches staff transcript data).
  */
 export async function OPTIONS() {
   return new NextResponse(null, { status: 204, headers: corsHeaders() });
@@ -48,7 +48,7 @@ export async function GET(req: NextRequest) {
       );
     }
 
-    const report = await buildStudentAcademicReport(internalId, "approved");
+    const report = await buildStudentAcademicReport(internalId, "all");
     if (!report) {
       return NextResponse.json(
         { error: "Student not found" },
@@ -64,6 +64,7 @@ export async function GET(req: NextRequest) {
           studentId: student.studentId,
           firstName: student.firstName,
           lastName: student.lastName,
+          imageUrl: student.imageUrl,
           admissionDate: student.admissionDate,
           department: student.department,
         },
@@ -71,6 +72,7 @@ export async function GET(req: NextRequest) {
           id: r.id,
           semester: r.semester,
           year: r.year,
+          status: r.status,
           midExam: r.midExam,
           finalExam: r.finalExam,
           assessment: r.assessment,
