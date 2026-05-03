@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import type { Prisma } from "@prisma/client";
 import { getAuthUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getActiveSemesterNames } from "@/lib/semesters";
@@ -18,16 +19,21 @@ export async function GET(req: NextRequest) {
     const search = searchParams.get("search")?.trim();
     const dateFrom = searchParams.get("dateFrom")?.trim();
     const dateTo = searchParams.get("dateTo")?.trim();
+    const paymentSemester = searchParams.get("paymentSemester")?.trim();
+    const classSemester = searchParams.get("classSemester")?.trim();
+    const classYearRaw = searchParams.get("classYear");
+    const paidOnly = searchParams.get("paidOnly") !== "false";
 
-    const where: {
-      status: string;
-      departmentId?: number;
-      classId?: number;
-      phone?: { contains: string };
-      OR?: { studentId?: { contains: string }; firstName?: { contains: string }; lastName?: { contains: string }; phone?: { contains: string } }[];
-    } = { status: "Admitted" };
+    const where: Prisma.StudentWhereInput = { status: "Admitted" };
     if (departmentId) where.departmentId = Number(departmentId);
-    if (classId) where.classId = Number(classId);
+    if (classId) {
+      where.classId = Number(classId);
+    } else if (classSemester && classSemester !== "all" && classYearRaw) {
+      const cy = Number(classYearRaw);
+      if (Number.isInteger(cy)) {
+        where.class = { is: { semester: classSemester, year: cy } };
+      }
+    }
     if (search) {
       where.OR = [
         { studentId: { contains: search } },
@@ -39,8 +45,15 @@ export async function GET(req: NextRequest) {
       where.phone = { contains: phone };
     }
 
-    const paymentWhere: { year?: number; paidAt?: { gte?: Date; lte?: Date } } = {};
+    const paymentWhere: {
+      year?: number;
+      semester?: string;
+      paidAt?: { gte?: Date; lte?: Date };
+    } = {};
     if (year) paymentWhere.year = Number(year);
+    if (paymentSemester && paymentSemester !== "all") {
+      paymentWhere.semester = paymentSemester;
+    }
     if (dateFrom) paymentWhere.paidAt = { ...(paymentWhere.paidAt || {}), gte: new Date(dateFrom + "T00:00:00.000Z") };
     if (dateTo) paymentWhere.paidAt = { ...(paymentWhere.paidAt || {}), lte: new Date(dateTo + "T23:59:59.999Z") };
 
@@ -60,7 +73,7 @@ export async function GET(req: NextRequest) {
     const yearFilter = year ? Number(year) : new Date().getFullYear();
     const activeSemesterNames = await getActiveSemesterNames();
 
-    const result = students.map((s) => {
+    let result = students.map((s) => {
       const paidSemesters = s.tuitionPayments.map((p) => `${p.semester}-${p.year}`);
       const allSemestersForYear = activeSemesterNames.map((sem) => `${sem}-${yearFilter}`);
       const unpaidSemesters = allSemestersForYear.filter((sem) => !paidSemesters.includes(sem));
@@ -82,6 +95,10 @@ export async function GET(req: NextRequest) {
         totalPaid,
       };
     });
+
+    if (paidOnly && !search) {
+      result = result.filter((r) => r.paidCount > 0 && r.totalPaid > 0);
+    }
 
     return NextResponse.json(result);
   } catch (e) {

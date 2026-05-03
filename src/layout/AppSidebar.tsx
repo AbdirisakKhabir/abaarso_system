@@ -197,6 +197,7 @@ const reportsItems: NavItem[] = [
       { name: "Student Transactions", path: "/reports/student-transactions", permission: "reports.view" },
       { name: "Class Revenue", path: "/reports/class-revenue", permission: "reports.view" },
       { name: "Unpaid Students", path: "/reports/unpaid-students", permission: "reports.view" },
+      { name: "Paid Students", path: "/reports/paid-students", permission: "reports.view" },
       { name: "Bank Balances", path: "/reports/bank-balances", permission: "banks.view" },
       { name: "Bank Transactions", path: "/reports/bank-transactions", permission: "banks.view" },
       { name: "Transaction History", path: "/reports/transaction-history", permission: "finance.view" },

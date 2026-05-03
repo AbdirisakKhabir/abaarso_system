@@ -13,6 +13,7 @@ const paymentReportLinks = [
   { name: "Student Transactions", path: "/reports/student-transactions", icon: ListIcon, description: "Student payment status by department and class" },
   { name: "Class Revenue", path: "/reports/class-revenue", icon: DollarLineIcon, description: "Class revenue with paid and unpaid counts" },
   { name: "Unpaid Students", path: "/reports/unpaid-students", icon: DollarLineIcon, description: "Students not paid for a semester and class" },
+  { name: "Paid Students", path: "/reports/paid-students", icon: DollarLineIcon, description: "Students paid up (or scholarship) for a semester and class" },
   { name: "Bank Balances", path: "/reports/bank-balances", icon: DollarLineIcon, description: "Balance per bank account" },
   { name: "Bank Transactions", path: "/reports/bank-transactions", icon: ListIcon, description: "Deposits, withdrawals, and transfers by bank and date" },
   { name: "Transaction History", path: "/reports/transaction-history", icon: ListIcon, description: "Unified ledger of financial transactions" },

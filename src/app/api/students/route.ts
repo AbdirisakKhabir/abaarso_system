@@ -56,6 +56,15 @@ function buildStudentWhere(searchParams: URLSearchParams): Prisma.StudentWhereIn
   if (classId && classId !== "all") {
     const id = Number(classId);
     if (Number.isInteger(id) && id > 0) where.classId = id;
+  } else {
+    const classSemester = searchParams.get("classSemester")?.trim();
+    const classYearRaw = searchParams.get("classYear");
+    if (classSemester && classSemester !== "all" && classYearRaw) {
+      const y = Number(classYearRaw);
+      if (Number.isInteger(y)) {
+        where.class = { is: { semester: classSemester, year: y } };
+      }
+    }
   }
   const q = searchParams.get("q")?.trim();
   if (q) {

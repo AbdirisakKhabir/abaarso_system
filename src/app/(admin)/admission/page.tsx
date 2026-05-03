@@ -43,7 +43,8 @@ type ClassInfo = {
   name: string;
   semester: string;
   year: number;
-  course: { code: string };
+  course?: { code: string };
+  department: { code: string };
   departmentId?: number;
 };
 
@@ -101,6 +102,10 @@ export default function AdmissionPage() {
   const [search, setSearch] = useState("");
   const [filterStatus, setFilterStatus] = useState<string>("all");
   const [filterDeptId, setFilterDeptId] = useState<string>("all");
+  const [listSemesters, setListSemesters] = useState<{ id: number; name: string; sortOrder: number }[]>([]);
+  const [filterListSemester, setFilterListSemester] = useState<string>("all");
+  const [filterListYear, setFilterListYear] = useState<string>("all");
+  const [filterListClassId, setFilterListClassId] = useState<string>("all");
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [bulkDeleting, setBulkDeleting] = useState(false);
   const [modal, setModal] = useState<"import" | null>(null);
@@ -131,7 +136,14 @@ export default function AdmissionPage() {
     totalPages,
     from,
     to,
-  } = useServerPagination([search, filterStatus, filterDeptId]);
+  } = useServerPagination([
+    search,
+    filterStatus,
+    filterDeptId,
+    filterListSemester,
+    filterListYear,
+    filterListClassId,
+  ]);
 
   const canCreate = hasPermission("admission.create");
   const canEdit = hasPermission("admission.edit");
@@ -151,6 +163,12 @@ export default function AdmissionPage() {
       if (search.trim()) params.set("q", search.trim());
       if (filterStatus !== "all") params.set("status", filterStatus);
       if (filterDeptId !== "all") params.set("departmentId", filterDeptId);
+      if (filterListClassId !== "all") {
+        params.set("classId", filterListClassId);
+      } else if (filterListSemester !== "all" && filterListYear !== "all") {
+        params.set("classSemester", filterListSemester);
+        params.set("classYear", filterListYear);
+      }
       const res = await authFetch(`/api/students?${params.toString()}`);
       if (res.ok) {
         const data = await res.json();
@@ -163,7 +181,17 @@ export default function AdmissionPage() {
     } finally {
       setLoading(false);
     }
-  }, [page, pageSize, search, filterStatus, filterDeptId, setTotal]);
+  }, [
+    page,
+    pageSize,
+    search,
+    filterStatus,
+    filterDeptId,
+    filterListSemester,
+    filterListYear,
+    filterListClassId,
+    setTotal,
+  ]);
 
   async function loadDepartments() {
     const res = await authFetch("/api/departments");
@@ -201,8 +229,46 @@ export default function AdmissionPage() {
   }, [refreshStatusStats]);
 
   useEffect(() => {
-    void Promise.all([loadDepartments(), loadClasses()]);
+    void Promise.all([loadDepartments(), loadClasses(), authFetch("/api/semesters?active=true").then((r) => {
+      if (r.ok) {
+        r.json().then((d: { id: number; name: string; sortOrder?: number }[]) => {
+          if (Array.isArray(d)) {
+            setListSemesters(
+              d.map((s) => ({ id: s.id, name: s.name, sortOrder: s.sortOrder ?? 0 }))
+            );
+          }
+        });
+      }
+    })]);
   }, []);
+
+  const classYearOptions = useMemo(() => {
+    const ys = new Set<number>();
+    for (const c of classes) {
+      if (typeof c.year === "number") ys.add(c.year);
+    }
+    const y = new Date().getFullYear();
+    for (let i = y + 1; i >= y - 8; i--) ys.add(i);
+    return [...ys].sort((a, b) => b - a);
+  }, [classes]);
+
+  const admissionFilteredClasses = useMemo(() => {
+    return classes.filter((c) => {
+      if (filterDeptId !== "all" && c.departmentId !== Number(filterDeptId)) return false;
+      if (filterListSemester !== "all" && c.semester !== filterListSemester) return false;
+      if (filterListYear !== "all" && c.year !== Number(filterListYear)) return false;
+      return true;
+    });
+  }, [classes, filterDeptId, filterListSemester, filterListYear]);
+
+  useEffect(() => {
+    if (
+      filterListClassId !== "all" &&
+      !admissionFilteredClasses.some((c) => String(c.id) === filterListClassId)
+    ) {
+      setFilterListClassId("all");
+    }
+  }, [admissionFilteredClasses, filterListClassId]);
 
   useEffect(() => {
     void loadStudents();
@@ -627,90 +693,162 @@ export default function AdmissionPage() {
       {/* Card */}
       <div className="min-w-0 overflow-hidden rounded-2xl border border-gray-200 bg-white dark:border-gray-800 dark:bg-white/3">
         {/* Toolbar */}
-        <div className="flex flex-col gap-3 border-b border-gray-200 px-5 py-4 dark:border-gray-800 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex items-center gap-2">
-            <h3 className="text-base font-semibold text-gray-800 dark:text-white/90">
-              Admission list
-            </h3>
-            <span className="inline-flex h-5 min-w-[20px] items-center justify-center rounded-full bg-brand-50 px-1.5 text-xs font-semibold text-brand-600 dark:bg-brand-500/10 dark:text-brand-400">
-              {total}
-            </span>
-            {(canEdit || canDelete) && total > 0 && (
-              <span className="text-xs text-gray-500 dark:text-gray-400">
-                Select all applies to this page only.
+        <div className="flex flex-col gap-4 border-b border-gray-200 px-5 py-4 dark:border-gray-800">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-center gap-2">
+              <h3 className="text-base font-semibold text-gray-800 dark:text-white/90">
+                Admission list
+              </h3>
+              <span className="inline-flex h-5 min-w-[20px] items-center justify-center rounded-full bg-brand-50 px-1.5 text-xs font-semibold text-brand-600 dark:bg-brand-500/10 dark:text-brand-400">
+                {total}
               </span>
-            )}
-          </div>
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
-            {canEdit && total > 0 && (
-              <Button
-                variant="outline"
-                size="sm"
-                startIcon={<DollarLineIcon />}
-                onClick={() => void openChargeModal()}
-                disabled={selectedIds.size === 0}
-              >
-                Charge / Invoice ({selectedIds.size})
-              </Button>
-            )}
-            {canDelete && total > 0 && (
-              <div className="flex items-center gap-2">
+              {(canEdit || canDelete) && total > 0 && (
+                <span className="text-xs text-gray-500 dark:text-gray-400">
+                  Select all applies to this page only.
+                </span>
+              )}
+            </div>
+            <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-end sm:gap-2">
+              {canEdit && total > 0 && (
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={handleBulkDelete}
-                  disabled={selectedIds.size === 0 || bulkDeleting}
-                  className="text-error-600 border-error-200 hover:bg-error-50 dark:border-error-800 dark:text-error-400 dark:hover:bg-error-500/10"
+                  startIcon={<DollarLineIcon />}
+                  onClick={() => void openChargeModal()}
+                  disabled={selectedIds.size === 0}
                 >
-                  {bulkDeleting ? "Deleting..." : `Delete ${selectedIds.size} selected`}
+                  Charge / Invoice ({selectedIds.size})
                 </Button>
-                {filterDeptId !== "all" && (
+              )}
+              {canDelete && total > 0 && (
+                <div className="flex flex-wrap items-center gap-2">
                   <Button
                     variant="outline"
                     size="sm"
-                    onClick={handleDeleteByDepartment}
-                    disabled={bulkDeleting}
+                    onClick={handleBulkDelete}
+                    disabled={selectedIds.size === 0 || bulkDeleting}
                     className="text-error-600 border-error-200 hover:bg-error-50 dark:border-error-800 dark:text-error-400 dark:hover:bg-error-500/10"
                   >
-                    Delete all in department
+                    {bulkDeleting ? "Deleting..." : `Delete ${selectedIds.size} selected`}
                   </Button>
-                )}
-              </div>
-            )}
-            <select
-              value={filterDeptId}
-              onChange={(e) => { setFilterDeptId(e.target.value); setSelectedIds(new Set()); }}
-              className="h-10 rounded-lg border border-gray-200 bg-transparent px-3 text-sm text-gray-700 outline-none focus:border-brand-300 focus:ring-2 focus:ring-brand-500/20 dark:border-gray-700 dark:text-gray-300 dark:focus:border-brand-500/40"
-            >
-              <option value="all">All Departments</option>
-              {departments.map((d) => (
-                <option key={d.id} value={String(d.id)}>
-                  {d.name} ({d.code})
-                </option>
-              ))}
-            </select>
-            <select
-              value={filterStatus}
-              onChange={(e) => setFilterStatus(e.target.value)}
-              className="h-10 rounded-lg border border-gray-200 bg-transparent px-3 text-sm text-gray-700 outline-none focus:border-brand-300 focus:ring-2 focus:ring-brand-500/20 dark:border-gray-700 dark:text-gray-300 dark:focus:border-brand-500/40"
-            >
-              <option value="all">All Statuses</option>
-              {STATUSES.map((s) => (
-                <option key={s} value={s}>{s}</option>
-              ))}
-            </select>
-            <div className="relative w-full sm:w-64">
-              <svg className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-              </svg>
-              <input
-                type="text"
-                placeholder="Search students..."
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                className="h-10 w-full rounded-lg border border-gray-200 bg-transparent py-2 pl-9 pr-4 text-sm text-gray-700 outline-none placeholder:text-gray-400 focus:border-brand-300 focus:ring-2 focus:ring-brand-500/20 dark:border-gray-700 dark:text-gray-300 dark:placeholder:text-gray-500 dark:focus:border-brand-500/40"
-              />
+                  {filterDeptId !== "all" && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={handleDeleteByDepartment}
+                      disabled={bulkDeleting}
+                      className="text-error-600 border-error-200 hover:bg-error-50 dark:border-error-800 dark:text-error-400 dark:hover:bg-error-500/10"
+                    >
+                      Delete all in department
+                    </Button>
+                  )}
+                </div>
+              )}
             </div>
+          </div>
+          <div className="flex flex-col gap-3 rounded-xl border border-gray-100 bg-gray-50/80 px-3 py-3 dark:border-gray-800 dark:bg-white/5">
+            <p className="text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400">
+              Filters
+            </p>
+            <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-end sm:gap-3">
+              <div className="relative w-full min-w-0 sm:w-56 sm:flex-1">
+                <label className="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400">Search</label>
+                <div className="relative">
+                  <svg className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                  </svg>
+                  <input
+                    type="text"
+                    placeholder="Search students..."
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                    className="h-10 w-full rounded-lg border border-gray-200 bg-white py-2 pl-9 pr-4 text-sm text-gray-700 outline-none placeholder:text-gray-400 focus:border-brand-300 focus:ring-2 focus:ring-brand-500/20 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 dark:placeholder:text-gray-500 dark:focus:border-brand-500/40"
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400">Department</label>
+                <select
+                  value={filterDeptId}
+                  onChange={(e) => {
+                    setFilterDeptId(e.target.value);
+                    setFilterListClassId("all");
+                    setSelectedIds(new Set());
+                  }}
+                  className="h-10 w-full min-w-[10rem] rounded-lg border border-gray-200 bg-white px-3 text-sm text-gray-700 outline-none focus:border-brand-300 focus:ring-2 focus:ring-brand-500/20 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 dark:focus:border-brand-500/40 sm:w-auto"
+                >
+                  <option value="all">All departments</option>
+                  {departments.map((d) => (
+                    <option key={d.id} value={String(d.id)}>
+                      {d.name} ({d.code})
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400">Status</label>
+                <select
+                  value={filterStatus}
+                  onChange={(e) => setFilterStatus(e.target.value)}
+                  className="h-10 w-full min-w-[9rem] rounded-lg border border-gray-200 bg-white px-3 text-sm text-gray-700 outline-none focus:border-brand-300 focus:ring-2 focus:ring-brand-500/20 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 dark:focus:border-brand-500/40 sm:w-auto"
+                >
+                  <option value="all">All statuses</option>
+                  {STATUSES.map((s) => (
+                    <option key={s} value={s}>{s}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400">Class semester</label>
+                <select
+                  value={filterListSemester}
+                  onChange={(e) => {
+                    setFilterListSemester(e.target.value);
+                    setFilterListClassId("all");
+                  }}
+                  className="h-10 w-full min-w-[8rem] rounded-lg border border-gray-200 bg-white px-3 text-sm text-gray-700 outline-none focus:border-brand-300 focus:ring-2 focus:ring-brand-500/20 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 dark:focus:border-brand-500/40 sm:w-auto"
+                >
+                  <option value="all">Any</option>
+                  {listSemesters.map((s) => (
+                    <option key={s.id} value={s.name}>{s.name}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400">Class year</label>
+                <select
+                  value={filterListYear}
+                  onChange={(e) => {
+                    setFilterListYear(e.target.value);
+                    setFilterListClassId("all");
+                  }}
+                  className="h-10 w-full min-w-[7rem] rounded-lg border border-gray-200 bg-white px-3 text-sm text-gray-700 outline-none focus:border-brand-300 focus:ring-2 focus:ring-brand-500/20 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 dark:focus:border-brand-500/40 sm:w-auto"
+                >
+                  <option value="all">Any</option>
+                  {classYearOptions.map((y) => (
+                    <option key={y} value={String(y)}>{y}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="min-w-0 flex-1 sm:min-w-[12rem]">
+                <label className="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400">Class</label>
+                <select
+                  value={filterListClassId}
+                  onChange={(e) => setFilterListClassId(e.target.value)}
+                  className="h-10 w-full rounded-lg border border-gray-200 bg-white px-3 text-sm text-gray-700 outline-none focus:border-brand-300 focus:ring-2 focus:ring-brand-500/20 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 dark:focus:border-brand-500/40"
+                >
+                  <option value="all">All matching classes</option>
+                  {admissionFilteredClasses.map((c) => (
+                    <option key={c.id} value={String(c.id)}>
+                      {c.department.code} · {c.name} ({c.semester} {c.year})
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+            <p className="text-xs text-gray-500 dark:text-gray-400">
+              Narrow the list by semester and year, then pick a specific class—or leave class on “All matching” to include every student assigned to a class in that term.
+            </p>
           </div>
         </div>
 
@@ -727,7 +865,12 @@ export default function AdmissionPage() {
               </svg>
             </div>
             <p className="text-sm font-medium text-gray-500 dark:text-gray-400">
-              {search || filterStatus !== "all" || filterDeptId !== "all"
+              {search ||
+              filterStatus !== "all" ||
+              filterDeptId !== "all" ||
+              filterListSemester !== "all" ||
+              filterListYear !== "all" ||
+              filterListClassId !== "all"
                 ? "No students match your filters."
                 : "No students yet. Add a new student to get started."}
             </p>

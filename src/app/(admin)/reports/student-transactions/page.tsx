@@ -27,12 +27,15 @@ type ClassItem = {
   year: number;
   department: { id: number; name: string; code: string };
 };
+type SemesterOpt = { id: number; name: string };
 
 const CURRENT_YEAR = new Date().getFullYear();
+const TX_YEAR_OPTIONS = Array.from({ length: 14 }, (_, i) => CURRENT_YEAR + 1 - i);
 
 export default function StudentTransactionsReportPage() {
   const [departments, setDepartments] = useState<Department[]>([]);
   const [classes, setClasses] = useState<ClassItem[]>([]);
+  const [semestersTx, setSemestersTx] = useState<SemesterOpt[]>([]);
   const [transactions, setTransactions] = useState<
     {
       studentId: string;
@@ -52,10 +55,14 @@ export default function StudentTransactionsReportPage() {
   const [filterYear, setFilterYear] = useState(String(CURRENT_YEAR));
   const [filterDept, setFilterDept] = useState("");
   const [filterClass, setFilterClass] = useState("");
+  const [filterClassSemester, setFilterClassSemester] = useState<string>("all");
+  const [filterClassYear, setFilterClassYear] = useState<string>("all");
   const [filterSearch, setFilterSearch] = useState("");
   const [filterPhone, setFilterPhone] = useState("");
   const [filterDateFrom, setFilterDateFrom] = useState("");
   const [filterDateTo, setFilterDateTo] = useState("");
+  const [filterPaymentSemester, setFilterPaymentSemester] = useState("");
+  const [filterPaidOnly, setFilterPaidOnly] = useState(true);
 
   const fetchTransactions = useCallback(async () => {
     setLoading(true);
@@ -63,22 +70,45 @@ export default function StudentTransactionsReportPage() {
       const params = new URLSearchParams({ year: filterYear });
       if (filterDept) params.set("departmentId", filterDept);
       if (filterClass) params.set("classId", filterClass);
+      else if (filterClassSemester !== "all" && filterClassYear !== "all") {
+        params.set("classSemester", filterClassSemester);
+        params.set("classYear", filterClassYear);
+      }
       if (filterSearch.trim()) params.set("search", filterSearch.trim());
       if (filterPhone) params.set("phone", filterPhone);
       if (filterDateFrom) params.set("dateFrom", filterDateFrom);
       if (filterDateTo) params.set("dateTo", filterDateTo);
+      if (filterPaymentSemester) params.set("paymentSemester", filterPaymentSemester);
+      if (!filterPaidOnly) params.set("paidOnly", "false");
       const res = await authFetch(`/api/finance/students-transactions?${params}`);
       if (res.ok) setTransactions(await res.json());
     } catch { /* empty */ }
     setLoading(false);
-  }, [filterYear, filterDept, filterClass, filterSearch, filterPhone, filterDateFrom, filterDateTo]);
+  }, [
+    filterYear,
+    filterDept,
+    filterClass,
+    filterClassSemester,
+    filterClassYear,
+    filterSearch,
+    filterPhone,
+    filterDateFrom,
+    filterDateTo,
+    filterPaymentSemester,
+    filterPaidOnly,
+  ]);
 
   useEffect(() => {
     authFetch("/api/departments").then((r) => {
       if (r.ok) r.json().then((d: Department[]) => setDepartments(d));
     });
     authFetch("/api/classes").then((r) => {
-      if (r.ok) r.json().then((d: ClassItem[]) => setClasses(d));
+      if (r.ok) r.json().then((d: ClassItem[]) => setClasses(Array.isArray(d) ? d : []));
+    });
+    authFetch("/api/semesters?active=true").then((r) => {
+      if (r.ok) r.json().then((d: SemesterOpt[]) => {
+        setSemestersTx(Array.isArray(d) ? d.map((s) => ({ id: s.id, name: s.name })) : []);
+      });
     });
   }, []);
 
@@ -86,9 +116,33 @@ export default function StudentTransactionsReportPage() {
     fetchTransactions();
   }, [fetchTransactions]);
 
-  const filteredClasses = filterDept
-    ? classes.filter((c) => c.department?.id === Number(filterDept))
-    : classes;
+  const filteredClasses = useMemo(() => {
+    let list = filterDept
+      ? classes.filter((c) => c.department?.id === Number(filterDept))
+      : classes;
+    if (filterClassSemester !== "all") {
+      list = list.filter((c) => c.semester === filterClassSemester);
+    }
+    if (filterClassYear !== "all") {
+      list = list.filter((c) => c.year === Number(filterClassYear));
+    }
+    return list;
+  }, [classes, filterDept, filterClassSemester, filterClassYear]);
+
+  useEffect(() => {
+    if (filterClass && !filteredClasses.some((c) => String(c.id) === filterClass)) {
+      setFilterClass("");
+    }
+  }, [filteredClasses, filterClass]);
+
+  const classYearOptions = useMemo(() => {
+    const ys = new Set<number>();
+    for (const c of classes) {
+      if (typeof c.year === "number") ys.add(c.year);
+    }
+    for (const y of TX_YEAR_OPTIONS) ys.add(y);
+    return [...ys].sort((a, b) => b - a);
+  }, [classes]);
 
   const {
     paginatedItems: paginatedTransactions,
@@ -104,10 +158,14 @@ export default function StudentTransactionsReportPage() {
     filterYear,
     filterDept,
     filterClass,
+    filterClassSemester,
+    filterClassYear,
     filterSearch,
     filterPhone,
     filterDateFrom,
     filterDateTo,
+    filterPaymentSemester,
+    filterPaidOnly,
   ]);
 
   const paidByDept = useMemo(() => {
@@ -164,6 +222,7 @@ export default function StudentTransactionsReportPage() {
         <h1 className="text-xl font-bold text-gray-900">Student Transactions Report</h1>
         <p className="text-sm text-gray-600">
           Year: {filterYear}
+          {filterPaymentSemester ? ` | Payment semester: ${filterPaymentSemester}` : ""}
           {filterSearch.trim() && ` | Student: "${filterSearch.trim()}"`}
           {" | Generated: "}{new Date().toLocaleDateString()}
         </p>
@@ -184,22 +243,81 @@ export default function StudentTransactionsReportPage() {
               />
             </div>
             <div>
-              <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400">Year</label>
+              <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400">Record year</label>
               <select
                 value={filterYear}
                 onChange={(e) => setFilterYear(e.target.value)}
                 className="h-10 w-full min-w-0 sm:w-auto sm:min-w-[120px] rounded-lg border border-gray-200 bg-transparent px-3 text-sm text-gray-800 outline-none focus:border-brand-300 dark:border-gray-700 dark:text-white/80"
               >
-                {[CURRENT_YEAR, CURRENT_YEAR - 1, CURRENT_YEAR - 2].map((y) => (
-                  <option key={y} value={y}>{y}</option>
+                {TX_YEAR_OPTIONS.map((y) => (
+                  <option key={y} value={String(y)}>{y}</option>
                 ))}
               </select>
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400">Payment semester</label>
+              <select
+                value={filterPaymentSemester}
+                onChange={(e) => setFilterPaymentSemester(e.target.value)}
+                className="h-10 w-full min-w-0 sm:w-auto sm:min-w-[140px] rounded-lg border border-gray-200 bg-transparent px-3 text-sm text-gray-800 outline-none focus:border-brand-300 dark:border-gray-700 dark:text-white/80"
+              >
+                <option value="">All semesters</option>
+                {semestersTx.map((s) => (
+                  <option key={s.id} value={s.name}>{s.name}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400">Class semester</label>
+              <select
+                value={filterClassSemester}
+                onChange={(e) => {
+                  setFilterClassSemester(e.target.value);
+                  setFilterClass("");
+                }}
+                className="h-10 w-full min-w-0 sm:w-auto sm:min-w-[130px] rounded-lg border border-gray-200 bg-transparent px-3 text-sm text-gray-800 outline-none focus:border-brand-300 dark:border-gray-700 dark:text-white/80"
+              >
+                <option value="all">Any</option>
+                {semestersTx.map((s) => (
+                  <option key={`c-${s.id}`} value={s.name}>{s.name}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400">Class year</label>
+              <select
+                value={filterClassYear}
+                onChange={(e) => {
+                  setFilterClassYear(e.target.value);
+                  setFilterClass("");
+                }}
+                className="h-10 w-full min-w-0 sm:w-auto sm:min-w-[100px] rounded-lg border border-gray-200 bg-transparent px-3 text-sm text-gray-800 outline-none focus:border-brand-300 dark:border-gray-700 dark:text-white/80"
+              >
+                <option value="all">Any</option>
+                {classYearOptions.map((y) => (
+                  <option key={y} value={String(y)}>{y}</option>
+                ))}
+              </select>
+            </div>
+            <div className="flex items-end pb-0.5">
+              <label className="flex cursor-pointer items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
+                <input
+                  type="checkbox"
+                  checked={filterPaidOnly}
+                  onChange={(e) => setFilterPaidOnly(e.target.checked)}
+                  className="h-4 w-4 rounded border-gray-300 text-brand-600 focus:ring-brand-500 dark:border-gray-600"
+                />
+                Paid students only
+              </label>
             </div>
             <div>
               <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400">Department</label>
               <select
                 value={filterDept}
-                onChange={(e) => { setFilterDept(e.target.value); setFilterClass(""); }}
+                onChange={(e) => {
+                  setFilterDept(e.target.value);
+                  setFilterClass("");
+                }}
                 className="h-10 w-full min-w-0 sm:w-auto sm:min-w-[180px] rounded-lg border border-gray-200 bg-transparent px-3 text-sm text-gray-800 outline-none focus:border-brand-300 dark:border-gray-700 dark:text-white/80"
               >
                 <option value="">All Departments</option>

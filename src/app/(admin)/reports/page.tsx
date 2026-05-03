@@ -19,6 +19,7 @@ const reportLinks = [
   { name: "Student Transactions", path: "/reports/student-transactions", icon: DollarLineIcon, description: "View student payment status by department and class" },
   { name: "Class Revenue", path: "/reports/class-revenue", icon: DollarLineIcon, description: "View class revenue with paid/unpaid counts" },
   { name: "Unpaid Students", path: "/reports/unpaid-students", icon: DollarLineIcon, description: "Generate list of students who have not paid for a specific semester and class" },
+  { name: "Paid Students", path: "/reports/paid-students", icon: DollarLineIcon, description: "Generate list of students who have paid (or have no tuition due) for a semester and class" },
 ];
 
 export default function ReportsIndexPage() {

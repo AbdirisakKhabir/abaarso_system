@@ -31,7 +31,6 @@ export async function GET(req: NextRequest) {
       );
     }
 
-    // Verify class exists and matches semester/year
     const cls = await prisma.class.findUnique({
       where: { id: parsedClassId },
       include: {
@@ -50,7 +49,6 @@ export async function GET(req: NextRequest) {
       );
     }
 
-    // Get all students in this class
     const studentsInClass = await prisma.student.findMany({
       where: { classId: parsedClassId, status: "Admitted" },
       include: {
@@ -63,17 +61,16 @@ export async function GET(req: NextRequest) {
       orderBy: [{ studentId: "asc" }],
     });
 
-    // Expected amount per term based on payment status (aligned with tuition charges)
-    const unpaidStudents = studentsInClass
+    const paidStudents = studentsInClass
       .filter((s) => {
         const paymentStatus = s.paymentStatus ?? "Fully Paid";
         const expectedAmount = perSemesterTuition(
           s.department.tuitionFee ?? 0,
           paymentStatus
         );
-        if (expectedAmount <= 0) return false;
         const paidAmount = s.tuitionPayments.reduce((sum, p) => sum + p.amount, 0);
-        return paidAmount < expectedAmount - 1e-6;
+        if (expectedAmount <= 0) return true;
+        return paidAmount >= expectedAmount - 1e-6;
       })
       .map((s) => {
         const paymentStatus = s.paymentStatus ?? "Fully Paid";
@@ -82,7 +79,6 @@ export async function GET(req: NextRequest) {
           paymentStatus
         );
         const paidAmount = s.tuitionPayments.reduce((sum, p) => sum + p.amount, 0);
-        const amountDue = expectedAmount - paidAmount;
         return {
           id: s.id,
           studentId: s.studentId,
@@ -91,10 +87,9 @@ export async function GET(req: NextRequest) {
           email: s.email,
           phone: s.phone,
           department: s.department,
-          tuitionFee: amountDue, // Amount still due for display
           paymentStatus,
           amountPaid: paidAmount,
-          amountDue,
+          amountExpected: expectedAmount,
         };
       });
 
@@ -108,11 +103,11 @@ export async function GET(req: NextRequest) {
       },
       semester,
       year: parsedYear,
-      unpaidStudents,
-      totalUnpaid: unpaidStudents.length,
+      paidStudents,
+      totalPaid: paidStudents.length,
     });
   } catch (e) {
-    console.error("Unpaid students error:", e);
+    console.error("Paid students error:", e);
     return NextResponse.json(
       { error: "Something went wrong" },
       { status: 500 }
