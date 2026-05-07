@@ -27,7 +27,7 @@ type SearchStudent = {
 
 export default function UpgradeStudentsPage() {
   const { hasPermission } = useAuth();
-  const [mode, setMode] = useState<"class" | "student">("class");
+  const [mode, setMode] = useState<"class" | "student" | "graduate">("class");
   const [classes, setClasses] = useState<ClassOption[]>([]);
   const [sourceClassId, setSourceClassId] = useState("");
   const [targetClassId, setTargetClassId] = useState("");
@@ -102,17 +102,25 @@ export default function UpgradeStudentsPage() {
     setSuccess(null);
     setSubmitting(true);
     try {
-      let body: { classId?: number; studentId?: number; targetClassId: number } = {
-        targetClassId: Number(targetClassId),
-      };
+      let body: { classId?: number; studentId?: number; targetClassId?: number; graduate?: boolean } = {};
       if (mode === "class") {
+        body.targetClassId = Number(targetClassId);
         if (!sourceClassId) {
           setError("Select a source class");
           setSubmitting(false);
           return;
         }
         body.classId = Number(sourceClassId);
+      } else if (mode === "graduate") {
+        if (!sourceClassId) {
+          setError("Select a class to graduate");
+          setSubmitting(false);
+          return;
+        }
+        body.classId = Number(sourceClassId);
+        body.graduate = true;
       } else {
+        body.targetClassId = Number(targetClassId);
         if (!selectedStudent) {
           setError("Select a student");
           setSubmitting(false);
@@ -132,8 +140,12 @@ export default function UpgradeStudentsPage() {
         setSubmitting(false);
         return;
       }
-      setSuccess({ count: data.upgraded, target: `${data.targetClass.name} (${data.targetClass.semester} ${data.targetClass.year})` });
-      if (mode === "class") {
+      if (mode === "graduate") {
+        setSuccess({ count: data.upgraded, target: "Graduated status" });
+      } else {
+        setSuccess({ count: data.upgraded, target: `${data.targetClass.name} (${data.targetClass.semester} ${data.targetClass.year})` });
+      }
+      if (mode === "class" || mode === "graduate") {
         setSourceClassId("");
         setTargetClassId("");
       } else {
@@ -180,6 +192,17 @@ export default function UpgradeStudentsPage() {
             }`}
           >
             Upgrade Entire Class
+          </button>
+          <button
+            type="button"
+            onClick={() => { setMode("graduate"); setError(""); setSuccess(null); setSourceClassId(""); setTargetClassId(""); }}
+            className={`rounded-lg px-4 py-2 text-sm font-medium transition ${
+              mode === "graduate"
+                ? "bg-brand-500 text-white"
+                : "bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-400 dark:hover:bg-gray-700"
+            }`}
+          >
+            Class Upgrade to Graduate
           </button>
           <button
             type="button"
@@ -241,6 +264,26 @@ export default function UpgradeStudentsPage() {
                 </select>
               </div>
             </>
+          ) : mode === "graduate" ? (
+            <div>
+              <label className="mb-2 block text-sm font-medium">Class to Graduate</label>
+              <select
+                value={sourceClassId}
+                onChange={(e) => setSourceClassId(e.target.value)}
+                className="w-full max-w-md rounded-lg border border-gray-200 px-3 py-2 dark:border-gray-700 dark:bg-gray-800 dark:text-white"
+                required
+              >
+                <option value="">— Select class —</option>
+                {classes.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name} — {c.department.code} ({c.semester} {c.year})
+                  </option>
+                ))}
+              </select>
+              <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
+                This will set all admitted students in the selected class to Graduated and remove class assignment.
+              </p>
+            </div>
           ) : (
             <>
               <div>
@@ -310,7 +353,7 @@ export default function UpgradeStudentsPage() {
           )}
 
           <Button type="submit" disabled={submitting}>
-            {submitting ? "Upgrading..." : "Upgrade"}
+            {submitting ? "Upgrading..." : mode === "graduate" ? "Graduate Class" : "Upgrade"}
           </Button>
         </form>
       </div>

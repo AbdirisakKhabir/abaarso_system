@@ -7,8 +7,9 @@ import { prisma } from "@/lib/prisma";
  * - Class upgrade: all students in a class move to target class
  * - Single student: one student moves to target class
  *
- * Body: { classId?, studentId?, targetClassId }
- * Either (classId + targetClassId) OR (studentId + targetClassId) is required.
+ * Body:
+ * - { classId, targetClassId } OR { studentId, targetClassId } for class/student upgrades
+ * - { classId, graduate: true } for class graduation
  */
 export async function POST(req: NextRequest) {
   try {
@@ -18,22 +19,26 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json();
-    const { classId, studentId, targetClassId } = body;
+    const { classId, studentId, targetClassId, graduate } = body;
+
+    const graduateMode = graduate === true;
 
     const targetId = targetClassId != null ? Number(targetClassId) : null;
-    if (!targetId || !Number.isInteger(targetId)) {
+    if (!graduateMode && (!targetId || !Number.isInteger(targetId))) {
       return NextResponse.json(
         { error: "Target class (targetClassId) is required" },
         { status: 400 }
       );
     }
 
-    const targetClass = await prisma.class.findUnique({
-      where: { id: targetId },
-      include: { department: { select: { id: true } } },
-    });
+    const targetClass = graduateMode
+      ? null
+      : await prisma.class.findUnique({
+          where: { id: targetId as number },
+          include: { department: { select: { id: true } } },
+        });
 
-    if (!targetClass || !targetClass.isActive) {
+    if (!graduateMode && (!targetClass || !targetClass.isActive)) {
       return NextResponse.json({ error: "Target class not found or inactive" }, { status: 404 });
     }
 
@@ -59,12 +64,14 @@ export async function POST(req: NextRequest) {
       }
 
       // Target class must be in same department for class upgrade (same course track)
-      const deptMismatch = students.some((s) => s.departmentId !== targetClass.department.id);
-      if (deptMismatch) {
-        return NextResponse.json(
-          { error: "Target class must be in the same department as the students" },
-          { status: 400 }
-        );
+      if (!graduateMode) {
+        const deptMismatch = students.some((s) => s.departmentId !== targetClass!.department.id);
+        if (deptMismatch) {
+          return NextResponse.json(
+            { error: "Target class must be in the same department as the students" },
+            { status: 400 }
+          );
+        }
       }
 
       studentIds = students.map((s) => s.id);
@@ -90,8 +97,15 @@ export async function POST(req: NextRequest) {
         );
       }
 
+      if (graduateMode) {
+        return NextResponse.json(
+          { error: "Graduation mode is only available for full class upgrade" },
+          { status: 400 }
+        );
+      }
+
       // For single student, allow cross-department if target class's department matches
-      if (student.departmentId !== targetClass.department.id) {
+      if (student.departmentId !== targetClass!.department.id) {
         return NextResponse.json(
           { error: "Target class must be in the student's department" },
           { status: 400 }
@@ -108,16 +122,25 @@ export async function POST(req: NextRequest) {
 
     const result = await prisma.student.updateMany({
       where: { id: { in: studentIds } },
-      data: { classId: targetId },
+      data: graduateMode
+        ? { status: "Graduated", classId: null }
+        : { classId: targetId as number },
     });
+
+    if (graduateMode) {
+      return NextResponse.json({
+        upgraded: result.count,
+        graduated: true,
+      });
+    }
 
     return NextResponse.json({
       upgraded: result.count,
       targetClass: {
-        id: targetClass.id,
-        name: targetClass.name,
-        semester: targetClass.semester,
-        year: targetClass.year,
+        id: targetClass!.id,
+        name: targetClass!.name,
+        semester: targetClass!.semester,
+        year: targetClass!.year,
       },
     });
   } catch (e) {
