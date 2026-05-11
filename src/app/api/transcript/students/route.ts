@@ -13,12 +13,24 @@ export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url);
     const departmentId = searchParams.get("departmentId");
     const classId = searchParams.get("classId");
+    const q = searchParams.get("q")?.trim();
 
     const where: Prisma.StudentWhereInput = {
       status: { in: ["Admitted", "Graduated"] },
     };
     if (departmentId) where.departmentId = Number(departmentId);
     if (classId) where.classId = Number(classId);
+    if (q) {
+      where.AND = [
+        {
+          OR: [
+            { studentId: { contains: q } },
+            { firstName: { contains: q } },
+            { lastName: { contains: q } },
+          ],
+        },
+      ];
+    }
 
     const students = await prisma.student.findMany({
       where,

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import PageBreadCrumb from "@/components/common/PageBreadCrumb";
 import Button from "@/components/ui/button/Button";
 import { authFetch } from "@/lib/api";
@@ -81,6 +81,10 @@ export default function TranscriptPage() {
   const [filterDept, setFilterDept] = useState("");
   const [filterClass, setFilterClass] = useState("");
   const [filterStudent, setFilterStudent] = useState("");
+  /** Narrows the student dropdown (name or institutional ID). */
+  const [studentSearch, setStudentSearch] = useState("");
+  const [debouncedStudentSearch, setDebouncedStudentSearch] = useState("");
+  const transcriptFetchId = useRef(0);
   const [transcript, setTranscript] = useState<TranscriptData | null>(null);
   const [classTranscript, setClassTranscript] = useState<ClassTranscriptData | null>(null);
   const [loading, setLoading] = useState(false);
@@ -102,6 +106,7 @@ export default function TranscriptPage() {
       const params = new URLSearchParams();
       if (filterDept) params.set("departmentId", filterDept);
       if (filterClass) params.set("classId", filterClass);
+      if (debouncedStudentSearch.trim()) params.set("q", debouncedStudentSearch.trim());
       const res = await authFetch(`/api/transcript/students?${params.toString()}`);
       if (res.ok) {
         const data = await res.json();
@@ -112,23 +117,41 @@ export default function TranscriptPage() {
       }
     } catch { /* empty */ }
     setLoading(false);
-  }, [filterDept, filterClass]);
+  }, [filterDept, filterClass, debouncedStudentSearch]);
+
+  useEffect(() => {
+    const t = window.setTimeout(() => {
+      setDebouncedStudentSearch(studentSearch);
+    }, 300);
+    return () => window.clearTimeout(t);
+  }, [studentSearch]);
 
   const fetchTranscript = useCallback(async () => {
     if (!filterStudent) {
+      transcriptFetchId.current += 1;
       setTranscript(null);
+      setLoadingTranscript(false);
       return;
     }
+    const id = ++transcriptFetchId.current;
     setLoadingTranscript(true);
     setTranscript(null);
     setClassTranscript(null);
     try {
-      const res = await authFetch(`/api/examinations/gpa?studentId=${filterStudent}`);
+      const res = await authFetch(
+        `/api/examinations/gpa?studentId=${encodeURIComponent(filterStudent)}`,
+        { cache: "no-store" }
+      );
+      if (id !== transcriptFetchId.current) return;
       if (res.ok) {
         const data = await res.json();
+        if (id !== transcriptFetchId.current) return;
         setTranscript(data);
+      } else {
+        setTranscript(null);
       }
     } catch { /* empty */ }
+    if (id !== transcriptFetchId.current) return;
     setLoadingTranscript(false);
   }, [filterStudent]);
 
@@ -255,6 +278,7 @@ export default function TranscriptPage() {
                   setFilterDept(e.target.value);
                   setFilterClass("");
                   setFilterStudent("");
+                  setStudentSearch("");
                 }}
                 className="h-10 w-full min-w-0 sm:w-auto sm:min-w-[180px] rounded-lg border border-gray-200 bg-transparent px-3 text-sm text-gray-800 outline-none focus:border-brand-300 dark:border-gray-700 dark:text-white/80"
               >
@@ -272,7 +296,10 @@ export default function TranscriptPage() {
                 value={filterClass}
                 onChange={(e) => {
                   setFilterClass(e.target.value);
-                  if (mode === "student") setFilterStudent("");
+                  if (mode === "student") {
+                    setFilterStudent("");
+                    setStudentSearch("");
+                  }
                 }}
                 className="h-10 w-full min-w-0 sm:w-auto sm:min-w-[200px] rounded-lg border border-gray-200 bg-transparent px-3 text-sm text-gray-800 outline-none focus:border-brand-300 dark:border-gray-700 dark:text-white/80"
               >
@@ -285,21 +312,35 @@ export default function TranscriptPage() {
               </select>
             </div>
             {mode === "student" && (
-              <div>
-                <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400">Student</label>
-                <select
-                  value={filterStudent}
-                  onChange={(e) => setFilterStudent(e.target.value)}
-                  className="h-10 w-full min-w-0 sm:w-auto sm:min-w-[220px] rounded-lg border border-gray-200 bg-transparent px-3 text-sm text-gray-800 outline-none focus:border-brand-300 dark:border-gray-700 dark:text-white/80"
-                >
-                  <option value="">Select Student</option>
-                  {students.map((s) => (
-                    <option key={s.id} value={s.id}>
-                      {s.studentId} - {s.firstName} {s.lastName}
-                    </option>
-                  ))}
-                </select>
-              </div>
+              <>
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400">
+                    Filter students (transcript)
+                  </label>
+                  <input
+                    type="search"
+                    value={studentSearch}
+                    onChange={(e) => setStudentSearch(e.target.value)}
+                    placeholder="Name or student ID…"
+                    className="h-10 w-full min-w-0 sm:w-auto sm:min-w-[200px] rounded-lg border border-gray-200 bg-transparent px-3 text-sm text-gray-800 outline-none focus:border-brand-300 dark:border-gray-700 dark:text-white/80"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400">Student</label>
+                  <select
+                    value={filterStudent}
+                    onChange={(e) => setFilterStudent(e.target.value)}
+                    className="h-10 w-full min-w-0 sm:w-auto sm:min-w-[220px] rounded-lg border border-gray-200 bg-transparent px-3 text-sm text-gray-800 outline-none focus:border-brand-300 dark:border-gray-700 dark:text-white/80"
+                  >
+                    <option value="">Select Student</option>
+                    {students.map((s) => (
+                      <option key={s.id} value={s.id}>
+                        {s.studentId} - {s.firstName} {s.lastName}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </>
             )}
           </div>
         </div>

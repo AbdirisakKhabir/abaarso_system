@@ -116,6 +116,9 @@ export default function ExaminationsPage() {
   const [filterSemester, setFilterSemester] = useState("");
   const [filterCourseId, setFilterCourseId] = useState("");
   const [filterYear, setFilterYear] = useState("");
+  /** Same roster as Student Transcript (Admitted + Graduated). */
+  const [filterTranscriptStudentId, setFilterTranscriptStudentId] = useState("");
+  const [transcriptStudents, setTranscriptStudents] = useState<StudentInfo[]>([]);
 
   // Modal state
   const [showModal, setShowModal] = useState(false);
@@ -148,11 +151,24 @@ export default function ExaminationsPage() {
       if (filterSemester) params.set("semester", filterSemester);
       if (filterCourseId) params.set("courseId", filterCourseId);
       if (filterYear) params.set("year", filterYear);
-      const res = await authFetch(`/api/examinations?${params.toString()}`);
+      if (filterTranscriptStudentId) params.set("studentId", filterTranscriptStudentId);
+      const res = await authFetch(`/api/examinations?${params.toString()}`, {
+        cache: "no-store",
+      });
       if (res.ok) setRecords(await res.json());
     } catch { /* empty */ }
     setLoading(false);
-  }, [filterSemester, filterCourseId, filterYear]);
+  }, [filterSemester, filterCourseId, filterYear, filterTranscriptStudentId]);
+
+  const fetchTranscriptStudents = useCallback(async () => {
+    try {
+      const res = await authFetch("/api/transcript/students");
+      if (res.ok) {
+        const data = await res.json();
+        setTranscriptStudents(data);
+      }
+    } catch { /* empty */ }
+  }, []);
 
   const fetchStudents = useCallback(async () => {
     try {
@@ -205,12 +221,21 @@ export default function ExaminationsPage() {
 
   useEffect(() => {
     fetchStudents();
+    fetchTranscriptStudents();
     fetchCourses();
     fetchFaculties();
     fetchDepartments();
     fetchClasses();
     fetchSemesters();
-  }, [fetchStudents, fetchCourses, fetchFaculties, fetchDepartments, fetchClasses, fetchSemesters]);
+  }, [
+    fetchStudents,
+    fetchTranscriptStudents,
+    fetchCourses,
+    fetchFaculties,
+    fetchDepartments,
+    fetchClasses,
+    fetchSemesters,
+  ]);
 
   useEffect(() => {
     if (semesters.length > 0 && !form.semester) {
@@ -241,7 +266,13 @@ export default function ExaminationsPage() {
     total: filteredTotal,
     from,
     to,
-  } = usePagination(filtered, [search, filterSemester, filterCourseId, filterYear]);
+  } = usePagination(filtered, [
+    search,
+    filterSemester,
+    filterCourseId,
+    filterYear,
+    filterTranscriptStudentId,
+  ]);
 
   // Open edit modal
   const openEdit = (r: ExamRecord) => {
@@ -316,7 +347,10 @@ export default function ExaminationsPage() {
     setShowGPAModal(true);
     setGpaData(null);
     try {
-      const res = await authFetch(`/api/examinations/gpa?studentId=${studentDbId}`);
+      const res = await authFetch(
+        `/api/examinations/gpa?studentId=${encodeURIComponent(String(studentDbId))}`,
+        { cache: "no-store" }
+      );
       if (res.ok) {
         setGpaData(await res.json());
       }
@@ -418,6 +452,19 @@ export default function ExaminationsPage() {
             <option value="">All Courses</option>
             {courses.map((c) => (
               <option key={c.id} value={c.id}>{c.code} - {c.name}</option>
+            ))}
+          </select>
+          <select
+            value={filterTranscriptStudentId}
+            onChange={(e) => setFilterTranscriptStudentId(e.target.value)}
+            title="Filter rows by student (same list as Student Transcript)"
+            className="h-10 min-w-[200px] rounded-lg border border-gray-200 bg-transparent px-3 text-sm text-gray-800 outline-none dark:border-gray-700 dark:text-white/80"
+          >
+            <option value="">All students (transcript)</option>
+            {transcriptStudents.map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.studentId} — {s.firstName} {s.lastName}
+              </option>
             ))}
           </select>
         </div>

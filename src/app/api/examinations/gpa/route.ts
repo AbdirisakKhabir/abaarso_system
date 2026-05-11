@@ -1,6 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAuthUser } from "@/lib/auth";
-import { buildStudentAcademicReport } from "@/lib/studentAcademicReport";
+import {
+  buildStudentAcademicReport,
+  resolveStudentInternalId,
+} from "@/lib/studentAcademicReport";
+
+export const dynamic = "force-dynamic";
 
 export async function GET(req: NextRequest) {
   try {
@@ -10,25 +15,54 @@ export async function GET(req: NextRequest) {
     }
 
     const { searchParams } = new URL(req.url);
-    const studentId = searchParams.get("studentId");
+    const raw = searchParams.get("studentId")?.trim();
 
-    if (!studentId) {
+    if (!raw) {
       return NextResponse.json({ error: "studentId is required" }, { status: 400 });
     }
 
-    const parsed = Number(studentId);
-    if (!Number.isInteger(parsed) || parsed <= 0) {
+    const asNum = Number(raw);
+    let internalId: number | null =
+      Number.isInteger(asNum) && asNum > 0 ? asNum : null;
+    if (internalId == null) {
+      internalId = await resolveStudentInternalId(raw);
+    }
+    if (internalId == null) {
       return NextResponse.json({ error: "Invalid studentId" }, { status: 400 });
     }
 
-    const report = await buildStudentAcademicReport(parsed, "all");
+    const report = await buildStudentAcademicReport(internalId, "all");
     if (!report) {
       return NextResponse.json({ error: "Student not found" }, { status: 404 });
     }
 
+    const records = report.records.map((r) => ({
+      id: r.id,
+      studentId: r.studentId,
+      courseId: r.courseId,
+      semester: r.semester,
+      year: r.year,
+      midExam: r.midExam,
+      finalExam: r.finalExam,
+      assessment: r.assessment,
+      project: r.project,
+      assignment: r.assignment,
+      presentation: r.presentation,
+      totalMarks: Number(r.totalMarks),
+      grade: r.grade,
+      gradePoints: r.gradePoints != null ? Number(r.gradePoints) : null,
+      status: r.status,
+      course: {
+        id: r.course.id,
+        name: r.course.name,
+        code: r.course.code,
+        creditHours: r.course.creditHours,
+      },
+    }));
+
     return NextResponse.json({
       student: report.student,
-      records: report.records,
+      records,
       gpa: report.gpa,
       semesterSortMap: report.semesterSortMap,
     });
