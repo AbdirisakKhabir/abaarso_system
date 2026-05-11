@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getAuthUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { isValidSemester } from "@/lib/semesters";
+import { perSemesterTuition } from "@/lib/tuition-amount";
 
 export async function GET(req: NextRequest) {
   try {
@@ -130,7 +131,14 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Student not found" }, { status: 404 });
     }
 
-    const amt = amount != null ? Number(amount) : (student.department.tuitionFee ?? 0);
+    const amt =
+      amount != null
+        ? Number(amount)
+        : perSemesterTuition(
+            student.department.tuitionFee ?? 0,
+            student.paymentStatus,
+            student.customSemesterFee
+          );
     if (amt <= 0) {
       return NextResponse.json(
         { error: "Amount must be greater than 0" },

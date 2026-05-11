@@ -3,6 +3,7 @@ import type { Prisma } from "@prisma/client";
 import { getAuthUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { parsePaginationParams } from "@/lib/pagination";
+import { perSemesterTuition } from "@/lib/tuition-amount";
 
 // Generate a unique student ID like STD-2026-0001
 async function generateStudentId(): Promise<string> {
@@ -148,6 +149,7 @@ export async function POST(req: NextRequest) {
       imagePublicId,
       status,
       paymentStatus,
+      customSemesterFee,
     } = body;
 
     const parsedDeptId = Number(departmentId);
@@ -164,10 +166,23 @@ export async function POST(req: NextRequest) {
       parsedAyId = n;
     }
     const parsedClassId = classId ? Number(classId) : null;
+    const parsedCustomSemesterFee =
+      customSemesterFee == null || String(customSemesterFee).trim() === ""
+        ? null
+        : Number(customSemesterFee);
 
     if (!firstName || !lastName || !Number.isInteger(parsedDeptId)) {
       return NextResponse.json(
         { error: "First name, last name, and department are required" },
+        { status: 400 }
+      );
+    }
+    if (
+      parsedCustomSemesterFee != null &&
+      (!Number.isFinite(parsedCustomSemesterFee) || parsedCustomSemesterFee < 0)
+    ) {
+      return NextResponse.json(
+        { error: "customSemesterFee must be a non-negative number" },
         { status: 400 }
       );
     }
@@ -219,12 +234,12 @@ export async function POST(req: NextRequest) {
       where: { id: parsedDeptId },
       select: { tuitionFee: true },
     });
-    const tuitionFee = dept?.tuitionFee ?? 0;
     const ps = ["Full Scholarship", "Half Scholar", "Fully Paid"].includes(paymentStatus) ? paymentStatus : "Fully Paid";
-    const initialBalance =
-      ps === "Full Scholarship" ? 0
-      : ps === "Half Scholar" ? tuitionFee * 0.5
-      : tuitionFee;
+    const initialBalance = perSemesterTuition(
+      dept?.tuitionFee ?? 0,
+      ps,
+      parsedCustomSemesterFee
+    );
 
     const student = await prisma.student.create({
       data: {
@@ -246,6 +261,7 @@ export async function POST(req: NextRequest) {
         imagePublicId: imagePublicId || null,
         status: status || "Admitted",
         paymentStatus: ps,
+        customSemesterFee: parsedCustomSemesterFee,
         balance: initialBalance,
       },
       include: {

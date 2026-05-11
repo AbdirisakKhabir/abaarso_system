@@ -1,8 +1,12 @@
 /** Per-semester tuition before multiplying by semester count (matches student registration rules). */
 export function perSemesterTuition(
   departmentTuitionFee: number,
-  paymentStatus: string
+  paymentStatus: string,
+  customSemesterFee?: number | null
 ): number {
+  if (customSemesterFee != null && Number.isFinite(customSemesterFee)) {
+    return Math.max(0, Number(customSemesterFee));
+  }
   const ps = ["Full Scholarship", "Half Scholar", "Fully Paid"].includes(paymentStatus)
     ? paymentStatus
     : "Fully Paid";

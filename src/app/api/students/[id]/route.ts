@@ -108,11 +108,24 @@ export async function PATCH(req: NextRequest, ctx: RouteContext) {
         ? body.paymentStatus
         : "Fully Paid";
     }
+    if (body.customSemesterFee !== undefined) {
+      if (body.customSemesterFee == null || String(body.customSemesterFee).trim() === "") {
+        data.customSemesterFee = null;
+      } else {
+        const fee = Number(body.customSemesterFee);
+        if (!Number.isFinite(fee) || fee < 0) {
+          return NextResponse.json(
+            { error: "customSemesterFee must be a non-negative number" },
+            { status: 400 }
+          );
+        }
+        data.customSemesterFee = fee;
+      }
+    }
     if (body.balance !== undefined) {
       const b = Number(body.balance);
       data.balance = !Number.isNaN(b) ? Math.max(0, b) : undefined;
     }
-
     // Handle image update: if new image provided, delete old one from Cloudinary
     if (body.imageUrl !== undefined) {
       const currentStudent = await prisma.student.findUnique({

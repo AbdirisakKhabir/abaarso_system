@@ -36,6 +36,7 @@ export type StudentFormData = {
   program: string;
   status: string;
   paymentStatus: string;
+  customSemesterFee: string;
   imageUrl: string;
   imagePublicId: string;
 };
@@ -60,6 +61,7 @@ const defaultForm: StudentFormData = {
   program: "",
   status: "Admitted",
   paymentStatus: "Fully Paid",
+  customSemesterFee: "",
   imageUrl: "",
   imagePublicId: "",
 };
@@ -149,6 +151,10 @@ export default function StudentRegistrationForm({
         program: form.program || undefined,
         status: form.status,
         paymentStatus: form.paymentStatus || "Fully Paid",
+        customSemesterFee:
+          form.customSemesterFee.trim() !== ""
+            ? Number(form.customSemesterFee)
+            : null,
         imageUrl: form.imageUrl || undefined,
         imagePublicId: form.imagePublicId || undefined,
       };
@@ -315,7 +321,7 @@ export default function StudentRegistrationForm({
         {/* Personal Details */}
         <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm dark:border-gray-700 dark:bg-gray-900">
           <SectionHeader icon={UserIcon} title="Personal Details" subtitle="Date of birth, gender, and status" />
-          <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
             <div>
               <DateInput
                 id="student-dob"
@@ -344,6 +350,20 @@ export default function StudentRegistrationForm({
               <select value={form.paymentStatus} onChange={(e) => setForm((f) => ({ ...f, paymentStatus: e.target.value }))} className={selectClass}>
                 {PAYMENT_STATUSES.map((p) => <option key={p} value={p}>{p}</option>)}
               </select>
+            </div>
+            <div>
+              <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">
+                Custom Fee / Semester
+              </label>
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                value={form.customSemesterFee}
+                onChange={(e) => setForm((f) => ({ ...f, customSemesterFee: e.target.value }))}
+                placeholder="Optional"
+                className={inputClass}
+              />
             </div>
           </div>
         </div>

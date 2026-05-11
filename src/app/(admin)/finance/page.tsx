@@ -6,6 +6,7 @@ import PageBreadCrumb from "@/components/common/PageBreadCrumb";
 import Button from "@/components/ui/button/Button";
 import { DateInput } from "@/components/form/DateInput";
 import { authFetch } from "@/lib/api";
+import { perSemesterTuition } from "@/lib/tuition-amount";
 import { useAuth } from "@/context/AuthContext";
 import { CheckCircleIcon, InfoIcon, AlertIcon } from "@/icons";
 
@@ -20,6 +21,7 @@ type SearchStudent = {
   email: string | null;
   balance: number;
   paymentStatus: string;
+  customSemesterFee: number | null;
   department: { name: string; code: string; tuitionFee: number | null };
   class: { name: string; semester: string; year: number; department: { code: string } } | null;
   tuitionPayments: { semester: string; year: number; amount: number }[];
@@ -102,10 +104,13 @@ export default function FinancePage() {
     };
   }, [searchQuery]);
 
-  const tuitionFee = selectedStudent?.department?.tuitionFee ?? 0;
-  const expectedFull = selectedStudent?.paymentStatus === "Full Scholarship" ? 0
-    : selectedStudent?.paymentStatus === "Half Scholar" ? tuitionFee * 0.5
-    : tuitionFee;
+  const expectedFull = selectedStudent
+    ? perSemesterTuition(
+        selectedStudent.department?.tuitionFee ?? 0,
+        selectedStudent.paymentStatus,
+        selectedStudent.customSemesterFee
+      )
+    : 0;
   const computedAmount = payAmountType === "half" ? expectedFull * 0.5
     : payAmountType === "full" ? expectedFull
     : payAmount ? Number(payAmount) : expectedFull;

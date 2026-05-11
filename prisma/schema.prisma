@@ -268,6 +268,7 @@ model Student {
   admissionDate      DateTime             @default(now())
   status             String               @default("Admitted") // "Pending", "Admitted", "Rejected", "Graduated"
   paymentStatus      String               @default("Fully Paid") // "Full Scholarship", "Half Scholar", "Fully Paid"
+  customSemesterFee  Float? // Optional custom fee per semester for this student
   balance            Float                @default(0) // Amount owed; charged at registration, reduced by payments
   attendanceRecords  AttendanceRecord[]
   examRecords        ExamRecord[]

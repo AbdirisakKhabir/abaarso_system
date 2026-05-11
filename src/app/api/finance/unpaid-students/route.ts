@@ -69,7 +69,8 @@ export async function GET(req: NextRequest) {
         const paymentStatus = s.paymentStatus ?? "Fully Paid";
         const expectedAmount = perSemesterTuition(
           s.department.tuitionFee ?? 0,
-          paymentStatus
+          paymentStatus,
+          s.customSemesterFee
         );
         if (expectedAmount <= 0) return false;
         const paidAmount = s.tuitionPayments.reduce((sum, p) => sum + p.amount, 0);
@@ -79,7 +80,8 @@ export async function GET(req: NextRequest) {
         const paymentStatus = s.paymentStatus ?? "Fully Paid";
         const expectedAmount = perSemesterTuition(
           s.department.tuitionFee ?? 0,
-          paymentStatus
+          paymentStatus,
+          s.customSemesterFee
         );
         const paidAmount = s.tuitionPayments.reduce((sum, p) => sum + p.amount, 0);
         const amountDue = expectedAmount - paidAmount;

@@ -106,7 +106,8 @@ export async function POST(req: NextRequest) {
           ? customById[s.id]
           : perSemesterTuition(
               s.department.tuitionFee ?? 0,
-              s.paymentStatus
+              s.paymentStatus,
+              s.customSemesterFee
             );
         const charge = per * semesterCount;
         if (charge <= 0) {

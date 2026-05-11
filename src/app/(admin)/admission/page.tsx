@@ -72,6 +72,7 @@ type StudentRow = {
   admissionDate: string;
   status: string;
   paymentStatus: string;
+  customSemesterFee: number | null;
   balance: number;
   createdAt: string;
 };
@@ -414,7 +415,8 @@ export default function AdmissionPage() {
     for (const s of rows) {
       const per = perSemesterTuition(
         s.department.tuitionFee ?? 0,
-        s.paymentStatus
+        s.paymentStatus,
+        s.customSemesterFee
       );
       next[s.id] = String(per);
     }
@@ -429,7 +431,8 @@ export default function AdmissionPage() {
     }
     return perSemesterTuition(
       s.department.tuitionFee ?? 0,
-      s.paymentStatus
+      s.paymentStatus,
+      s.customSemesterFee
     );
   }
 
