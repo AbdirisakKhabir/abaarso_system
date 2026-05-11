@@ -30,7 +30,10 @@ export async function GET(req: NextRequest) {
     }
 
     const students = await prisma.student.findMany({
-      where: { classId: Number(classId), status: "Admitted" },
+      where: {
+        classId: Number(classId),
+        status: { in: ["Admitted", "Graduated"] },
+      },
       select: {
         id: true,
         studentId: true,
