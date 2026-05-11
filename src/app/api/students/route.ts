@@ -150,6 +150,8 @@ export async function POST(req: NextRequest) {
       status,
       paymentStatus,
       customSemesterFee,
+      balance: rawBalance,
+      admissionDate: bodyAdmissionDate,
     } = body;
 
     const parsedDeptId = Number(departmentId);
@@ -241,6 +243,32 @@ export async function POST(req: NextRequest) {
       parsedCustomSemesterFee
     );
 
+    let finalBalance = initialBalance;
+    if (
+      rawBalance !== undefined &&
+      rawBalance !== null &&
+      String(rawBalance).trim() !== ""
+    ) {
+      const nb = Number(rawBalance);
+      if (!Number.isFinite(nb) || nb < 0) {
+        return NextResponse.json({ error: "Invalid balance" }, { status: 400 });
+      }
+      finalBalance = Math.max(0, nb);
+    }
+
+    let admissionAt = new Date();
+    if (
+      bodyAdmissionDate !== undefined &&
+      bodyAdmissionDate !== null &&
+      String(bodyAdmissionDate).trim() !== ""
+    ) {
+      const ad = new Date(bodyAdmissionDate);
+      if (Number.isNaN(ad.getTime())) {
+        return NextResponse.json({ error: "Invalid admission date" }, { status: 400 });
+      }
+      admissionAt = ad;
+    }
+
     const student = await prisma.student.create({
       data: {
         studentId,
@@ -262,7 +290,8 @@ export async function POST(req: NextRequest) {
         status: status || "Admitted",
         paymentStatus: ps,
         customSemesterFee: parsedCustomSemesterFee,
-        balance: initialBalance,
+        balance: finalBalance,
+        admissionDate: admissionAt,
       },
       include: {
         department: { select: { id: true, name: true, code: true } },

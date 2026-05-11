@@ -28,6 +28,8 @@ export type StudentFormData = {
   email: string;
   phone: string;
   dateOfBirth: string;
+  /** Calendar day (YYYY-MM-DD) for native date picker */
+  admissionDate: string;
   gender: string;
   address: string;
   departmentId: string;
@@ -37,6 +39,8 @@ export type StudentFormData = {
   status: string;
   paymentStatus: string;
   customSemesterFee: string;
+  /** Amount owed ($); empty on new student = server default from tuition rules */
+  balance: string;
   imageUrl: string;
   imagePublicId: string;
 };
@@ -53,6 +57,7 @@ const defaultForm: StudentFormData = {
   email: "",
   phone: "",
   dateOfBirth: "",
+  admissionDate: "",
   gender: "",
   address: "",
   departmentId: "",
@@ -62,6 +67,7 @@ const defaultForm: StudentFormData = {
   status: "Admitted",
   paymentStatus: "Fully Paid",
   customSemesterFee: "",
+  balance: "",
   imageUrl: "",
   imagePublicId: "",
 };
@@ -85,10 +91,20 @@ export default function StudentRegistrationForm({
   classes,
   onSuccess,
 }: Props) {
-  const [form, setForm] = useState<StudentFormData>({
-    ...defaultForm,
-    ...initialData,
-    departmentId: initialData?.departmentId ?? (departments[0] ? String(departments[0].id) : ""),
+  const [form, setForm] = useState<StudentFormData>(() => {
+    const merged: StudentFormData = {
+      ...defaultForm,
+      ...initialData,
+      departmentId:
+        initialData?.departmentId ?? (departments[0] ? String(departments[0].id) : ""),
+    };
+    if (!merged.admissionDate?.trim()) {
+      merged.admissionDate = new Date().toISOString().slice(0, 10);
+    }
+    if (merged.balance === undefined || merged.balance === null) {
+      merged.balance = "";
+    }
+    return merged;
   });
   const initialFullName = `${initialData?.firstName ?? ""} ${initialData?.lastName ?? ""}`.trim();
   const [fullName, setFullName] = useState(initialFullName);
@@ -131,7 +147,23 @@ export default function StudentRegistrationForm({
     setSubmitError("");
     setSubmitting(true);
     try {
-      const payload = {
+      if (!form.admissionDate?.trim()) {
+        setSubmitError("Admission date is required");
+        setSubmitting(false);
+        return;
+      }
+      const admissionDateIso = form.admissionDate.trim();
+      const balanceTrim = form.balance.trim();
+      if (balanceTrim !== "") {
+        const b = Number(balanceTrim);
+        if (!Number.isFinite(b) || b < 0) {
+          setSubmitError("Balance must be a non-negative number");
+          setSubmitting(false);
+          return;
+        }
+      }
+
+      const payload: Record<string, unknown> = {
         studentId: form.studentId.trim() || undefined,
         firstName: form.firstName,
         lastName: form.lastName,
@@ -140,6 +172,7 @@ export default function StudentRegistrationForm({
         email: form.email || undefined,
         phone: form.phone || undefined,
         dateOfBirth: form.dateOfBirth || undefined,
+        admissionDate: admissionDateIso,
         gender: form.gender || undefined,
         address: form.address || undefined,
         departmentId: Number(form.departmentId),
@@ -158,6 +191,9 @@ export default function StudentRegistrationForm({
         imageUrl: form.imageUrl || undefined,
         imagePublicId: form.imagePublicId || undefined,
       };
+      if (balanceTrim !== "") {
+        payload.balance = Math.max(0, Number(balanceTrim));
+      }
       if (mode === "add") {
         const res = await authFetch("/api/students", {
           method: "POST",
@@ -320,15 +356,24 @@ export default function StudentRegistrationForm({
 
         {/* Personal Details */}
         <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm dark:border-gray-700 dark:bg-gray-900">
-          <SectionHeader icon={UserIcon} title="Personal Details" subtitle="Date of birth, gender, and status" />
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
+          <SectionHeader icon={UserIcon} title="Personal Details" subtitle="Dates, gender, status, and account balance" />
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
             <div>
               <DateInput
                 id="student-dob"
                 label="Date of Birth"
                 value={form.dateOfBirth}
                 onChange={(v) => setForm((f) => ({ ...f, dateOfBirth: v }))}
-                inputClassName={inputClass}
+                inputClassName={`${inputClass} [color-scheme:light] dark:[color-scheme:dark]`}
+              />
+            </div>
+            <div>
+              <DateInput
+                id="student-admission-date"
+                label="Admission date"
+                value={form.admissionDate}
+                onChange={(v) => setForm((f) => ({ ...f, admissionDate: v }))}
+                inputClassName={`${inputClass} [color-scheme:light] dark:[color-scheme:dark]`}
               />
             </div>
             <div>
@@ -364,6 +409,25 @@ export default function StudentRegistrationForm({
                 placeholder="Optional"
                 className={inputClass}
               />
+            </div>
+            <div>
+              <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">
+                Balance (amount owed) <span className="text-gray-400">($)</span>
+              </label>
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                value={form.balance}
+                onChange={(e) => setForm((f) => ({ ...f, balance: e.target.value }))}
+                placeholder={mode === "add" ? "Leave empty for default from tuition" : "0"}
+                className={inputClass}
+              />
+              {mode === "add" && (
+                <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                  If empty, the system sets balance from department tuition and payment status.
+                </p>
+              )}
             </div>
           </div>
         </div>

@@ -124,7 +124,21 @@ export async function PATCH(req: NextRequest, ctx: RouteContext) {
     }
     if (body.balance !== undefined) {
       const b = Number(body.balance);
-      data.balance = !Number.isNaN(b) ? Math.max(0, b) : undefined;
+      if (Number.isNaN(b) || b < 0) {
+        return NextResponse.json({ error: "Invalid balance" }, { status: 400 });
+      }
+      data.balance = Math.max(0, b);
+    }
+    if (body.admissionDate !== undefined) {
+      const raw = String(body.admissionDate).trim();
+      if (!raw) {
+        return NextResponse.json({ error: "Admission date is required" }, { status: 400 });
+      }
+      const d = new Date(raw);
+      if (Number.isNaN(d.getTime())) {
+        return NextResponse.json({ error: "Invalid admission date" }, { status: 400 });
+      }
+      data.admissionDate = d;
     }
     // Handle image update: if new image provided, delete old one from Cloudinary
     if (body.imageUrl !== undefined) {

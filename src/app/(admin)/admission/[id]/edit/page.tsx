@@ -29,6 +29,7 @@ type Student = {
   email: string | null;
   phone: string | null;
   dateOfBirth: string | null;
+  admissionDate: string;
   gender: string | null;
   address: string | null;
   departmentId: number;
@@ -38,6 +39,7 @@ type Student = {
   status: string;
   paymentStatus: string;
   customSemesterFee: number | null;
+  balance: number;
   imageUrl: string | null;
   imagePublicId: string | null;
 };
@@ -148,6 +150,9 @@ export default function EditStudentPage() {
         email: student.email ?? "",
         phone: student.phone ?? "",
         dateOfBirth: student.dateOfBirth ? student.dateOfBirth.split("T")[0] : "",
+        admissionDate: student.admissionDate
+          ? new Date(student.admissionDate).toISOString().slice(0, 10)
+          : new Date().toISOString().slice(0, 10),
         gender: student.gender ?? "",
         address: student.address ?? "",
         departmentId: String(student.departmentId),
@@ -160,6 +165,7 @@ export default function EditStudentPage() {
           student.customSemesterFee != null
             ? String(student.customSemesterFee)
             : "",
+        balance: String(Number(student.balance ?? 0)),
         imageUrl: student.imageUrl ?? "",
         imagePublicId: student.imagePublicId ?? "",
       };
