@@ -79,9 +79,9 @@ type SessionDetail = {
 const STATUS_COLOR: Record<string, "success" | "error" | "warning" | "info"> = {
   Present: "success",
   Absent: "error",
-  Late: "warning",
   Excused: "info",
 };
+const ATTENDANCE_STATUSES = ["Present", "Absent", "Excused"] as const;
 
 export default function AttendancePage() {
   const { hasPermission } = useAuth();
@@ -92,8 +92,15 @@ export default function AttendancePage() {
   const [filterDepartmentId, setFilterDepartmentId] = useState("all");
   const [filterClassId, setFilterClassId] = useState("all");
   const [viewSession, setViewSession] = useState<SessionDetail | null>(null);
+  const [editingSessionId, setEditingSessionId] = useState<number | null>(null);
+  const [draftNote, setDraftNote] = useState("");
+  const [draftRecords, setDraftRecords] = useState<
+    { studentId: number; status: string; note: string }[]
+  >([]);
+  const [savingEdit, setSavingEdit] = useState(false);
 
   const canCreate = hasPermission("attendance.create");
+  const canEdit = hasPermission("attendance.edit") || hasPermission("attendance.create");
   const canDelete = hasPermission("attendance.delete");
 
   async function loadSessions() {
@@ -152,7 +159,76 @@ export default function AttendancePage() {
 
   async function handleViewSession(id: number) {
     const res = await authFetch(`/api/attendance/${id}`);
-    if (res.ok) setViewSession(await res.json());
+    if (res.ok) {
+      const data = await res.json();
+      setViewSession(data);
+      setEditingSessionId(null);
+      setDraftNote(data.note ?? "");
+      setDraftRecords(
+        data.records.map(
+          (r: { student: { id: number }; status: string; note: string | null }) => ({
+            studentId: r.student.id,
+            status: r.status,
+            note: r.note ?? "",
+          })
+        )
+      );
+    }
+  }
+
+  function startEditSession() {
+    if (!viewSession) return;
+    setEditingSessionId(viewSession.id);
+    setDraftNote(viewSession.note ?? "");
+    setDraftRecords(
+      viewSession.records.map((r) => ({
+        studentId: r.student.id,
+        status: r.status,
+        note: r.note ?? "",
+      }))
+    );
+  }
+
+  function cancelEditSession() {
+    setEditingSessionId(null);
+    if (!viewSession) return;
+    setDraftNote(viewSession.note ?? "");
+    setDraftRecords(
+      viewSession.records.map((r) => ({
+        studentId: r.student.id,
+        status: r.status,
+        note: r.note ?? "",
+      }))
+    );
+  }
+
+  async function saveEditedSession() {
+    if (!viewSession) return;
+    setSavingEdit(true);
+    try {
+      const res = await authFetch(`/api/attendance/${viewSession.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          note: draftNote,
+          records: draftRecords.map((r) => ({
+            studentId: r.studentId,
+            status: r.status,
+            note: r.note || undefined,
+          })),
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        alert(data.error || "Failed to update attendance");
+        return;
+      }
+      setViewSession(data);
+      setEditingSessionId(null);
+      await loadSessions();
+    } finally {
+      setSavingEdit(false);
+    }
   }
 
   async function handleDelete(id: number) {
@@ -466,6 +542,22 @@ export default function AttendancePage() {
                   </p>
                 </div>
               </div>
+              <div className="border-b border-gray-200 px-6 py-3 dark:border-gray-700">
+                <p className="mb-1 text-xs text-gray-400 dark:text-gray-500">Session note</p>
+                {editingSessionId === viewSession.id ? (
+                  <textarea
+                    rows={2}
+                    value={draftNote}
+                    onChange={(e) => setDraftNote(e.target.value)}
+                    placeholder="Optional session note"
+                    className="w-full rounded-lg border border-gray-200 bg-transparent px-3 py-2 text-sm text-gray-700 outline-none focus:border-brand-300 dark:border-gray-700 dark:text-gray-300"
+                  />
+                ) : (
+                  <p className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                    {viewSession.note?.trim() || "—"}
+                  </p>
+                )}
+              </div>
 
               <div className="max-h-[50vh] min-w-0 overflow-auto">
                 <table className="min-w-full border-collapse divide-y divide-gray-100 dark:divide-gray-800">
@@ -486,7 +578,11 @@ export default function AttendancePage() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
-                    {viewSession.records.map((r, idx) => (
+                    {viewSession.records.map((r, idx) => {
+                      const draft = draftRecords.find((d) => d.studentId === r.student.id);
+                      const statusValue = draft?.status ?? r.status;
+                      const noteValue = draft?.note ?? r.note ?? "";
+                      return (
                       <tr key={r.id} className="hover:bg-gray-50/50 dark:hover:bg-white/2">
                         <td className="px-5 py-3 text-sm text-gray-400">{idx + 1}</td>
                         <td className="px-5 py-3">
@@ -514,12 +610,51 @@ export default function AttendancePage() {
                           {r.student.studentId}
                         </td>
                         <td className="px-5 py-3">
-                          <Badge color={STATUS_COLOR[r.status] || "light"} size="sm">
-                            {r.status}
-                          </Badge>
+                          {editingSessionId === viewSession.id ? (
+                            <div className="space-y-2">
+                              <select
+                                value={statusValue}
+                                onChange={(e) =>
+                                  setDraftRecords((prev) =>
+                                    prev.map((item) =>
+                                      item.studentId === r.student.id
+                                        ? { ...item, status: e.target.value }
+                                        : item
+                                    )
+                                  )
+                                }
+                                className="h-8 min-w-[120px] rounded-md border border-gray-200 bg-transparent px-2 text-xs text-gray-700 outline-none focus:border-brand-300 dark:border-gray-700 dark:text-gray-300"
+                              >
+                                {ATTENDANCE_STATUSES.map((status) => (
+                                  <option key={status} value={status}>
+                                    {status}
+                                  </option>
+                                ))}
+                              </select>
+                              <input
+                                type="text"
+                                value={noteValue}
+                                onChange={(e) =>
+                                  setDraftRecords((prev) =>
+                                    prev.map((item) =>
+                                      item.studentId === r.student.id
+                                        ? { ...item, note: e.target.value }
+                                        : item
+                                    )
+                                  )
+                                }
+                                placeholder="Note (optional)"
+                                className="h-8 w-full rounded-md border border-gray-200 bg-transparent px-2 text-xs text-gray-700 outline-none focus:border-brand-300 dark:border-gray-700 dark:text-gray-300"
+                              />
+                            </div>
+                          ) : (
+                            <Badge color={STATUS_COLOR[r.status] || "light"} size="sm">
+                              {r.status}
+                            </Badge>
+                          )}
                         </td>
                       </tr>
-                    ))}
+                    )})}
                   </tbody>
                 </table>
               </div>
@@ -539,13 +674,44 @@ export default function AttendancePage() {
                     E: {viewSession.records.filter((r) => r.status === "Excused").length}
                   </span>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => setViewSession(null)}
-                  className="inline-flex items-center justify-center gap-2 rounded-lg bg-white px-4 py-3 text-sm font-medium text-gray-700 ring-1 ring-inset ring-gray-300 transition hover:bg-gray-50 dark:bg-gray-800 dark:text-gray-400 dark:ring-gray-700 dark:hover:bg-white/3 dark:hover:text-gray-300"
-                >
-                  Close
-                </button>
+                <div className="flex items-center gap-2">
+                  {canEdit && editingSessionId !== viewSession.id && (
+                    <button
+                      type="button"
+                      onClick={startEditSession}
+                      className="inline-flex items-center justify-center gap-2 rounded-lg bg-brand-500 px-4 py-3 text-sm font-medium text-white transition hover:bg-brand-600"
+                    >
+                      Edit
+                    </button>
+                  )}
+                  {canEdit && editingSessionId === viewSession.id && (
+                    <>
+                      <button
+                        type="button"
+                        onClick={cancelEditSession}
+                        disabled={savingEdit}
+                        className="inline-flex items-center justify-center gap-2 rounded-lg bg-white px-4 py-3 text-sm font-medium text-gray-700 ring-1 ring-inset ring-gray-300 transition hover:bg-gray-50 disabled:opacity-60 dark:bg-gray-800 dark:text-gray-400 dark:ring-gray-700 dark:hover:bg-white/3 dark:hover:text-gray-300"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="button"
+                        onClick={saveEditedSession}
+                        disabled={savingEdit}
+                        className="inline-flex items-center justify-center gap-2 rounded-lg bg-brand-500 px-4 py-3 text-sm font-medium text-white transition hover:bg-brand-600 disabled:opacity-60"
+                      >
+                        {savingEdit ? "Saving..." : "Save changes"}
+                      </button>
+                    </>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => setViewSession(null)}
+                    className="inline-flex items-center justify-center gap-2 rounded-lg bg-white px-4 py-3 text-sm font-medium text-gray-700 ring-1 ring-inset ring-gray-300 transition hover:bg-gray-50 dark:bg-gray-800 dark:text-gray-400 dark:ring-gray-700 dark:hover:bg-white/3 dark:hover:text-gray-300"
+                  >
+                    Close
+                  </button>
+                </div>
               </div>
             </div>
           </div>

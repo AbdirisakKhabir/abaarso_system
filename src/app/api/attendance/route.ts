@@ -149,7 +149,7 @@ export async function POST(req: NextRequest) {
         return NextResponse.json(
           {
             error:
-              "Each record status must be one of: Present, Absent, Excused",
+                "Each record status must be one of: Present, Absent, Excused",
           },
           { status: 400 }
         );
