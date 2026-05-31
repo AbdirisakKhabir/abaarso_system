@@ -17,6 +17,7 @@ import Badge from "@/components/ui/badge/Badge";
 import { authFetch } from "@/lib/api";
 import { ModalOverlayGate } from "@/context/ModalOverlayContext";
 import { useAuth } from "@/context/AuthContext";
+import { DateInput } from "@/components/form/DateInput";
 import { PlusIcon, TrashBinIcon } from "@/icons";
 
 type DepartmentOption = {
@@ -83,6 +84,23 @@ const STATUS_COLOR: Record<string, "success" | "error" | "warning" | "info"> = {
 };
 const ATTENDANCE_STATUSES = ["Present", "Absent", "Excused"] as const;
 
+function toDateInputValue(isoDate: string): string {
+  const d = new Date(isoDate);
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+function formatSessionDate(isoDate: string): string {
+  return new Date(isoDate).toLocaleDateString("en-US", {
+    weekday: "long",
+    month: "long",
+    day: "numeric",
+    year: "numeric",
+  });
+}
+
 export default function AttendancePage() {
   const { hasPermission } = useAuth();
   const [sessions, setSessions] = useState<SessionRow[]>([]);
@@ -94,6 +112,7 @@ export default function AttendancePage() {
   const [viewSession, setViewSession] = useState<SessionDetail | null>(null);
   const [editingSessionId, setEditingSessionId] = useState<number | null>(null);
   const [draftNote, setDraftNote] = useState("");
+  const [draftDate, setDraftDate] = useState("");
   const [draftRecords, setDraftRecords] = useState<
     { studentId: number; status: string; note: string }[]
   >([]);
@@ -164,6 +183,7 @@ export default function AttendancePage() {
       setViewSession(data);
       setEditingSessionId(null);
       setDraftNote(data.note ?? "");
+      setDraftDate(toDateInputValue(data.date));
       setDraftRecords(
         data.records.map(
           (r: { student: { id: number }; status: string; note: string | null }) => ({
@@ -180,6 +200,7 @@ export default function AttendancePage() {
     if (!viewSession) return;
     setEditingSessionId(viewSession.id);
     setDraftNote(viewSession.note ?? "");
+    setDraftDate(toDateInputValue(viewSession.date));
     setDraftRecords(
       viewSession.records.map((r) => ({
         studentId: r.student.id,
@@ -193,6 +214,7 @@ export default function AttendancePage() {
     setEditingSessionId(null);
     if (!viewSession) return;
     setDraftNote(viewSession.note ?? "");
+    setDraftDate(toDateInputValue(viewSession.date));
     setDraftRecords(
       viewSession.records.map((r) => ({
         studentId: r.student.id,
@@ -204,12 +226,17 @@ export default function AttendancePage() {
 
   async function saveEditedSession() {
     if (!viewSession) return;
+    if (!draftDate) {
+      alert("Please select an attendance date.");
+      return;
+    }
     setSavingEdit(true);
     try {
       const res = await authFetch(`/api/attendance/${viewSession.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          date: draftDate,
           note: draftNote,
           records: draftRecords.map((r) => ({
             studentId: r.studentId,
@@ -499,12 +526,9 @@ export default function AttendancePage() {
                   <p className="mt-0.5 text-xs text-gray-400 dark:text-gray-500">
                     {viewSession.course.code} — {viewSession.course.name} · {viewSession.class.name} ·{" "}
                     {viewSession.class.department.code} ·{" "}
-                    {new Date(viewSession.date).toLocaleDateString("en-US", {
-                      weekday: "long",
-                      month: "long",
-                      day: "numeric",
-                      year: "numeric",
-                    })}
+                    {formatSessionDate(
+                      editingSessionId === viewSession.id ? draftDate : viewSession.date
+                    )}
                   </p>
                 </div>
                 <button
@@ -518,7 +542,23 @@ export default function AttendancePage() {
                 </button>
               </div>
 
-              <div className="grid grid-cols-3 gap-4 border-b border-gray-200 px-6 py-4 dark:border-gray-700">
+              <div className="grid grid-cols-2 gap-4 border-b border-gray-200 px-6 py-4 dark:border-gray-700 sm:grid-cols-4">
+                <div>
+                  <p className="text-xs text-gray-400 dark:text-gray-500">Date</p>
+                  {editingSessionId === viewSession.id ? (
+                    <DateInput
+                      id="edit-session-date"
+                      value={draftDate}
+                      onChange={setDraftDate}
+                      required
+                      inputClassName="mt-0.5 h-9 w-full rounded-lg border border-gray-200 bg-transparent px-2 text-sm text-gray-800 outline-none focus:border-brand-300 focus:ring-2 focus:ring-brand-500/20 dark:border-gray-700 dark:text-white dark:focus:border-brand-500/40 [color-scheme:light] dark:[color-scheme:dark]"
+                    />
+                  ) : (
+                    <p className="mt-0.5 text-sm font-semibold text-gray-800 dark:text-white/90">
+                      {formatSessionDate(viewSession.date)}
+                    </p>
+                  )}
+                </div>
                 <div>
                   <p className="text-xs text-gray-400 dark:text-gray-500">Shift</p>
                   <p className="mt-0.5 text-sm font-semibold text-gray-800 dark:text-white/90">

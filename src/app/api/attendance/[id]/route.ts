@@ -75,13 +75,58 @@ export async function PATCH(req: NextRequest, ctx: RouteContext) {
     }
 
     const body = await req.json();
-    const { note, records } = body;
+    const { note, records, date } = body;
 
-    // Update session note
+    const existing = await prisma.attendanceSession.findUnique({
+      where: { id },
+      select: { id: true, classId: true, courseId: true, shift: true },
+    });
+    if (!existing) {
+      return NextResponse.json({ error: "Session not found" }, { status: 404 });
+    }
+
+    const sessionUpdates: { note?: string | null; date?: Date } = {};
+
     if (note !== undefined) {
+      sessionUpdates.note = note || null;
+    }
+
+    if (date !== undefined) {
+      if (!date) {
+        return NextResponse.json({ error: "Date is required" }, { status: 400 });
+      }
+      const parsedDate = new Date(date);
+      if (Number.isNaN(parsedDate.getTime())) {
+        return NextResponse.json({ error: "Invalid date" }, { status: 400 });
+      }
+
+      const conflict = await prisma.attendanceSession.findFirst({
+        where: {
+          classId: existing.classId,
+          courseId: existing.courseId,
+          shift: existing.shift,
+          date: parsedDate,
+          NOT: { id },
+        },
+        select: { id: true },
+      });
+      if (conflict) {
+        return NextResponse.json(
+          {
+            error:
+              "Attendance for this class, course, date, and shift already exists",
+          },
+          { status: 400 }
+        );
+      }
+
+      sessionUpdates.date = parsedDate;
+    }
+
+    if (Object.keys(sessionUpdates).length > 0) {
       await prisma.attendanceSession.update({
         where: { id },
-        data: { note: note || null },
+        data: sessionUpdates,
       });
     }
 
@@ -151,7 +196,21 @@ export async function PATCH(req: NextRequest, ctx: RouteContext) {
     });
 
     return NextResponse.json(session);
-  } catch (e) {
+  } catch (e: unknown) {
+    if (
+      typeof e === "object" &&
+      e !== null &&
+      "code" in e &&
+      (e as { code: string }).code === "P2002"
+    ) {
+      return NextResponse.json(
+        {
+          error:
+            "Attendance for this class, course, date, and shift already exists",
+        },
+        { status: 400 }
+      );
+    }
     console.error("Update attendance error:", e);
     return NextResponse.json(
       { error: "Something went wrong" },
