@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getAuthUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { isAllowedAttendanceStatus } from "@/lib/attendanceConstants";
+import { assertUserCanManageAttendanceSession } from "@/lib/attendanceTaker";
 
 export async function GET(req: NextRequest) {
   try {
@@ -154,6 +155,16 @@ export async function POST(req: NextRequest) {
           { status: 400 }
         );
       }
+    }
+
+    const access = await assertUserCanManageAttendanceSession(
+      auth.userId,
+      parsedClassId,
+      parsedCourseId,
+      shift
+    );
+    if (!access.ok) {
+      return NextResponse.json({ error: access.error }, { status: access.status });
     }
 
     // Check for existing session (same class, course, date, shift)

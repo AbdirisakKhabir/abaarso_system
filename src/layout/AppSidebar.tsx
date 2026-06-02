@@ -110,6 +110,11 @@ const academicsItems: NavItem[] = [
     name: "Attendance",
     path: "/attendance",
     permission: "attendance.view",
+    subItems: [
+      { name: "Sessions", path: "/attendance", permission: "attendance.view" },
+      { name: "Take Attendance", path: "/attendance/take", permission: "attendance.create" },
+      { name: "Attendance Takers", path: "/attendance/takers", permission: "attendance.assign.view" },
+    ],
   },
   {
     icon: <ListIcon />,

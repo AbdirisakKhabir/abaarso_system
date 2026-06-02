@@ -37,6 +37,10 @@ const DEFAULT_PERMISSIONS = [
   { name: "attendance.create", description: "Take attendance", module: "attendance" },
   { name: "attendance.edit", description: "Edit attendance", module: "attendance" },
   { name: "attendance.delete", description: "Delete attendance sessions", module: "attendance" },
+  { name: "attendance.assign.view", description: "View attendance taker assignments", module: "attendance" },
+  { name: "attendance.assign.create", description: "Assign lecturers to take attendance", module: "attendance" },
+  { name: "attendance.assign.edit", description: "Edit attendance taker assignments", module: "attendance" },
+  { name: "attendance.assign.delete", description: "Remove attendance taker assignments", module: "attendance" },
   { name: "examinations.view", description: "View examination records", module: "examinations" },
   { name: "examinations.create", description: "Create examination records", module: "examinations" },
   { name: "examinations.edit", description: "Edit examination records", module: "examinations" },
@@ -212,7 +216,8 @@ async function main() {
     "dashboard.view", "faculties.view", "faculties.edit", "departments.view", "departments.edit",
     "courses.view", "courses.edit", "classes.view", "classes.edit",
     "lecturers.view", "lecturers.edit", "schedule.view", "schedule.edit",
-    "admission.view", "attendance.view", "examinations.view",
+    "admission.view", "attendance.view", "attendance.assign.view", "attendance.assign.create",
+    "attendance.assign.edit", "attendance.assign.delete", "examinations.view",
     "semesters.view", "reports.view",
   ];
   const deanPerms = allPermissions.filter((p) => deanPermNames.includes(p.name));

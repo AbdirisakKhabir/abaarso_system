@@ -42,6 +42,14 @@ type RecordEntry = {
   note: string;
 };
 
+type MyAssignment = {
+  classId: number;
+  courseId: number;
+  shift: string;
+  class: ClassOption & { departmentId?: number };
+  course: { id: number; code: string; name: string };
+};
+
 const SHIFTS = ["Morning", "Afternoon", "Evening"];
 
 type TakeAttendanceFormProps = {
@@ -71,6 +79,17 @@ export default function TakeAttendanceForm({ onSuccess }: TakeAttendanceFormProp
   const [loadingStudents, setLoadingStudents] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState("");
+  const [loadingAssignments, setLoadingAssignments] = useState(true);
+  const [isAssignmentAdmin, setIsAssignmentAdmin] = useState(false);
+  const [myAssignments, setMyAssignments] = useState<MyAssignment[]>([]);
+
+  const visibleDepartments = useMemo(() => {
+    if (isAssignmentAdmin) return departments;
+    const deptIds = new Set(
+      myAssignments.map((a) => a.class.department?.id ?? a.class.departmentId)
+    );
+    return departments.filter((d) => deptIds.has(d.id));
+  }, [departments, isAssignmentAdmin, myAssignments]);
 
   const departmentCoursesSorted = useMemo(
     () =>
@@ -109,6 +128,22 @@ export default function TakeAttendanceForm({ onSuccess }: TakeAttendanceFormProp
 
   useEffect(() => {
     void loadDepartments();
+  }, []);
+
+  useEffect(() => {
+    (async () => {
+      setLoadingAssignments(true);
+      try {
+        const res = await authFetch("/api/attendance-takers/my");
+        if (res.ok) {
+          const data = await res.json();
+          setIsAssignmentAdmin(Boolean(data.isAdmin));
+          setMyAssignments(Array.isArray(data.assignments) ? data.assignments : []);
+        }
+      } finally {
+        setLoadingAssignments(false);
+      }
+    })();
   }, []);
 
   async function loadStudentsForClass(classId: string) {
@@ -220,13 +255,49 @@ export default function TakeAttendanceForm({ onSuccess }: TakeAttendanceFormProp
   }, [takeClasses, takeForm.semesterName]);
 
   const filteredTakeClasses = useMemo(() => {
-    return takeClasses.filter((c) => {
+    const base = takeClasses.filter((c) => {
       if (takeForm.semesterName && c.semester !== takeForm.semesterName)
         return false;
       if (takeForm.year && String(c.year) !== takeForm.year) return false;
       return true;
     });
-  }, [takeClasses, takeForm.semesterName, takeForm.year]);
+    if (isAssignmentAdmin) return base;
+    const allowedClassIds = new Set(myAssignments.map((a) => a.classId));
+    return base.filter((c) => allowedClassIds.has(c.id));
+  }, [takeClasses, takeForm.semesterName, takeForm.year, isAssignmentAdmin, myAssignments]);
+
+  const allowedCourseIdsForClass = useMemo(() => {
+    if (!takeForm.classId || isAssignmentAdmin) return null;
+    const classId = Number(takeForm.classId);
+    return new Set(
+      myAssignments
+        .filter((a) => a.classId === classId)
+        .map((a) => a.courseId)
+    );
+  }, [takeForm.classId, isAssignmentAdmin, myAssignments]);
+
+  const filteredCourseSelectOptions = useMemo(() => {
+    if (!allowedCourseIdsForClass) return courseSelectOptions;
+    return courseSelectOptions.filter((opt) => allowedCourseIdsForClass.has(opt.id));
+  }, [courseSelectOptions, allowedCourseIdsForClass]);
+
+  const allowedShifts = useMemo(() => {
+    if (!takeForm.classId || !takeForm.courseId || isAssignmentAdmin) {
+      return SHIFTS;
+    }
+    const classId = Number(takeForm.classId);
+    const courseId = Number(takeForm.courseId);
+    const shifts = myAssignments
+      .filter((a) => a.classId === classId && a.courseId === courseId)
+      .map((a) => a.shift);
+    return [...new Set(shifts)];
+  }, [takeForm.classId, takeForm.courseId, isAssignmentAdmin, myAssignments]);
+
+  useEffect(() => {
+    if (allowedShifts.length > 0 && !allowedShifts.includes(takeForm.shift)) {
+      setTakeForm((f) => ({ ...f, shift: allowedShifts[0] }));
+    }
+  }, [allowedShifts, takeForm.shift]);
 
   async function handleTakeSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -291,6 +362,18 @@ export default function TakeAttendanceForm({ onSuccess }: TakeAttendanceFormProp
         </div>
 
         <div className="px-5 py-5 sm:px-6">
+          {loadingAssignments ? (
+            <div className="mb-4 flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
+              <div className="h-4 w-4 animate-spin rounded-full border-2 border-brand-500 border-t-transparent" />
+              Checking your attendance assignments…
+            </div>
+          ) : !isAssignmentAdmin && myAssignments.length === 0 ? (
+            <div className="mb-4 rounded-lg bg-warning-50 px-4 py-3 text-sm text-warning-700 dark:bg-warning-500/10 dark:text-warning-400">
+              You have no active attendance taker assignments. Ask an administrator to assign you
+              before taking attendance.
+            </div>
+          ) : null}
+
           {submitError && (
             <div className="mb-4 rounded-lg bg-error-50 px-4 py-3 text-sm text-error-600 dark:bg-error-500/10 dark:text-error-400">
               {submitError}
@@ -320,7 +403,7 @@ export default function TakeAttendanceForm({ onSuccess }: TakeAttendanceFormProp
                 className="h-11 min-w-0 flex-1 appearance-none rounded-lg border border-gray-200 bg-transparent px-3 py-2.5 text-sm text-gray-800 outline-none focus:border-brand-300 focus:ring-2 focus:ring-brand-500/20 dark:border-gray-700 dark:text-white dark:focus:border-brand-500/40"
               >
                 <option value="">Select department</option>
-                {departments.map((d) => (
+                {visibleDepartments.map((d) => (
                   <option key={d.id} value={String(d.id)}>
                     {d.code} — {d.name}
                   </option>
@@ -458,7 +541,7 @@ export default function TakeAttendanceForm({ onSuccess }: TakeAttendanceFormProp
                   takeForm.semesterName &&
                   takeForm.year &&
                   !loadingTakeContext
-                    ? courseSelectOptions
+                    ? filteredCourseSelectOptions
                     : []
                 }
                 value={takeForm.courseId}
@@ -476,7 +559,9 @@ export default function TakeAttendanceForm({ onSuccess }: TakeAttendanceFormProp
                 noOptionsHint={
                   !takeForm.classId
                     ? "Select class first."
-                    : "No courses in this department."
+                    : filteredCourseSelectOptions.length === 0
+                      ? "No assigned courses for this class."
+                      : "No courses in this department."
                 }
                 searchPlaceholder="Search course code or name…"
               />
@@ -507,13 +592,18 @@ export default function TakeAttendanceForm({ onSuccess }: TakeAttendanceFormProp
                 onChange={(e) =>
                   setTakeForm((f) => ({ ...f, shift: e.target.value }))
                 }
-                className="h-11 w-full appearance-none rounded-lg border border-gray-200 bg-transparent px-3 py-2.5 text-sm text-gray-800 outline-none focus:border-brand-300 focus:ring-2 focus:ring-brand-500/20 dark:border-gray-700 dark:text-white dark:focus:border-brand-500/40"
+                disabled={allowedShifts.length === 0}
+                className="h-11 w-full appearance-none rounded-lg border border-gray-200 bg-transparent px-3 py-2.5 text-sm text-gray-800 outline-none focus:border-brand-300 focus:ring-2 focus:ring-brand-500/20 disabled:opacity-50 dark:border-gray-700 dark:text-white dark:focus:border-brand-500/40"
               >
-                {SHIFTS.map((s) => (
-                  <option key={s} value={s}>
-                    {s}
-                  </option>
-                ))}
+                {allowedShifts.length === 0 ? (
+                  <option value="">No assigned shifts</option>
+                ) : (
+                  allowedShifts.map((s) => (
+                    <option key={s} value={s}>
+                      {s}
+                    </option>
+                  ))
+                )}
               </select>
             </div>
             <div className="sm:col-span-2">

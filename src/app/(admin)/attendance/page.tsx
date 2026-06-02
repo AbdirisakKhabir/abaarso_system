@@ -69,6 +69,7 @@ type SessionDetail = {
   takenBy: { id: number; name: string | null; email: string };
   takenAt: string;
   note: string | null;
+  canManage?: boolean;
   records: {
     id: number;
     status: string;
@@ -121,6 +122,7 @@ export default function AttendancePage() {
   const canCreate = hasPermission("attendance.create");
   const canEdit = hasPermission("attendance.edit") || hasPermission("attendance.create");
   const canDelete = hasPermission("attendance.delete");
+  const canAssign = hasPermission("attendance.assign.view");
 
   async function loadSessions() {
     const res = await authFetch("/api/attendance");
@@ -310,15 +312,25 @@ export default function AttendancePage() {
     <>
       <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <PageBreadCrumb pageTitle="Attendance" />
-        {canCreate && (
-          <Link
-            href="/attendance/take"
-            className="inline-flex items-center justify-center gap-2 rounded-lg bg-brand-500 px-4 py-3 text-sm font-medium text-white shadow-theme-xs hover:bg-brand-600 disabled:bg-brand-300 dark:hover:bg-brand-600"
-          >
-            <PlusIcon className="h-4 w-4 shrink-0" />
-            Take attendance
-          </Link>
-        )}
+        <div className="flex flex-wrap items-center gap-2">
+          {canAssign && (
+            <Link
+              href="/attendance/takers"
+              className="inline-flex items-center justify-center gap-2 rounded-lg bg-white px-4 py-3 text-sm font-medium text-gray-700 ring-1 ring-inset ring-gray-300 transition hover:bg-gray-50 dark:bg-gray-800 dark:text-gray-400 dark:ring-gray-700 dark:hover:bg-white/3"
+            >
+              Attendance takers
+            </Link>
+          )}
+          {canCreate && (
+            <Link
+              href="/attendance/take"
+              className="inline-flex items-center justify-center gap-2 rounded-lg bg-brand-500 px-4 py-3 text-sm font-medium text-white shadow-theme-xs hover:bg-brand-600 disabled:bg-brand-300 dark:hover:bg-brand-600"
+            >
+              <PlusIcon className="h-4 w-4 shrink-0" />
+              Take attendance
+            </Link>
+          )}
+        </div>
       </div>
 
       <div className="min-w-0 overflow-hidden rounded-2xl border border-gray-200 bg-white dark:border-gray-800 dark:bg-white/3">
@@ -715,7 +727,7 @@ export default function AttendancePage() {
                   </span>
                 </div>
                 <div className="flex items-center gap-2">
-                  {canEdit && editingSessionId !== viewSession.id && (
+                  {canEdit && viewSession.canManage !== false && editingSessionId !== viewSession.id && (
                     <button
                       type="button"
                       onClick={startEditSession}
@@ -724,7 +736,12 @@ export default function AttendancePage() {
                       Edit
                     </button>
                   )}
-                  {canEdit && editingSessionId === viewSession.id && (
+                  {canEdit && viewSession.canManage === false && (
+                    <span className="text-xs text-gray-400 dark:text-gray-500">
+                      Not assigned to edit this session
+                    </span>
+                  )}
+                  {canEdit && viewSession.canManage !== false && editingSessionId === viewSession.id && (
                     <>
                       <button
                         type="button"

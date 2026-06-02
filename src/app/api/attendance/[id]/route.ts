@@ -2,6 +2,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { getAuthUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { isAllowedAttendanceStatus } from "@/lib/attendanceConstants";
+import {
+  assertUserCanManageAttendanceSession,
+  userCanManageAttendanceSession,
+} from "@/lib/attendanceTaker";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -51,7 +55,14 @@ export async function GET(req: NextRequest, ctx: RouteContext) {
       return NextResponse.json({ error: "Session not found" }, { status: 404 });
     }
 
-    return NextResponse.json(session);
+    const canManage = await userCanManageAttendanceSession(
+      auth.userId,
+      session.classId,
+      session.courseId,
+      session.shift
+    );
+
+    return NextResponse.json({ ...session, canManage });
   } catch (e) {
     console.error("Get attendance error:", e);
     return NextResponse.json(
@@ -83,6 +94,16 @@ export async function PATCH(req: NextRequest, ctx: RouteContext) {
     });
     if (!existing) {
       return NextResponse.json({ error: "Session not found" }, { status: 404 });
+    }
+
+    const access = await assertUserCanManageAttendanceSession(
+      auth.userId,
+      existing.classId,
+      existing.courseId,
+      existing.shift
+    );
+    if (!access.ok) {
+      return NextResponse.json({ error: access.error }, { status: access.status });
     }
 
     const sessionUpdates: { note?: string | null; date?: Date } = {};
@@ -195,7 +216,7 @@ export async function PATCH(req: NextRequest, ctx: RouteContext) {
       },
     });
 
-    return NextResponse.json(session);
+    return NextResponse.json({ ...session, canManage: true });
   } catch (e: unknown) {
     if (
       typeof e === "object" &&
