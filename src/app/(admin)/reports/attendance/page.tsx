@@ -205,6 +205,16 @@ export default function AttendanceReportPage() {
   );
 
   const selectedDept = departments.find((d) => String(d.id) === filterDept);
+  const averageAttendancePercent =
+    studentAttendances.length > 0
+      ? studentAttendances.reduce((total, s) => total + s.attendancePercent, 0) /
+        studentAttendances.length
+      : 0;
+  const averageAttendanceMarks =
+    studentAttendances.length > 0
+      ? studentAttendances.reduce((total, s) => total + s.attendanceMarks, 0) /
+        studentAttendances.length
+      : 0;
 
   const printTitle = viewMode === "students" ? "Student Attendance Report" : "Attendance Sessions Report";
 
@@ -237,6 +247,13 @@ export default function AttendanceReportPage() {
           <p className="text-sm font-semibold text-black">{TRANSCRIPT_BRAND.officeTitle}</p>
           <p className="text-xs text-black">{TRANSCRIPT_BRAND.website}</p>
         </div>
+        <Image
+          src={TRANSCRIPT_BRAND.logoUrl}
+          alt={TRANSCRIPT_BRAND.universityName}
+          width={64}
+          height={64}
+          className="h-16 w-16 object-contain"
+        />
       </div>
       <div className="text-center mb-3">
         <p className="text-base font-bold uppercase tracking-widest text-black underline">
@@ -258,6 +275,8 @@ export default function AttendanceReportPage() {
           <>
             <span><strong>Total Students:</strong> {studentAttendances.length}</span>
             <span><strong>Total Sessions:</strong> {studentAttendances[0]?.totalSessions ?? 0}</span>
+            <span><strong>Avg Attendance %:</strong> {averageAttendancePercent.toFixed(1)}%</span>
+            <span><strong>Avg Marks (10%):</strong> {averageAttendanceMarks.toFixed(2)}</span>
           </>
         )}
         {viewMode === "sessions" && (
@@ -430,6 +449,12 @@ export default function AttendanceReportPage() {
                   <span className="text-gray-600 dark:text-gray-400">
                     <strong className="text-gray-800 dark:text-white/80">{studentAttendances[0]?.totalSessions ?? 0}</strong> sessions
                   </span>
+                  <span className="text-gray-600 dark:text-gray-400">
+                    <strong className="text-gray-800 dark:text-white/80">{averageAttendancePercent.toFixed(1)}%</strong> avg attendance
+                  </span>
+                  <span className="text-gray-600 dark:text-gray-400">
+                    <strong className="text-gray-800 dark:text-white/80">{averageAttendanceMarks.toFixed(2)}</strong> avg marks
+                  </span>
                 </>
               ) : (
                 <>
@@ -479,6 +504,8 @@ export default function AttendanceReportPage() {
                           <th className="py-2.5 px-3 text-center font-semibold text-gray-700 print:text-black w-20">Excused</th>
                         )}
                         <th className="py-2.5 px-3 text-center font-semibold text-gray-700 print:text-black w-20">Sessions</th>
+                        <th className="py-2.5 px-3 text-center font-semibold text-gray-700 print:text-black w-24">Attendance %</th>
+                        <th className="py-2.5 px-3 text-center font-semibold text-gray-700 print:text-black w-20">Marks</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -505,6 +532,8 @@ export default function AttendanceReportPage() {
                             <td className="py-2 px-3 text-center text-gray-600 print:text-black">{s.excused}</td>
                           )}
                           <td className="py-2 px-3 text-center text-gray-600 print:text-black">{s.totalSessions}</td>
+                          <td className="py-2 px-3 text-center text-gray-700 print:text-black">{s.attendancePercent.toFixed(1)}%</td>
+                          <td className="py-2 px-3 text-center text-gray-700 print:text-black">{s.attendanceMarks.toFixed(2)}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -533,6 +562,12 @@ export default function AttendanceReportPage() {
                         )}
                         <td className="py-2 px-3 text-center text-gray-700 print:text-black">
                           {studentAttendances[0]?.totalSessions ?? 0}
+                        </td>
+                        <td className="py-2 px-3 text-center text-gray-700 print:text-black">
+                          {averageAttendancePercent.toFixed(1)}%
+                        </td>
+                        <td className="py-2 px-3 text-center text-gray-700 print:text-black">
+                          {averageAttendanceMarks.toFixed(2)}
                         </td>
                       </tr>
                     </tfoot>
