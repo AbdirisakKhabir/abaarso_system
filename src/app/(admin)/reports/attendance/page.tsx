@@ -69,6 +69,10 @@ function formatDateShort(isoDate: string): string {
   });
 }
 
+function safeNumber(value: unknown): number {
+  return typeof value === "number" && Number.isFinite(value) ? value : 0;
+}
+
 const selectClassName =
   "h-10 w-full min-w-0 sm:w-auto sm:min-w-[180px] rounded-lg border border-gray-200 bg-transparent px-3 text-sm text-gray-800 outline-none focus:border-brand-300 dark:border-gray-700 dark:text-white/80";
 
@@ -207,12 +211,12 @@ export default function AttendanceReportPage() {
   const selectedDept = departments.find((d) => String(d.id) === filterDept);
   const averageAttendancePercent =
     studentAttendances.length > 0
-      ? studentAttendances.reduce((total, s) => total + s.attendancePercent, 0) /
+      ? studentAttendances.reduce((total, s) => total + safeNumber(s.attendancePercent), 0) /
         studentAttendances.length
       : 0;
   const averageAttendanceMarks =
     studentAttendances.length > 0
-      ? studentAttendances.reduce((total, s) => total + s.attendanceMarks, 0) /
+      ? studentAttendances.reduce((total, s) => total + safeNumber(s.attendanceMarks), 0) /
         studentAttendances.length
       : 0;
 
@@ -532,8 +536,12 @@ export default function AttendanceReportPage() {
                             <td className="py-2 px-3 text-center text-gray-600 print:text-black">{s.excused}</td>
                           )}
                           <td className="py-2 px-3 text-center text-gray-600 print:text-black">{s.totalSessions}</td>
-                          <td className="py-2 px-3 text-center text-gray-700 print:text-black">{s.attendancePercent.toFixed(1)}%</td>
-                          <td className="py-2 px-3 text-center text-gray-700 print:text-black">{s.attendanceMarks.toFixed(2)}</td>
+                          <td className="py-2 px-3 text-center text-gray-700 print:text-black">
+                            {safeNumber(s.attendancePercent).toFixed(1)}%
+                          </td>
+                          <td className="py-2 px-3 text-center text-gray-700 print:text-black">
+                            {safeNumber(s.attendanceMarks).toFixed(2)}
+                          </td>
                         </tr>
                       ))}
                     </tbody>
