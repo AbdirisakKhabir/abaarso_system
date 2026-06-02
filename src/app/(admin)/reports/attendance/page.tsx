@@ -122,7 +122,7 @@ export default function AttendanceReportPage() {
       if (res.ok) {
         const data = await res.json();
         const dates = [
-          ...new Set(
+          ...new Set<string>(
             (data.sessions || []).map((s: Session) => toDateInputValue(s.date))
           ),
         ].sort((a, b) => b.localeCompare(a));
