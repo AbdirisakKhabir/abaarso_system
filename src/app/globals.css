@@ -955,4 +955,32 @@ span.flatpickr-weekday,
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
   }
+
+  /* ── Attendance Report (By Student / By Session) print styles ── */
+  .attendance-report-print-area {
+    padding: 6mm !important;
+  }
+  .attendance-report-print-area table {
+    width: 100% !important;
+    border-collapse: collapse !important;
+    font-size: 10px !important;
+    color: #000 !important;
+  }
+  .attendance-report-print-area table th,
+  .attendance-report-print-area table td {
+    color: #000 !important;
+    border-bottom: 1px solid #ccc !important;
+    padding: 3px 6px !important;
+  }
+  .attendance-report-print-area table thead tr {
+    border-bottom: 2px solid #000 !important;
+    background: transparent !important;
+  }
+  .attendance-report-print-area table tfoot tr {
+    border-top: 2px solid #000 !important;
+    background: transparent !important;
+  }
+  .attendance-report-print-area table tbody tr {
+    background: transparent !important;
+  }
 }

@@ -1,19 +1,12 @@
 "use client";
 
 import React, { useCallback, useEffect, useMemo, useState } from "react";
+import Image from "next/image";
 import PageBreadCrumb from "@/components/common/PageBreadCrumb";
 import Button from "@/components/ui/button/Button";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHeader,
-  TablePagination,
-  TableRow,
-} from "@/components/ui/table";
-import { usePagination } from "@/hooks/usePagination";
 import Badge from "@/components/ui/badge/Badge";
 import { authFetch } from "@/lib/api";
+import { TRANSCRIPT_BRAND } from "@/lib/transcript-brand";
 
 type Department = { id: number; name: string; code: string };
 type ClassItem = {
@@ -68,6 +61,14 @@ function formatDateLabel(value: string): string {
   });
 }
 
+function formatDateShort(isoDate: string): string {
+  return new Date(isoDate).toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
+}
+
 const selectClassName =
   "h-10 w-full min-w-0 sm:w-auto sm:min-w-[180px] rounded-lg border border-gray-200 bg-transparent px-3 text-sm text-gray-800 outline-none focus:border-brand-300 dark:border-gray-700 dark:text-white/80";
 
@@ -95,6 +96,7 @@ export default function AttendanceReportPage() {
     name: string;
     semester: string;
     year: number;
+    department?: { name: string; code: string };
   } | null>(null);
 
   const filtersReady = Boolean(filterDept && filterClass);
@@ -109,10 +111,7 @@ export default function AttendanceReportPage() {
   }, [filterDept, filterClass, dateFrom, dateTo]);
 
   const loadAvailableDates = useCallback(async () => {
-    if (!filtersReady) {
-      setAvailableDates([]);
-      return;
-    }
+    if (!filtersReady) { setAvailableDates([]); return; }
     setLoadingDates(true);
     try {
       const params = new URLSearchParams();
@@ -140,13 +139,7 @@ export default function AttendanceReportPage() {
   const fetchReport = useCallback(async () => {
     if (!filtersReady) {
       setSessions([]);
-      setSummary({
-        totalSessions: 0,
-        totalPresent: 0,
-        totalAbsent: 0,
-        totalLate: 0,
-        totalExcused: 0,
-      });
+      setSummary({ totalSessions: 0, totalPresent: 0, totalAbsent: 0, totalLate: 0, totalExcused: 0 });
       return;
     }
     setLoading(true);
@@ -155,46 +148,26 @@ export default function AttendanceReportPage() {
       if (res.ok) {
         const data = await res.json();
         setSessions(data.sessions || []);
-        setSummary(
-          data.summary || {
-            totalSessions: 0,
-            totalPresent: 0,
-            totalAbsent: 0,
-            totalLate: 0,
-            totalExcused: 0,
-          }
-        );
+        setSummary(data.summary || { totalSessions: 0, totalPresent: 0, totalAbsent: 0, totalLate: 0, totalExcused: 0 });
       }
-    } catch {
-      /* empty */
-    }
+    } catch { /* empty */ }
     setLoading(false);
   }, [filtersReady, buildParams]);
 
   const fetchStudentAttendance = useCallback(async () => {
-    if (!filtersReady) {
-      setStudentAttendances([]);
-      setSelectedClassInfo(null);
-      return;
-    }
+    if (!filtersReady) { setStudentAttendances([]); setSelectedClassInfo(null); return; }
     setLoading(true);
     try {
       const params = new URLSearchParams({ classId: filterClass });
       if (dateFrom) params.set("dateFrom", dateFrom);
       if (dateTo) params.set("dateTo", dateTo);
-      const res = await authFetch(
-        `/api/reports/attendance-by-student?${params.toString()}`
-      );
+      const res = await authFetch(`/api/reports/attendance-by-student?${params.toString()}`);
       if (res.ok) {
         const data = await res.json();
         setStudentAttendances(data.students || []);
         setSelectedClassInfo(
           data.class
-            ? {
-                name: data.class.name,
-                semester: data.class.semester,
-                year: data.class.year,
-              }
+            ? { name: data.class.name, semester: data.class.semester, year: data.class.year, department: data.class.department }
             : null
         );
       } else {
@@ -209,95 +182,113 @@ export default function AttendanceReportPage() {
   }, [filtersReady, filterClass, dateFrom, dateTo]);
 
   useEffect(() => {
-    authFetch("/api/departments").then((r) => {
-      if (r.ok) r.json().then((d: Department[]) => setDepartments(d));
-    });
-    authFetch("/api/classes").then((r) => {
-      if (r.ok) r.json().then((d: ClassItem[]) => setClasses(d));
-    });
+    authFetch("/api/departments").then((r) => { if (r.ok) r.json().then((d: Department[]) => setDepartments(d)); });
+    authFetch("/api/classes").then((r) => { if (r.ok) r.json().then((d: ClassItem[]) => setClasses(d)); });
   }, []);
 
-  useEffect(() => {
-    setDateFrom("");
-    setDateTo("");
-  }, [filterDept, filterClass]);
+  useEffect(() => { setDateFrom(""); setDateTo(""); }, [filterDept, filterClass]);
 
   useEffect(() => {
-    if (dateFrom && dateTo && dateFrom > dateTo) {
-      setDateTo(dateFrom);
-    }
+    if (dateFrom && dateTo && dateFrom > dateTo) setDateTo(dateFrom);
   }, [dateFrom, dateTo]);
 
-  useEffect(() => {
-    void loadAvailableDates();
-  }, [loadAvailableDates]);
+  useEffect(() => { void loadAvailableDates(); }, [loadAvailableDates]);
 
   useEffect(() => {
-    if (viewMode === "sessions") {
-      void fetchReport();
-    } else {
-      void fetchStudentAttendance();
-    }
+    if (viewMode === "sessions") void fetchReport();
+    else void fetchStudentAttendance();
   }, [viewMode, fetchReport, fetchStudentAttendance]);
 
   const filteredClasses = useMemo(
-    () =>
-      filterDept
-        ? classes.filter((c) => c.department?.id === Number(filterDept))
-        : [],
+    () => filterDept ? classes.filter((c) => c.department?.id === Number(filterDept)) : [],
     [classes, filterDept]
   );
 
-  const {
-    paginatedItems: paginatedSessions,
-    page: sessionsPage,
-    setPage: setSessionsPage,
-    pageSize: sessionsPageSize,
-    setPageSize: setSessionsPageSize,
-    totalPages: sessionsTotalPages,
-    total: sessionsTotal,
-    from: sessionsFrom,
-    to: sessionsTo,
-  } = usePagination(sessions, [filterDept, filterClass, dateFrom, dateTo]);
+  const selectedDept = departments.find((d) => String(d.id) === filterDept);
 
-  const {
-    paginatedItems: paginatedStudents,
-    page: studentsPage,
-    setPage: setStudentsPage,
-    pageSize: studentsPageSize,
-    setPageSize: setStudentsPageSize,
-    totalPages: studentsTotalPages,
-    total: studentsTotal,
-    from: studentsFrom,
-    to: studentsTo,
-  } = usePagination(studentAttendances, [filterDept, filterClass, dateFrom, dateTo]);
+  const printTitle = viewMode === "students" ? "Student Attendance Report" : "Attendance Sessions Report";
 
-  const handlePrint = () => window.print();
-
-  const dateRangeLabel =
+  const dateRangeText =
     dateFrom && dateTo
       ? `${formatDateLabel(dateFrom)} – ${formatDateLabel(dateTo)}`
       : dateFrom
         ? `From ${formatDateLabel(dateFrom)}`
         : dateTo
           ? `Until ${formatDateLabel(dateTo)}`
-          : "All dates in range";
+          : "Full Semester";
+
+  const handlePrint = () => window.print();
+
+  // ── Print header (shown only on print) ─────────────────────────────────────
+  const PrintHeader = () => (
+    <div className="hidden print:block mb-4">
+      <div className="flex items-center gap-4 border-b-2 border-gray-800 pb-3 mb-3">
+        <Image
+          src={TRANSCRIPT_BRAND.logoUrl}
+          alt={TRANSCRIPT_BRAND.universityName}
+          width={64}
+          height={64}
+          className="h-16 w-16 object-contain"
+        />
+        <div className="flex-1 text-center">
+          <p className="text-lg font-bold text-black tracking-wide uppercase">
+            {TRANSCRIPT_BRAND.universityName}
+          </p>
+          <p className="text-sm font-semibold text-black">{TRANSCRIPT_BRAND.officeTitle}</p>
+          <p className="text-xs text-black">{TRANSCRIPT_BRAND.website}</p>
+        </div>
+      </div>
+      <div className="text-center mb-3">
+        <p className="text-base font-bold uppercase tracking-widest text-black underline">
+          {printTitle}
+        </p>
+      </div>
+      <div className="grid grid-cols-2 gap-x-8 gap-y-1 text-xs text-black border border-gray-400 px-4 py-2 rounded">
+        {selectedClassInfo && (
+          <>
+            <span><strong>Class:</strong> {selectedClassInfo.name}</span>
+            <span><strong>Semester:</strong> {selectedClassInfo.semester} {selectedClassInfo.year}</span>
+          </>
+        )}
+        {selectedDept && (
+          <span><strong>Department:</strong> {selectedDept.code} — {selectedDept.name}</span>
+        )}
+        <span><strong>Date Range:</strong> {dateRangeText}</span>
+        {viewMode === "students" && (
+          <>
+            <span><strong>Total Students:</strong> {studentAttendances.length}</span>
+            <span><strong>Total Sessions:</strong> {studentAttendances[0]?.totalSessions ?? 0}</span>
+          </>
+        )}
+        {viewMode === "sessions" && (
+          <>
+            <span><strong>Total Sessions:</strong> {summary.totalSessions}</span>
+            <span><strong>Total Present:</strong> {summary.totalPresent}</span>
+            <span><strong>Total Absent:</strong> {summary.totalAbsent}</span>
+            {summary.totalLate > 0 && <span><strong>Total Late:</strong> {summary.totalLate}</span>}
+          </>
+        )}
+        <span><strong>Printed:</strong> {new Date().toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}</span>
+      </div>
+    </div>
+  );
 
   return (
     <div>
+      {/* ── Toolbar (hidden on print) ── */}
       <div className="mb-6 flex flex-wrap items-center justify-between gap-4 no-print">
         <PageBreadCrumb pageTitle="Attendance Report" />
         <Button size="sm" onClick={handlePrint} disabled={!filtersReady}>
-          Print
+          Print / Save PDF
         </Button>
       </div>
 
       <div className="min-w-0 overflow-hidden rounded-2xl border border-gray-200 bg-white dark:border-gray-800 dark:bg-white/5">
+
+        {/* ── Filters panel (hidden on print) ── */}
         <div className="no-print border-b border-gray-100 px-5 py-4 dark:border-gray-800">
           <div className="mb-4 flex flex-wrap items-center justify-between gap-4">
-            <h3 className="text-lg font-semibold text-gray-800 dark:text-white/90">
-              Filters
-            </h3>
+            <h3 className="text-base font-semibold text-gray-800 dark:text-white/90">Filters</h3>
             <div className="flex rounded-lg border border-gray-200 bg-gray-50 p-1 dark:border-gray-700 dark:bg-gray-800/50">
               <button
                 type="button"
@@ -329,19 +320,13 @@ export default function AttendanceReportPage() {
                 Department <span className="text-error-500">*</span>
               </label>
               <select
-                required
                 value={filterDept}
-                onChange={(e) => {
-                  setFilterDept(e.target.value);
-                  setFilterClass("");
-                }}
+                onChange={(e) => { setFilterDept(e.target.value); setFilterClass(""); }}
                 className={selectClassName}
               >
                 <option value="">Select department</option>
                 {departments.map((d) => (
-                  <option key={d.id} value={d.id}>
-                    {d.code} - {d.name}
-                  </option>
+                  <option key={d.id} value={d.id}>{d.code} - {d.name}</option>
                 ))}
               </select>
             </div>
@@ -350,7 +335,6 @@ export default function AttendanceReportPage() {
                 Class <span className="text-error-500">*</span>
               </label>
               <select
-                required
                 value={filterClass}
                 onChange={(e) => setFilterClass(e.target.value)}
                 disabled={!filterDept}
@@ -378,9 +362,7 @@ export default function AttendanceReportPage() {
               >
                 <option value="">Any date</option>
                 {availableDates.map((d) => (
-                  <option key={`from-${d}`} value={d}>
-                    {formatDateLabel(d)}
-                  </option>
+                  <option key={`from-${d}`} value={d}>{formatDateLabel(d)}</option>
                 ))}
               </select>
             </div>
@@ -395,323 +377,264 @@ export default function AttendanceReportPage() {
                 className={`${selectClassName} disabled:opacity-50`}
               >
                 <option value="">Any date</option>
-                {(dateFrom
-                  ? availableDates.filter((d) => d >= dateFrom)
-                  : availableDates
-                ).map((d) => (
-                  <option key={`to-${d}`} value={d}>
-                    {formatDateLabel(d)}
-                  </option>
+                {(dateFrom ? availableDates.filter((d) => d >= dateFrom) : availableDates).map((d) => (
+                  <option key={`to-${d}`} value={d}>{formatDateLabel(d)}</option>
                 ))}
               </select>
             </div>
           </div>
           {!filtersReady ? (
-            <p className="mt-3 text-xs text-gray-500 dark:text-gray-400">
-              Select a department and class to load attendance dates and report data.
+            <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
+              Select a department and class to load the report.
             </p>
           ) : loadingDates ? (
-            <p className="mt-3 text-xs text-gray-500 dark:text-gray-400">
-              Loading available dates…
-            </p>
+            <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">Loading available dates…</p>
           ) : availableDates.length === 0 ? (
-            <p className="mt-3 text-xs text-gray-500 dark:text-gray-400">
+            <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
               No attendance sessions recorded for this class yet.
             </p>
           ) : (
-            <p className="mt-3 text-xs text-gray-500 dark:text-gray-400">
-              Optional: narrow results with date from / date to ({availableDates.length}{" "}
-              session date{availableDates.length === 1 ? "" : "s"} available).
+            <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
+              {availableDates.length} session date{availableDates.length === 1 ? "" : "s"} available — optionally narrow by date.
             </p>
           )}
         </div>
 
+        {/* ── Report body ── */}
         {!filtersReady ? (
           <div className="px-5 py-16 text-center text-sm text-gray-500 dark:text-gray-400">
-            Choose a department and class, then optionally filter by date.
+            Choose a department and class to generate the report.
           </div>
-        ) : viewMode === "sessions" ? (
-          <>
-            <div className="flex flex-wrap gap-4 border-b border-gray-100 px-5 py-4 dark:border-gray-800">
-              <div className="rounded-xl bg-brand-50 px-4 py-2 dark:bg-brand-500/10">
-                <span className="text-xs text-gray-500 dark:text-gray-400">Date range</span>
-                <p className="text-sm font-semibold text-brand-600 dark:text-brand-400">
-                  {dateRangeLabel}
-                </p>
-              </div>
-              <div className="rounded-xl bg-brand-50 px-4 py-2 dark:bg-brand-500/10">
-                <span className="text-xs text-gray-500 dark:text-gray-400">Total Sessions</span>
-                <p className="text-xl font-bold text-brand-600 dark:text-brand-400">
-                  {summary.totalSessions}
-                </p>
-              </div>
-              <div className="rounded-xl bg-green-50 px-4 py-2 dark:bg-green-500/10">
-                <span className="text-xs text-gray-500 dark:text-gray-400">Total Present</span>
-                <p className="text-xl font-bold text-green-600 dark:text-green-400">
-                  {summary.totalPresent}
-                </p>
-              </div>
-              <div className="rounded-xl bg-red-50 px-4 py-2 dark:bg-red-500/10">
-                <span className="text-xs text-gray-500 dark:text-gray-400">Total Absent</span>
-                <p className="text-xl font-bold text-red-600 dark:text-red-400">
-                  {summary.totalAbsent}
-                </p>
-              </div>
-              <div className="rounded-xl bg-yellow-50 px-4 py-2 dark:bg-yellow-500/10">
-                <span className="text-xs text-gray-500 dark:text-gray-400">Total Late</span>
-                <p className="text-xl font-bold text-yellow-600 dark:text-yellow-600">
-                  {summary.totalLate}
-                </p>
-              </div>
-              <div className="rounded-xl bg-gray-50 px-4 py-2 dark:bg-white/5">
-                <span className="text-xs text-gray-500 dark:text-gray-400">Total Excused</span>
-                <p className="text-xl font-bold text-gray-800 dark:text-white/90">
-                  {summary.totalExcused}
-                </p>
-              </div>
-            </div>
-            <div className="overflow-x-auto">
-              <Table>
-                <TableHeader className="border-b border-gray-100 dark:border-gray-800">
-                  <TableRow>
-                    <TableCell isHeader className="px-5 py-3 text-left text-xs font-medium uppercase text-gray-500 dark:text-gray-400">
-                      Course
-                    </TableCell>
-                    <TableCell isHeader className="px-5 py-3 text-center text-xs font-medium uppercase text-gray-500 dark:text-gray-400">
-                      Date
-                    </TableCell>
-                    <TableCell isHeader className="px-5 py-3 text-center text-xs font-medium uppercase text-gray-500 dark:text-gray-400">
-                      Shift
-                    </TableCell>
-                    <TableCell isHeader className="px-5 py-3 text-center text-xs font-medium uppercase text-gray-500 dark:text-gray-400">
-                      Present
-                    </TableCell>
-                    <TableCell isHeader className="px-5 py-3 text-center text-xs font-medium uppercase text-gray-500 dark:text-gray-400">
-                      Absent
-                    </TableCell>
-                    <TableCell isHeader className="px-5 py-3 text-center text-xs font-medium uppercase text-gray-500 dark:text-gray-400">
-                      Late
-                    </TableCell>
-                    <TableCell isHeader className="px-5 py-3 text-center text-xs font-medium uppercase text-gray-500 dark:text-gray-400">
-                      Excused
-                    </TableCell>
-                    <TableCell isHeader className="px-5 py-3 text-left text-xs font-medium uppercase text-gray-500 dark:text-gray-400">
-                      Taken By
-                    </TableCell>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {loading ? (
-                    <TableRow>
-                      <TableCell colSpan={8} className="px-5 py-10 text-center">
-                        <div className="flex items-center justify-center gap-2">
-                          <div className="h-5 w-5 animate-spin rounded-full border-2 border-brand-500 border-t-transparent" />
-                          <span className="text-sm text-gray-500">Loading...</span>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ) : sessions.length === 0 ? (
-                    <TableRow>
-                      <TableCell colSpan={8} className="px-5 py-10 text-center text-sm text-gray-500">
-                        No attendance sessions match the selected filters.
-                      </TableCell>
-                    </TableRow>
-                  ) : (
-                    paginatedSessions.map((s) => (
-                      <TableRow key={s.id} className="border-b border-gray-50 dark:border-gray-800">
-                        <TableCell className="px-5 py-3">
-                          <p className="text-sm font-medium text-gray-800 dark:text-white/90">
-                            {s.course?.code}
-                          </p>
-                          <p className="line-clamp-2 text-xs text-gray-500 dark:text-gray-400">
-                            {s.course?.name}
-                          </p>
-                        </TableCell>
-                        <TableCell className="px-5 py-3 text-center text-sm text-gray-700 dark:text-gray-300">
-                          {new Date(s.date).toLocaleDateString()}
-                        </TableCell>
-                        <TableCell className="px-5 py-3 text-center">
-                          <Badge variant="light" color="info" size="sm">
-                            {s.shift}
-                          </Badge>
-                        </TableCell>
-                        <TableCell className="px-5 py-3 text-center font-medium text-green-600 dark:text-green-400">
-                          {s.present}
-                        </TableCell>
-                        <TableCell className="px-5 py-3 text-center font-medium text-red-600 dark:text-red-400">
-                          {s.absent}
-                        </TableCell>
-                        <TableCell className="px-5 py-3 text-center font-medium text-yellow-600 dark:text-yellow-600">
-                          {s.late}
-                        </TableCell>
-                        <TableCell className="px-5 py-3 text-center text-sm text-gray-600 dark:text-gray-400">
-                          {s.excused}
-                        </TableCell>
-                        <TableCell className="px-5 py-3 text-sm text-gray-600 dark:text-gray-400">
-                          {s.takenBy?.name ?? "—"}
-                        </TableCell>
-                      </TableRow>
-                    ))
-                  )}
-                </TableBody>
-              </Table>
-              <TablePagination
-                className="no-print"
-                page={sessionsPage}
-                totalPages={sessionsTotalPages}
-                total={sessionsTotal}
-                from={sessionsFrom}
-                to={sessionsTo}
-                pageSize={sessionsPageSize}
-                onPageChange={setSessionsPage}
-                onPageSizeChange={setSessionsPageSize}
-              />
-            </div>
-          </>
+        ) : loading ? (
+          <div className="flex items-center justify-center gap-2 py-16">
+            <div className="h-6 w-6 animate-spin rounded-full border-2 border-brand-500 border-t-transparent" />
+            <span className="text-sm text-gray-500">Loading…</span>
+          </div>
         ) : (
-          <>
-            <div className="flex flex-wrap gap-4 border-b border-gray-100 px-5 py-4 dark:border-gray-800">
-              <div className="rounded-xl bg-brand-50 px-4 py-2 dark:bg-brand-500/10">
-                <span className="text-xs text-gray-500 dark:text-gray-400">Class</span>
-                <p className="text-lg font-bold text-brand-600 dark:text-brand-400">
-                  {selectedClassInfo
-                    ? `${selectedClassInfo.name} · ${selectedClassInfo.semester} ${selectedClassInfo.year}`
-                    : "—"}
-                </p>
-              </div>
-              <div className="rounded-xl bg-brand-50 px-4 py-2 dark:bg-brand-500/10">
-                <span className="text-xs text-gray-500 dark:text-gray-400">Date range</span>
-                <p className="text-sm font-semibold text-brand-600 dark:text-brand-400">
-                  {dateRangeLabel}
-                </p>
-              </div>
-              <div className="rounded-xl bg-gray-50 px-4 py-2 dark:bg-white/5">
-                <span className="text-xs text-gray-500 dark:text-gray-400">Total Students</span>
-                <p className="text-xl font-bold text-gray-800 dark:text-white/90">
-                  {studentAttendances.length}
-                </p>
-              </div>
-              <div className="rounded-xl bg-gray-50 px-4 py-2 dark:bg-white/5">
-                <span className="text-xs text-gray-500 dark:text-gray-400">Total Sessions</span>
-                <p className="text-xl font-bold text-gray-800 dark:text-white/90">
-                  {studentAttendances[0]?.totalSessions ?? 0}
-                </p>
-              </div>
-              <div className="rounded-xl bg-green-50 px-4 py-2 dark:bg-green-500/10">
-                <span className="text-xs text-gray-500 dark:text-gray-400">Avg Attendance %</span>
-                <p className="text-xl font-bold text-green-600 dark:text-green-400">
-                  {studentAttendances.length > 0
-                    ? (
-                        studentAttendances.reduce((s, a) => s + a.attendancePercent, 0) /
-                        studentAttendances.length
-                      ).toFixed(1)
-                    : "0"}
-                  %
-                </p>
-              </div>
-            </div>
-            <div className="overflow-x-auto">
-              <Table>
-                <TableHeader className="border-b border-gray-100 dark:border-gray-800">
-                  <TableRow>
-                    <TableCell isHeader className="px-5 py-3 text-left text-xs font-medium uppercase text-gray-500 dark:text-gray-400">
-                      Student ID
-                    </TableCell>
-                    <TableCell isHeader className="px-5 py-3 text-left text-xs font-medium uppercase text-gray-500 dark:text-gray-400">
-                      Name
-                    </TableCell>
-                    <TableCell isHeader className="px-5 py-3 text-center text-xs font-medium uppercase text-gray-500 dark:text-gray-400">
-                      Present
-                    </TableCell>
-                    <TableCell isHeader className="px-5 py-3 text-center text-xs font-medium uppercase text-gray-500 dark:text-gray-400">
-                      Absent
-                    </TableCell>
-                    <TableCell isHeader className="px-5 py-3 text-center text-xs font-medium uppercase text-gray-500 dark:text-gray-400">
-                      Late
-                    </TableCell>
-                    <TableCell isHeader className="px-5 py-3 text-center text-xs font-medium uppercase text-gray-500 dark:text-gray-400">
-                      Excused
-                    </TableCell>
-                    <TableCell isHeader className="px-5 py-3 text-center text-xs font-medium uppercase text-gray-500 dark:text-gray-400">
-                      Sessions
-                    </TableCell>
-                    <TableCell isHeader className="px-5 py-3 text-center text-xs font-medium uppercase text-gray-500 dark:text-gray-400">
-                      Attendance %
-                    </TableCell>
-                    <TableCell isHeader className="px-5 py-3 text-center text-xs font-medium uppercase text-gray-500 dark:text-gray-400">
-                      Marks (10%)
-                    </TableCell>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {loading ? (
-                    <TableRow>
-                      <TableCell colSpan={9} className="px-5 py-10 text-center">
-                        <div className="flex items-center justify-center gap-2">
-                          <div className="h-5 w-5 animate-spin rounded-full border-2 border-brand-500 border-t-transparent" />
-                          <span className="text-sm text-gray-500">Loading...</span>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ) : studentAttendances.length === 0 ? (
-                    <TableRow>
-                      <TableCell colSpan={9} className="px-5 py-10 text-center text-sm text-gray-500">
-                        No students or no attendance sessions in the selected date range.
-                      </TableCell>
-                    </TableRow>
-                  ) : (
-                    paginatedStudents.map((s) => (
-                      <TableRow
-                        key={s.studentId}
-                        className={`border-b border-gray-50 dark:border-gray-800 ${
-                          s.rowDanger ? "bg-error-50/30 dark:bg-error-500/5" : ""
-                        }`}
-                      >
-                        <TableCell className="px-5 py-3 font-mono text-sm text-gray-600 dark:text-gray-400">
-                          {s.studentIdStr}
-                        </TableCell>
-                        <TableCell className="px-5 py-3 font-medium text-gray-800 dark:text-white/90">
-                          {s.firstName} {s.lastName}
-                        </TableCell>
-                        <TableCell className="px-5 py-3 text-center font-medium text-green-600 dark:text-green-400">
-                          {s.present}
-                        </TableCell>
-                        <TableCell className="px-5 py-3 text-center font-medium text-red-600 dark:text-red-400">
-                          {s.absent}
-                        </TableCell>
-                        <TableCell className="px-5 py-3 text-center font-medium text-yellow-600 dark:text-yellow-600">
-                          {s.late}
-                        </TableCell>
-                        <TableCell className="px-5 py-3 text-center text-sm text-gray-600 dark:text-gray-400">
-                          {s.excused}
-                        </TableCell>
-                        <TableCell className="px-5 py-3 text-center text-sm text-gray-600 dark:text-gray-400">
-                          {s.totalSessions}
-                        </TableCell>
-                        <TableCell className="px-5 py-3 text-center font-medium text-gray-800 dark:text-white/90">
-                          {s.attendancePercent.toFixed(1)}%
-                        </TableCell>
-                        <TableCell className="px-5 py-3 text-center font-medium text-brand-600 dark:text-brand-400">
-                          {s.attendanceMarks.toFixed(2)}
-                        </TableCell>
-                      </TableRow>
-                    ))
+          <div className="px-5 py-5 sm:px-6 attendance-report-print-area">
+            <PrintHeader />
+
+            {/* ── Screen info bar (hidden on print) ── */}
+            <div className="no-print mb-4 flex flex-wrap items-center gap-x-6 gap-y-2 rounded-xl border border-gray-100 bg-gray-50 px-4 py-3 text-sm dark:border-gray-800 dark:bg-white/3">
+              {selectedClassInfo && (
+                <span className="font-medium text-gray-800 dark:text-white/90">
+                  {selectedClassInfo.name} · {selectedClassInfo.semester} {selectedClassInfo.year}
+                </span>
+              )}
+              <span className="text-gray-500 dark:text-gray-400">{dateRangeText}</span>
+              {viewMode === "students" ? (
+                <>
+                  <span className="text-gray-600 dark:text-gray-400">
+                    <strong className="text-gray-800 dark:text-white/80">{studentAttendances.length}</strong> students
+                  </span>
+                  <span className="text-gray-600 dark:text-gray-400">
+                    <strong className="text-gray-800 dark:text-white/80">{studentAttendances[0]?.totalSessions ?? 0}</strong> sessions
+                  </span>
+                </>
+              ) : (
+                <>
+                  <span className="text-gray-600 dark:text-gray-400">
+                    <strong className="text-gray-800 dark:text-white/80">{summary.totalSessions}</strong> sessions
+                  </span>
+                  <span className="text-green-700 dark:text-green-400">
+                    <strong>{summary.totalPresent}</strong> present
+                  </span>
+                  <span className="text-red-600 dark:text-red-400">
+                    <strong>{summary.totalAbsent}</strong> absent
+                  </span>
+                  {summary.totalLate > 0 && (
+                    <span className="text-yellow-600 dark:text-yellow-400">
+                      <strong>{summary.totalLate}</strong> late
+                    </span>
                   )}
-                </TableBody>
-              </Table>
-              <TablePagination
-                className="no-print"
-                page={studentsPage}
-                totalPages={studentsTotalPages}
-                total={studentsTotal}
-                from={studentsFrom}
-                to={studentsTo}
-                pageSize={studentsPageSize}
-                onPageChange={setStudentsPage}
-                onPageSizeChange={setStudentsPageSize}
-              />
+                  {summary.totalExcused > 0 && (
+                    <span className="text-gray-600 dark:text-gray-400">
+                      <strong>{summary.totalExcused}</strong> excused
+                    </span>
+                  )}
+                </>
+              )}
             </div>
-          </>
+
+            {/* ── TABLE ── */}
+            {viewMode === "students" ? (
+              studentAttendances.length === 0 ? (
+                <p className="py-10 text-center text-sm text-gray-500">
+                  No students or no attendance sessions in this date range.
+                </p>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full border-collapse text-sm print:text-xs">
+                    <thead>
+                      <tr className="border-b-2 border-gray-300 print:border-black bg-gray-50 print:bg-transparent">
+                        <th className="py-2.5 pl-3 pr-2 text-left font-semibold text-gray-700 print:text-black w-8">#</th>
+                        <th className="py-2.5 px-3 text-left font-semibold text-gray-700 print:text-black w-28">Student ID</th>
+                        <th className="py-2.5 px-3 text-left font-semibold text-gray-700 print:text-black">Full Name</th>
+                        <th className="py-2.5 px-3 text-center font-semibold text-gray-700 print:text-black w-20">Present</th>
+                        <th className="py-2.5 px-3 text-center font-semibold text-gray-700 print:text-black w-20">Absent</th>
+                        {studentAttendances.some((s) => s.late > 0) && (
+                          <th className="py-2.5 px-3 text-center font-semibold text-gray-700 print:text-black w-16">Late</th>
+                        )}
+                        {studentAttendances.some((s) => s.excused > 0) && (
+                          <th className="py-2.5 px-3 text-center font-semibold text-gray-700 print:text-black w-20">Excused</th>
+                        )}
+                        <th className="py-2.5 px-3 text-center font-semibold text-gray-700 print:text-black w-20">Sessions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {studentAttendances.map((s, idx) => (
+                        <tr
+                          key={s.studentId}
+                          className={`border-b border-gray-100 print:border-gray-300 ${
+                            idx % 2 === 1 ? "bg-gray-50/60 print:bg-transparent" : ""
+                          } ${s.rowDanger ? "bg-red-50/40 print:bg-transparent" : ""}`}
+                        >
+                          <td className="py-2 pl-3 pr-2 text-gray-400 print:text-black text-xs">{idx + 1}</td>
+                          <td className="py-2 px-3 font-mono text-xs text-gray-600 print:text-black">{s.studentIdStr}</td>
+                          <td className="py-2 px-3 font-medium text-gray-800 print:text-black">
+                            {s.firstName} {s.lastName}
+                          </td>
+                          <td className="py-2 px-3 text-center font-semibold text-green-700 print:text-black">{s.present}</td>
+                          <td className={`py-2 px-3 text-center font-semibold print:text-black ${s.absent > 0 ? "text-red-600" : "text-gray-500"}`}>
+                            {s.absent}
+                          </td>
+                          {studentAttendances.some((r) => r.late > 0) && (
+                            <td className="py-2 px-3 text-center text-gray-700 print:text-black">{s.late}</td>
+                          )}
+                          {studentAttendances.some((r) => r.excused > 0) && (
+                            <td className="py-2 px-3 text-center text-gray-600 print:text-black">{s.excused}</td>
+                          )}
+                          <td className="py-2 px-3 text-center text-gray-600 print:text-black">{s.totalSessions}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                    <tfoot>
+                      <tr className="border-t-2 border-gray-300 print:border-black font-semibold bg-gray-50 print:bg-transparent">
+                        <td className="py-2 pl-3 pr-2" />
+                        <td className="py-2 px-3 text-xs text-gray-500 print:text-black">Total</td>
+                        <td className="py-2 px-3 text-gray-700 print:text-black">
+                          {studentAttendances.length} student{studentAttendances.length === 1 ? "" : "s"}
+                        </td>
+                        <td className="py-2 px-3 text-center text-green-700 print:text-black">
+                          {studentAttendances.reduce((acc, s) => acc + s.present, 0)}
+                        </td>
+                        <td className="py-2 px-3 text-center text-red-600 print:text-black">
+                          {studentAttendances.reduce((acc, s) => acc + s.absent, 0)}
+                        </td>
+                        {studentAttendances.some((s) => s.late > 0) && (
+                          <td className="py-2 px-3 text-center text-gray-700 print:text-black">
+                            {studentAttendances.reduce((acc, s) => acc + s.late, 0)}
+                          </td>
+                        )}
+                        {studentAttendances.some((s) => s.excused > 0) && (
+                          <td className="py-2 px-3 text-center text-gray-600 print:text-black">
+                            {studentAttendances.reduce((acc, s) => acc + s.excused, 0)}
+                          </td>
+                        )}
+                        <td className="py-2 px-3 text-center text-gray-700 print:text-black">
+                          {studentAttendances[0]?.totalSessions ?? 0}
+                        </td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
+              )
+            ) : (
+              sessions.length === 0 ? (
+                <p className="py-10 text-center text-sm text-gray-500">
+                  No attendance sessions match the selected filters.
+                </p>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full border-collapse text-sm print:text-xs">
+                    <thead>
+                      <tr className="border-b-2 border-gray-300 print:border-black bg-gray-50 print:bg-transparent">
+                        <th className="py-2.5 pl-3 pr-2 text-left font-semibold text-gray-700 print:text-black w-8">#</th>
+                        <th className="py-2.5 px-3 text-left font-semibold text-gray-700 print:text-black">Course</th>
+                        <th className="py-2.5 px-3 text-left font-semibold text-gray-700 print:text-black w-32">Date</th>
+                        <th className="py-2.5 px-3 text-left font-semibold text-gray-700 print:text-black w-24">Shift</th>
+                        <th className="py-2.5 px-3 text-center font-semibold text-gray-700 print:text-black w-20">Present</th>
+                        <th className="py-2.5 px-3 text-center font-semibold text-gray-700 print:text-black w-20">Absent</th>
+                        {sessions.some((s) => s.late > 0) && (
+                          <th className="py-2.5 px-3 text-center font-semibold text-gray-700 print:text-black w-16">Late</th>
+                        )}
+                        {sessions.some((s) => s.excused > 0) && (
+                          <th className="py-2.5 px-3 text-center font-semibold text-gray-700 print:text-black w-20">Excused</th>
+                        )}
+                        <th className="py-2.5 px-3 text-center font-semibold text-gray-700 print:text-black w-16">Total</th>
+                        <th className="py-2.5 px-3 text-left font-semibold text-gray-700 print:text-black w-32">Taken By</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {sessions.map((s, idx) => (
+                        <tr
+                          key={s.id}
+                          className={`border-b border-gray-100 print:border-gray-300 ${
+                            idx % 2 === 1 ? "bg-gray-50/60 print:bg-transparent" : ""
+                          }`}
+                        >
+                          <td className="py-2 pl-3 pr-2 text-gray-400 print:text-black text-xs">{idx + 1}</td>
+                          <td className="py-2 px-3 print:text-black">
+                            <p className="font-medium text-gray-800 print:text-black">{s.course?.code}</p>
+                            <p className="text-xs text-gray-500 print:text-black">{s.course?.name}</p>
+                          </td>
+                          <td className="py-2 px-3 text-gray-700 print:text-black whitespace-nowrap">
+                            {formatDateShort(s.date)}
+                          </td>
+                          <td className="py-2 px-3 print:text-black">
+                            <span className="no-print">
+                              <Badge variant="light" color={s.shift === "Morning" ? "info" : s.shift === "Afternoon" ? "warning" : "primary"} size="sm">
+                                {s.shift}
+                              </Badge>
+                            </span>
+                            <span className="hidden print:inline text-black">{s.shift}</span>
+                          </td>
+                          <td className="py-2 px-3 text-center font-semibold text-green-700 print:text-black">{s.present}</td>
+                          <td className={`py-2 px-3 text-center font-semibold print:text-black ${s.absent > 0 ? "text-red-600" : "text-gray-500"}`}>
+                            {s.absent}
+                          </td>
+                          {sessions.some((r) => r.late > 0) && (
+                            <td className="py-2 px-3 text-center text-gray-700 print:text-black">{s.late}</td>
+                          )}
+                          {sessions.some((r) => r.excused > 0) && (
+                            <td className="py-2 px-3 text-center text-gray-600 print:text-black">{s.excused}</td>
+                          )}
+                          <td className="py-2 px-3 text-center text-gray-600 print:text-black">{s.total}</td>
+                          <td className="py-2 px-3 text-sm text-gray-600 print:text-black">{s.takenBy?.name ?? "—"}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                    <tfoot>
+                      <tr className="border-t-2 border-gray-300 print:border-black font-semibold bg-gray-50 print:bg-transparent">
+                        <td className="py-2 pl-3 pr-2" />
+                        <td className="py-2 px-3 text-xs text-gray-500 print:text-black" colSpan={3}>
+                          Totals — {summary.totalSessions} session{summary.totalSessions === 1 ? "" : "s"}
+                        </td>
+                        <td className="py-2 px-3 text-center text-green-700 print:text-black">{summary.totalPresent}</td>
+                        <td className="py-2 px-3 text-center text-red-600 print:text-black">{summary.totalAbsent}</td>
+                        {sessions.some((s) => s.late > 0) && (
+                          <td className="py-2 px-3 text-center text-gray-700 print:text-black">{summary.totalLate}</td>
+                        )}
+                        {sessions.some((s) => s.excused > 0) && (
+                          <td className="py-2 px-3 text-center text-gray-600 print:text-black">{summary.totalExcused}</td>
+                        )}
+                        <td className="py-2 px-3 text-center text-gray-700 print:text-black">{summary.totalPresent + summary.totalAbsent + summary.totalLate + summary.totalExcused}</td>
+                        <td className="py-2 px-3" />
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
+              )
+            )}
+
+            {/* ── Print footer ── */}
+            <div className="hidden print:block mt-6 border-t border-gray-300 pt-3 text-xs text-black">
+              <div className="flex justify-between">
+                <span>Abaarso Tech University — Attendance Report</span>
+                <span>Generated: {new Date().toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}</span>
+              </div>
+            </div>
+          </div>
         )}
       </div>
     </div>
