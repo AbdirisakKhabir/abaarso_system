@@ -19,8 +19,6 @@ import { ModalOverlayGate } from "@/context/ModalOverlayContext";
 import { useAuth } from "@/context/AuthContext";
 import { PencilIcon, PlusIcon, TrashBinIcon } from "@/icons";
 
-const SHIFTS = ["Morning", "Afternoon", "Evening"];
-
 type DepartmentOption = { id: number; name: string; code: string };
 type ClassOption = {
   id: number;
@@ -30,35 +28,29 @@ type ClassOption = {
   departmentId: number;
   department: { id: number; name: string; code: string };
 };
-type CourseOption = { id: number; name: string; code: string; departmentId: number };
 type LecturerOption = { id: number; name: string; email: string };
 
 type TakerRow = {
   id: number;
   classId: number;
-  courseId: number;
   lecturerId: number;
-  shift: string;
   isActive: boolean;
   class: ClassOption;
-  course: { id: number; code: string; name: string };
   lecturer: LecturerOption;
   assignedBy: { id: number; name: string | null; email: string };
   createdAt: string;
 };
 
 type FormState = {
-  classId: string;
-  courseId: string;
   lecturerId: string;
-  shift: string;
+  classId: string;
+  classIds: number[];
 };
 
 const emptyForm: FormState = {
-  classId: "",
-  courseId: "",
   lecturerId: "",
-  shift: SHIFTS[0],
+  classId: "",
+  classIds: [],
 };
 
 export default function AttendanceTakersPage() {
@@ -66,16 +58,15 @@ export default function AttendanceTakersPage() {
   const [rows, setRows] = useState<TakerRow[]>([]);
   const [departments, setDepartments] = useState<DepartmentOption[]>([]);
   const [classes, setClasses] = useState<ClassOption[]>([]);
-  const [courses, setCourses] = useState<CourseOption[]>([]);
-  const [lecturersByCourse, setLecturersByCourse] = useState<
-    Record<number, LecturerOption[]>
-  >({});
+  const [lecturers, setLecturers] = useState<LecturerOption[]>([]);
   const [loading, setLoading] = useState(true);
   const [filterDepartmentId, setFilterDepartmentId] = useState("all");
+  const [filterLecturerId, setFilterLecturerId] = useState("all");
   const [modal, setModal] = useState<"add" | "edit" | null>(null);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [form, setForm] = useState<FormState>(emptyForm);
   const [submitError, setSubmitError] = useState("");
+  const [submitInfo, setSubmitInfo] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
   const canCreate = hasPermission("attendance.assign.create");
@@ -83,19 +74,27 @@ export default function AttendanceTakersPage() {
   const canDelete = hasPermission("attendance.assign.delete");
 
   const loadRows = useCallback(async () => {
-    const params = new URLSearchParams();
+    const params = new URLSearchParams({ active: "false" });
     if (filterDepartmentId !== "all") {
       params.set("departmentId", filterDepartmentId);
+    }
+    if (filterLecturerId !== "all") {
+      params.set("lecturerId", filterLecturerId);
     }
     const res = await authFetch(`/api/attendance-takers?${params.toString()}`);
     if (res.ok) setRows(await res.json());
     else setRows([]);
-  }, [filterDepartmentId]);
+  }, [filterDepartmentId, filterLecturerId]);
 
-  const loadDepartments = useCallback(async () => {
-    const res = await authFetch("/api/departments?active=true");
-    if (res.ok) {
-      const data = await res.json();
+  const loadOptions = useCallback(async () => {
+    const [deptRes, classRes, lecturerRes] = await Promise.all([
+      authFetch("/api/departments?active=true"),
+      authFetch("/api/classes?active=true"),
+      authFetch("/api/lecturers"),
+    ]);
+
+    if (deptRes.ok) {
+      const data = await deptRes.json();
       setDepartments(
         data.map((d: DepartmentOption) => ({
           id: d.id,
@@ -104,13 +103,7 @@ export default function AttendanceTakersPage() {
         }))
       );
     }
-  }, []);
 
-  const loadClassesAndCourses = useCallback(async () => {
-    const [classRes, courseRes] = await Promise.all([
-      authFetch("/api/classes?active=true"),
-      authFetch("/api/courses?active=true"),
-    ]);
     if (classRes.ok) {
       const data = await classRes.json();
       setClasses(
@@ -124,15 +117,20 @@ export default function AttendanceTakersPage() {
         }))
       );
     }
-    if (courseRes.ok) {
-      const data = await courseRes.json();
-      setCourses(
-        data.map((c: CourseOption) => ({
-          id: c.id,
-          name: c.name,
-          code: c.code,
-          departmentId: c.departmentId,
-        }))
+
+    if (lecturerRes.ok) {
+      const data = await lecturerRes.json();
+      setLecturers(
+        (Array.isArray(data) ? data : data.items ?? [])
+          .filter((l: LecturerOption & { isActive?: boolean }) => l.isActive !== false)
+          .map((l: LecturerOption) => ({
+            id: l.id,
+            name: l.name,
+            email: l.email,
+          }))
+          .sort((a: LecturerOption, b: LecturerOption) =>
+            a.name.localeCompare(b.name)
+          )
       );
     }
   }, []);
@@ -140,10 +138,10 @@ export default function AttendanceTakersPage() {
   useEffect(() => {
     (async () => {
       setLoading(true);
-      await Promise.all([loadDepartments(), loadClassesAndCourses()]);
+      await loadOptions();
       setLoading(false);
     })();
-  }, [loadDepartments, loadClassesAndCourses]);
+  }, [loadOptions]);
 
   useEffect(() => {
     void loadRows();
@@ -161,75 +159,100 @@ export default function AttendanceTakersPage() {
     total: filteredTotal,
     from,
     to,
-  } = usePagination(filtered, [filterDepartmentId]);
+  } = usePagination(filtered, [filterDepartmentId, filterLecturerId]);
 
-  const selectedClass = classes.find((c) => String(c.id) === form.classId);
-  const coursesForClass = selectedClass
-    ? courses.filter((c) => c.departmentId === selectedClass.departmentId)
-    : [];
-  const lecturersForCourse = form.courseId
-    ? lecturersByCourse[Number(form.courseId)] ?? []
-    : [];
+  const assignedClassIdsForLecturer = useMemo(() => {
+    if (!form.lecturerId) return new Set<number>();
+    return new Set(
+      rows
+        .filter((row) => String(row.lecturerId) === form.lecturerId && row.isActive)
+        .map((row) => row.classId)
+    );
+  }, [rows, form.lecturerId]);
 
-  async function loadLecturersForCourse(courseId: number) {
-    if (lecturersByCourse[courseId]) return;
-    const res = await authFetch(`/api/lecturers/by-course/${courseId}`);
-    if (res.ok) {
-      const data = await res.json();
-      setLecturersByCourse((prev) => ({ ...prev, [courseId]: data }));
-    }
-  }
+  const availableClassesForAdd = useMemo(() => {
+    return classes.filter((c) => !assignedClassIdsForLecturer.has(c.id));
+  }, [classes, assignedClassIdsForLecturer]);
 
   function openAdd() {
     setModal("add");
     setEditingId(null);
     setForm(emptyForm);
     setSubmitError("");
+    setSubmitInfo("");
   }
 
   function openEdit(row: TakerRow) {
     setModal("edit");
     setEditingId(row.id);
     setForm({
-      classId: String(row.classId),
-      courseId: String(row.courseId),
       lecturerId: String(row.lecturerId),
-      shift: row.shift,
+      classId: String(row.classId),
+      classIds: [],
     });
     setSubmitError("");
-    void loadLecturersForCourse(row.courseId);
+    setSubmitInfo("");
+  }
+
+  function toggleClassSelection(classId: number) {
+    setForm((current) => ({
+      ...current,
+      classIds: current.classIds.includes(classId)
+        ? current.classIds.filter((id) => id !== classId)
+        : [...current.classIds, classId],
+    }));
   }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setSubmitError("");
-    if (!form.classId || !form.courseId || !form.lecturerId || !form.shift) {
-      setSubmitError("Class, course, lecturer, and shift are required.");
+    setSubmitInfo("");
+
+    if (!form.lecturerId) {
+      setSubmitError("Select a lecturer.");
       return;
     }
+
+    if (modal === "edit") {
+      if (!form.classId) {
+        setSubmitError("Select a class.");
+        return;
+      }
+    } else if (form.classIds.length === 0) {
+      setSubmitError("Select at least one class.");
+      return;
+    }
+
     setSubmitting(true);
     try {
-      const payload = {
-        classId: Number(form.classId),
-        courseId: Number(form.courseId),
-        lecturerId: Number(form.lecturerId),
-        shift: form.shift,
-      };
       const url =
         modal === "edit" && editingId
           ? `/api/attendance-takers/${editingId}`
           : "/api/attendance-takers";
       const method = modal === "edit" ? "PATCH" : "POST";
+      const body =
+        modal === "edit"
+          ? {
+              lecturerId: Number(form.lecturerId),
+              classId: Number(form.classId),
+            }
+          : {
+              lecturerId: Number(form.lecturerId),
+              classIds: form.classIds,
+            };
+
       const res = await authFetch(url, {
         method,
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
+        body: JSON.stringify(body),
       });
       const data = await res.json();
       if (!res.ok) {
         setSubmitError(data.error || "Failed to save assignment");
         return;
       }
+
+      if (data.message) setSubmitInfo(data.message);
       await loadRows();
       setModal(null);
     } finally {
@@ -296,8 +319,8 @@ export default function AttendanceTakersPage() {
 
       <div className="mb-4 rounded-2xl border border-brand-100 bg-brand-50/50 px-5 py-4 dark:border-brand-500/20 dark:bg-brand-500/5">
         <p className="text-sm text-gray-700 dark:text-gray-300">
-          Assign a lecturer to take attendance for a specific class, course, and shift.
-          Only assigned lecturers (or admins) can take or edit attendance for that combination.
+          Assign a lecturer to one or more classes. Once assigned, the lecturer can take and edit
+          attendance for any course and shift in those classes.
         </p>
       </div>
 
@@ -311,18 +334,32 @@ export default function AttendanceTakersPage() {
               {filtered.length}
             </span>
           </div>
-          <select
-            value={filterDepartmentId}
-            onChange={(e) => setFilterDepartmentId(e.target.value)}
-            className="h-10 min-w-[180px] rounded-lg border border-gray-200 bg-transparent px-3 text-sm text-gray-700 outline-none focus:border-brand-300 focus:ring-2 focus:ring-brand-500/20 dark:border-gray-700 dark:text-gray-300"
-          >
-            <option value="all">All departments</option>
-            {departments.map((d) => (
-              <option key={d.id} value={String(d.id)}>
-                {d.code} — {d.name}
-              </option>
-            ))}
-          </select>
+          <div className="flex flex-wrap gap-2">
+            <select
+              value={filterDepartmentId}
+              onChange={(e) => setFilterDepartmentId(e.target.value)}
+              className="h-10 min-w-[180px] rounded-lg border border-gray-200 bg-transparent px-3 text-sm text-gray-700 outline-none focus:border-brand-300 focus:ring-2 focus:ring-brand-500/20 dark:border-gray-700 dark:text-gray-300"
+            >
+              <option value="all">All departments</option>
+              {departments.map((d) => (
+                <option key={d.id} value={String(d.id)}>
+                  {d.code} — {d.name}
+                </option>
+              ))}
+            </select>
+            <select
+              value={filterLecturerId}
+              onChange={(e) => setFilterLecturerId(e.target.value)}
+              className="h-10 min-w-[180px] rounded-lg border border-gray-200 bg-transparent px-3 text-sm text-gray-700 outline-none focus:border-brand-300 focus:ring-2 focus:ring-brand-500/20 dark:border-gray-700 dark:text-gray-300"
+            >
+              <option value="all">All lecturers</option>
+              {lecturers.map((l) => (
+                <option key={l.id} value={String(l.id)}>
+                  {l.name}
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
 
         {loading ? (
@@ -350,10 +387,8 @@ export default function AttendanceTakersPage() {
               <TableHeader>
                 <TableRow className="bg-transparent! hover:bg-transparent!">
                   <TableCell isHeader>#</TableCell>
-                  <TableCell isHeader>Class</TableCell>
-                  <TableCell isHeader>Course</TableCell>
-                  <TableCell isHeader>Shift</TableCell>
                   <TableCell isHeader>Lecturer</TableCell>
+                  <TableCell isHeader>Class</TableCell>
                   <TableCell isHeader>Status</TableCell>
                   <TableCell isHeader className="text-right">Actions</TableCell>
                 </TableRow>
@@ -367,44 +402,20 @@ export default function AttendanceTakersPage() {
                     <TableCell>
                       <div className="min-w-0">
                         <p className="font-semibold text-gray-800 dark:text-white/90">
-                          {row.class.name}
-                        </p>
-                        <p className="text-xs text-gray-400 dark:text-gray-500">
-                          {row.class.department.code} · {row.class.semester} {row.class.year}
-                        </p>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <div className="min-w-0">
-                        <p className="text-sm font-medium text-gray-800 dark:text-white/90">
-                          {row.course.code}
-                        </p>
-                        <p className="line-clamp-2 text-xs text-gray-500 dark:text-gray-400">
-                          {row.course.name}
-                        </p>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <Badge
-                        color={
-                          row.shift === "Morning"
-                            ? "info"
-                            : row.shift === "Afternoon"
-                              ? "warning"
-                              : "primary"
-                        }
-                        size="sm"
-                      >
-                        {row.shift}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>
-                      <div className="min-w-0">
-                        <p className="text-sm font-medium text-gray-800 dark:text-white/90">
                           {row.lecturer.name}
                         </p>
                         <p className="text-xs text-gray-400 dark:text-gray-500">
                           {row.lecturer.email}
+                        </p>
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <div className="min-w-0">
+                        <p className="font-semibold text-gray-800 dark:text-white/90">
+                          {row.class.name}
+                        </p>
+                        <p className="text-xs text-gray-400 dark:text-gray-500">
+                          {row.class.department.code} · {row.class.semester} {row.class.year}
                         </p>
                       </div>
                     </TableCell>
@@ -469,8 +480,13 @@ export default function AttendanceTakersPage() {
               <form onSubmit={handleSubmit}>
                 <div className="border-b border-gray-200 px-6 py-4 dark:border-gray-700">
                   <h2 className="text-lg font-semibold text-gray-800 dark:text-white/90">
-                    {modal === "add" ? "Assign attendance taker" : "Edit assignment"}
+                    {modal === "add" ? "Assign lecturer to classes" : "Edit assignment"}
                   </h2>
+                  <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                    {modal === "add"
+                      ? "Choose one lecturer, then select one or more classes."
+                      : "Update the lecturer or class for this assignment."}
+                  </p>
                 </div>
                 <div className="space-y-4 px-6 py-5">
                   {submitError && (
@@ -478,104 +494,127 @@ export default function AttendanceTakersPage() {
                       {submitError}
                     </div>
                   )}
-                  <div>
-                    <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">
-                      Class <span className="text-error-500">*</span>
-                    </label>
-                    <select
-                      required
-                      value={form.classId}
-                      onChange={(e) => {
-                        const v = e.target.value;
-                        setForm((f) => ({
-                          ...f,
-                          classId: v,
-                          courseId: "",
-                          lecturerId: "",
-                        }));
-                      }}
-                      className="h-11 w-full rounded-lg border border-gray-200 bg-transparent px-3 text-sm text-gray-800 outline-none focus:border-brand-300 dark:border-gray-700 dark:text-white"
-                    >
-                      <option value="">Select class</option>
-                      {classes.map((c) => (
-                        <option key={c.id} value={String(c.id)}>
-                          {c.name} · {c.semester} {c.year} ({c.department.code})
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <div>
-                    <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">
-                      Course <span className="text-error-500">*</span>
-                    </label>
-                    <select
-                      required
-                      disabled={!form.classId}
-                      value={form.courseId}
-                      onChange={(e) => {
-                        const v = e.target.value;
-                        setForm((f) => ({ ...f, courseId: v, lecturerId: "" }));
-                        if (v) void loadLecturersForCourse(Number(v));
-                      }}
-                      className="h-11 w-full rounded-lg border border-gray-200 bg-transparent px-3 text-sm text-gray-800 outline-none focus:border-brand-300 disabled:opacity-50 dark:border-gray-700 dark:text-white"
-                    >
-                      <option value="">
-                        {!form.classId ? "Select class first" : "Select course"}
-                      </option>
-                      {coursesForClass.map((c) => (
-                        <option key={c.id} value={String(c.id)}>
-                          {c.code} — {c.name}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
+                  {submitInfo && (
+                    <div className="rounded-lg bg-success-50 px-4 py-3 text-sm text-success-700 dark:bg-success-500/10 dark:text-success-400">
+                      {submitInfo}
+                    </div>
+                  )}
                   <div>
                     <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">
                       Lecturer <span className="text-error-500">*</span>
                     </label>
                     <select
                       required
-                      disabled={!form.courseId}
                       value={form.lecturerId}
-                      onChange={(e) =>
-                        setForm((f) => ({ ...f, lecturerId: e.target.value }))
-                      }
-                      className="h-11 w-full rounded-lg border border-gray-200 bg-transparent px-3 text-sm text-gray-800 outline-none focus:border-brand-300 disabled:opacity-50 dark:border-gray-700 dark:text-white"
+                      onChange={(e) => {
+                        const v = e.target.value;
+                        setForm((f) => ({
+                          ...f,
+                          lecturerId: v,
+                          classId: "",
+                          classIds: [],
+                        }));
+                      }}
+                      className="h-11 w-full rounded-lg border border-gray-200 bg-transparent px-3 text-sm text-gray-800 outline-none focus:border-brand-300 dark:border-gray-700 dark:text-white"
                     >
-                      <option value="">
-                        {!form.courseId ? "Select course first" : "Select lecturer"}
-                      </option>
-                      {lecturersForCourse.map((l) => (
+                      <option value="">Select lecturer</option>
+                      {lecturers.map((l) => (
                         <option key={l.id} value={String(l.id)}>
                           {l.name} ({l.email})
                         </option>
                       ))}
                     </select>
-                    {form.courseId && lecturersForCourse.length === 0 && (
-                      <p className="mt-1 text-xs text-warning-600 dark:text-warning-400">
-                        No lecturers are assigned to teach this course.
-                      </p>
-                    )}
                   </div>
-                  <div>
-                    <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">
-                      Shift <span className="text-error-500">*</span>
-                    </label>
-                    <select
-                      required
-                      value={form.shift}
-                      onChange={(e) =>
-                        setForm((f) => ({ ...f, shift: e.target.value }))
-                      }
-                      className="h-11 w-full rounded-lg border border-gray-200 bg-transparent px-3 text-sm text-gray-800 outline-none focus:border-brand-300 dark:border-gray-700 dark:text-white"
-                    >
-                      {SHIFTS.map((s) => (
-                        <option key={s} value={s}>
-                          {s}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
+
+                  {modal === "edit" ? (
+                    <div>
+                      <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">
+                        Class <span className="text-error-500">*</span>
+                      </label>
+                      <select
+                        required
+                        value={form.classId}
+                        onChange={(e) =>
+                          setForm((f) => ({ ...f, classId: e.target.value }))
+                        }
+                        className="h-11 w-full rounded-lg border border-gray-200 bg-transparent px-3 text-sm text-gray-800 outline-none focus:border-brand-300 dark:border-gray-700 dark:text-white"
+                      >
+                        <option value="">Select class</option>
+                        {classes.map((c) => (
+                          <option key={c.id} value={String(c.id)}>
+                            {c.name} · {c.semester} {c.year} ({c.department.code})
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  ) : (
+                    <div>
+                      <div className="mb-2 flex items-center justify-between">
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                          Classes <span className="text-error-500">*</span>
+                        </label>
+                        {form.lecturerId && (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setForm((f) => ({
+                                ...f,
+                                classIds: availableClassesForAdd.map((c) => c.id),
+                              }))
+                            }
+                            className="text-xs font-medium text-brand-600 hover:underline dark:text-brand-400"
+                          >
+                            Select all available
+                          </button>
+                        )}
+                      </div>
+                      {!form.lecturerId ? (
+                        <p className="rounded-lg border border-dashed border-gray-200 px-4 py-6 text-sm text-gray-500 dark:border-gray-700 dark:text-gray-400">
+                          Select a lecturer first to choose classes.
+                        </p>
+                      ) : availableClassesForAdd.length === 0 ? (
+                        <p className="rounded-lg border border-dashed border-gray-200 px-4 py-6 text-sm text-gray-500 dark:border-gray-700 dark:text-gray-400">
+                          This lecturer is already assigned to all active classes.
+                        </p>
+                      ) : (
+                        <div className="max-h-72 space-y-2 overflow-y-auto rounded-lg border border-gray-200 p-3 dark:border-gray-700">
+                          {availableClassesForAdd.map((c) => {
+                            const checked = form.classIds.includes(c.id);
+                            return (
+                              <label
+                                key={c.id}
+                                className={`flex cursor-pointer items-start gap-3 rounded-lg border px-3 py-2 transition ${
+                                  checked
+                                    ? "border-brand-300 bg-brand-50/70 dark:border-brand-500/40 dark:bg-brand-500/10"
+                                    : "border-gray-100 hover:bg-gray-50 dark:border-gray-800 dark:hover:bg-white/3"
+                                }`}
+                              >
+                                <input
+                                  type="checkbox"
+                                  checked={checked}
+                                  onChange={() => toggleClassSelection(c.id)}
+                                  className="mt-1 h-4 w-4 rounded border-gray-300 text-brand-500 focus:ring-brand-500"
+                                />
+                                <span className="min-w-0">
+                                  <span className="block text-sm font-medium text-gray-800 dark:text-white/90">
+                                    {c.name}
+                                  </span>
+                                  <span className="block text-xs text-gray-500 dark:text-gray-400">
+                                    {c.department.code} · {c.semester} {c.year}
+                                  </span>
+                                </span>
+                              </label>
+                            );
+                          })}
+                        </div>
+                      )}
+                      {form.classIds.length > 0 && (
+                        <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
+                          {form.classIds.length} class{form.classIds.length === 1 ? "" : "es"} selected
+                        </p>
+                      )}
+                    </div>
+                  )}
                 </div>
                 <div className="flex items-center justify-end gap-2 border-t border-gray-200 px-6 py-4 dark:border-gray-700">
                   <button
@@ -591,7 +630,11 @@ export default function AttendanceTakersPage() {
                     disabled={submitting}
                     className="inline-flex items-center justify-center rounded-lg bg-brand-500 px-4 py-3 text-sm font-medium text-white transition hover:bg-brand-600 disabled:opacity-60"
                   >
-                    {submitting ? "Saving..." : modal === "add" ? "Assign" : "Save changes"}
+                    {submitting
+                      ? "Saving..."
+                      : modal === "add"
+                        ? `Assign${form.classIds.length > 0 ? ` (${form.classIds.length})` : ""}`
+                        : "Save changes"}
                   </button>
                 </div>
               </form>

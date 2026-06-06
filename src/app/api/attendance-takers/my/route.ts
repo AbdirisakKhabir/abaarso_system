@@ -30,8 +30,6 @@ export async function GET(req: NextRequest) {
       select: {
         id: true,
         classId: true,
-        courseId: true,
-        shift: true,
         class: {
           select: {
             id: true,
@@ -42,9 +40,8 @@ export async function GET(req: NextRequest) {
             department: { select: { id: true, name: true, code: true } },
           },
         },
-        course: { select: { id: true, code: true, name: true } },
       },
-      orderBy: [{ class: { name: "asc" } }, { course: { code: "asc" } }],
+      orderBy: [{ class: { name: "asc" } }],
     });
 
     return NextResponse.json({

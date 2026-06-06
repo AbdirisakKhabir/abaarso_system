@@ -57,9 +57,7 @@ export async function GET(req: NextRequest, ctx: RouteContext) {
 
     const canManage = await userCanManageAttendanceSession(
       auth.userId,
-      session.classId,
-      session.courseId,
-      session.shift
+      session.classId
     );
 
     return NextResponse.json({ ...session, canManage });
@@ -98,9 +96,7 @@ export async function PATCH(req: NextRequest, ctx: RouteContext) {
 
     const access = await assertUserCanManageAttendanceSession(
       auth.userId,
-      existing.classId,
-      existing.courseId,
-      existing.shift
+      existing.classId
     );
     if (!access.ok) {
       return NextResponse.json({ error: access.error }, { status: access.status });

@@ -4,6 +4,20 @@ import { prisma } from "@/lib/prisma";
 import { userHasPermission } from "@/lib/permissions";
 import { validateAttendanceTakerAssignment } from "@/lib/attendanceTaker";
 
+const includeAssignment = {
+  class: {
+    select: {
+      id: true,
+      name: true,
+      semester: true,
+      year: true,
+      department: { select: { id: true, name: true, code: true } },
+    },
+  },
+  lecturer: { select: { id: true, name: true, email: true } },
+  assignedBy: { select: { id: true, name: true, email: true } },
+} as const;
+
 export async function GET(req: NextRequest) {
   try {
     const auth = await getAuthUser(req);
@@ -18,39 +32,25 @@ export async function GET(req: NextRequest) {
 
     const { searchParams } = new URL(req.url);
     const classId = searchParams.get("classId");
-    const courseId = searchParams.get("courseId");
+    const lecturerId = searchParams.get("lecturerId");
     const departmentId = searchParams.get("departmentId");
     const activeOnly = searchParams.get("active") !== "false";
 
     const where: Record<string, unknown> = {};
     if (activeOnly) where.isActive = true;
     if (classId) where.classId = Number(classId);
-    if (courseId) where.courseId = Number(courseId);
+    if (lecturerId) where.lecturerId = Number(lecturerId);
     if (departmentId) {
       where.class = { departmentId: Number(departmentId) };
     }
 
     const rows = await prisma.attendanceTaker.findMany({
       where,
-      include: {
-        class: {
-          select: {
-            id: true,
-            name: true,
-            semester: true,
-            year: true,
-            department: { select: { id: true, name: true, code: true } },
-          },
-        },
-        course: { select: { id: true, code: true, name: true } },
-        lecturer: { select: { id: true, name: true, email: true } },
-        assignedBy: { select: { id: true, name: true, email: true } },
-      },
+      include: includeAssignment,
       orderBy: [
+        { lecturer: { name: "asc" } },
         { class: { year: "desc" } },
         { class: { name: "asc" } },
-        { course: { code: "asc" } },
-        { shift: "asc" },
       ],
     });
 
@@ -77,76 +77,85 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json();
-    const classId = Number(body.classId);
-    const courseId = Number(body.courseId);
     const lecturerId = Number(body.lecturerId);
-    const shift = String(body.shift ?? "").trim();
+    const classIds = Array.isArray(body.classIds)
+      ? body.classIds
+          .map((id: unknown) => Number(id))
+          .filter((id: number) => Number.isInteger(id) && id > 0)
+      : body.classId !== undefined
+        ? [Number(body.classId)].filter((id) => Number.isInteger(id) && id > 0)
+        : [];
 
-    if (
-      !Number.isInteger(classId) ||
-      !Number.isInteger(courseId) ||
-      !Number.isInteger(lecturerId) ||
-      !shift
-    ) {
+    if (!Number.isInteger(lecturerId) || lecturerId <= 0) {
+      return NextResponse.json({ error: "lecturerId is required" }, { status: 400 });
+    }
+    if (classIds.length === 0) {
       return NextResponse.json(
-        { error: "classId, courseId, lecturerId, and shift are required" },
+        { error: "Select at least one class" },
         { status: 400 }
       );
     }
 
-    const validation = await validateAttendanceTakerAssignment({
-      classId,
-      courseId,
-      lecturerId,
-      shift,
-    });
-    if (!validation.ok) {
-      return NextResponse.json(
-        { error: validation.error },
-        { status: validation.status }
-      );
+    const created = [];
+    const skipped: { classId: number; error: string }[] = [];
+
+    for (const classId of classIds) {
+      const validation = await validateAttendanceTakerAssignment({
+        classId,
+        lecturerId,
+      });
+      if (!validation.ok) {
+        skipped.push({ classId, error: validation.error });
+        continue;
+      }
+
+      try {
+        const row = await prisma.attendanceTaker.create({
+          data: {
+            classId,
+            lecturerId,
+            assignedById: auth.userId,
+          },
+          include: includeAssignment,
+        });
+        created.push(row);
+      } catch (e: unknown) {
+        if (
+          typeof e === "object" &&
+          e !== null &&
+          "code" in e &&
+          (e as { code: string }).code === "P2002"
+        ) {
+          skipped.push({
+            classId,
+            error: "This lecturer is already assigned to this class.",
+          });
+        } else {
+          throw e;
+        }
+      }
     }
 
-    const row = await prisma.attendanceTaker.create({
-      data: {
-        classId,
-        courseId,
-        lecturerId,
-        shift,
-        assignedById: auth.userId,
-      },
-      include: {
-        class: {
-          select: {
-            id: true,
-            name: true,
-            semester: true,
-            year: true,
-            department: { select: { id: true, name: true, code: true } },
-          },
-        },
-        course: { select: { id: true, code: true, name: true } },
-        lecturer: { select: { id: true, name: true, email: true } },
-        assignedBy: { select: { id: true, name: true, email: true } },
-      },
-    });
-
-    return NextResponse.json(row);
-  } catch (e: unknown) {
-    if (
-      typeof e === "object" &&
-      e !== null &&
-      "code" in e &&
-      (e as { code: string }).code === "P2002"
-    ) {
+    if (created.length === 0) {
       return NextResponse.json(
         {
           error:
-            "An attendance taker is already assigned for this class, course, and shift.",
+            skipped[0]?.error ||
+            "No assignments were created. The lecturer may already be assigned to the selected classes.",
         },
         { status: 400 }
       );
     }
+
+    return NextResponse.json({
+      created,
+      skipped,
+      message:
+        skipped.length > 0
+          ? `Assigned ${created.length} class(es). ${skipped.length} skipped.`
+          : `Assigned ${created.length} class(es).`,
+    });
+  } catch (e) {
     console.error("Create attendance taker error:", e);
     return NextResponse.json(
       { error: "Something went wrong" },

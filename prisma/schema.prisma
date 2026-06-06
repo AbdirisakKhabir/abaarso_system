@@ -171,7 +171,6 @@ model Course {
   lecturers      LecturerCourse[]
   classSchedules     ClassSchedule[]
   attendanceSessions AttendanceSession[]
-  attendanceTakers   AttendanceTaker[]
   createdAt          DateTime        @default(now())
   updatedAt          DateTime        @updatedAt
 
@@ -436,18 +435,15 @@ model AttendanceTaker {
   id           Int      @id @default(autoincrement())
   classId      Int
   class        Class    @relation(fields: [classId], references: [id], onDelete: Cascade)
-  courseId     Int
-  course       Course   @relation(fields: [courseId], references: [id], onDelete: Restrict)
   lecturerId   Int
   lecturer     Lecturer @relation(fields: [lecturerId], references: [id], onDelete: Restrict)
-  shift        String // "Morning", "Afternoon", "Evening"
   assignedById Int
   assignedBy   User     @relation("AttendanceTakerAssignedBy", fields: [assignedById], references: [id], onDelete: Restrict)
   isActive     Boolean  @default(true)
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  @@unique([classId, courseId, shift])
+  @@unique([classId, lecturerId])
   @@map("attendance_takers")
 }
 

@@ -44,10 +44,7 @@ type RecordEntry = {
 
 type MyAssignment = {
   classId: number;
-  courseId: number;
-  shift: string;
   class: ClassOption & { departmentId?: number };
-  course: { id: number; code: string; name: string };
 };
 
 const SHIFTS = ["Morning", "Afternoon", "Evening"];
@@ -265,39 +262,6 @@ export default function TakeAttendanceForm({ onSuccess }: TakeAttendanceFormProp
     const allowedClassIds = new Set(myAssignments.map((a) => a.classId));
     return base.filter((c) => allowedClassIds.has(c.id));
   }, [takeClasses, takeForm.semesterName, takeForm.year, isAssignmentAdmin, myAssignments]);
-
-  const allowedCourseIdsForClass = useMemo(() => {
-    if (!takeForm.classId || isAssignmentAdmin) return null;
-    const classId = Number(takeForm.classId);
-    return new Set(
-      myAssignments
-        .filter((a) => a.classId === classId)
-        .map((a) => a.courseId)
-    );
-  }, [takeForm.classId, isAssignmentAdmin, myAssignments]);
-
-  const filteredCourseSelectOptions = useMemo(() => {
-    if (!allowedCourseIdsForClass) return courseSelectOptions;
-    return courseSelectOptions.filter((opt) => allowedCourseIdsForClass.has(opt.id));
-  }, [courseSelectOptions, allowedCourseIdsForClass]);
-
-  const allowedShifts = useMemo(() => {
-    if (!takeForm.classId || !takeForm.courseId || isAssignmentAdmin) {
-      return SHIFTS;
-    }
-    const classId = Number(takeForm.classId);
-    const courseId = Number(takeForm.courseId);
-    const shifts = myAssignments
-      .filter((a) => a.classId === classId && a.courseId === courseId)
-      .map((a) => a.shift);
-    return [...new Set(shifts)];
-  }, [takeForm.classId, takeForm.courseId, isAssignmentAdmin, myAssignments]);
-
-  useEffect(() => {
-    if (allowedShifts.length > 0 && !allowedShifts.includes(takeForm.shift)) {
-      setTakeForm((f) => ({ ...f, shift: allowedShifts[0] }));
-    }
-  }, [allowedShifts, takeForm.shift]);
 
   async function handleTakeSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -541,7 +505,7 @@ export default function TakeAttendanceForm({ onSuccess }: TakeAttendanceFormProp
                   takeForm.semesterName &&
                   takeForm.year &&
                   !loadingTakeContext
-                    ? filteredCourseSelectOptions
+                    ? courseSelectOptions
                     : []
                 }
                 value={takeForm.courseId}
@@ -559,9 +523,7 @@ export default function TakeAttendanceForm({ onSuccess }: TakeAttendanceFormProp
                 noOptionsHint={
                   !takeForm.classId
                     ? "Select class first."
-                    : filteredCourseSelectOptions.length === 0
-                      ? "No assigned courses for this class."
-                      : "No courses in this department."
+                    : "No courses in this department."
                 }
                 searchPlaceholder="Search course code or name…"
               />
@@ -592,18 +554,13 @@ export default function TakeAttendanceForm({ onSuccess }: TakeAttendanceFormProp
                 onChange={(e) =>
                   setTakeForm((f) => ({ ...f, shift: e.target.value }))
                 }
-                disabled={allowedShifts.length === 0}
-                className="h-11 w-full appearance-none rounded-lg border border-gray-200 bg-transparent px-3 py-2.5 text-sm text-gray-800 outline-none focus:border-brand-300 focus:ring-2 focus:ring-brand-500/20 disabled:opacity-50 dark:border-gray-700 dark:text-white dark:focus:border-brand-500/40"
+                className="h-11 w-full appearance-none rounded-lg border border-gray-200 bg-transparent px-3 py-2.5 text-sm text-gray-800 outline-none focus:border-brand-300 focus:ring-2 focus:ring-brand-500/20 dark:border-gray-700 dark:text-white dark:focus:border-brand-500/40"
               >
-                {allowedShifts.length === 0 ? (
-                  <option value="">No assigned shifts</option>
-                ) : (
-                  allowedShifts.map((s) => (
-                    <option key={s} value={s}>
-                      {s}
-                    </option>
-                  ))
-                )}
+                {SHIFTS.map((s) => (
+                  <option key={s} value={s}>
+                    {s}
+                  </option>
+                ))}
               </select>
             </div>
             <div className="sm:col-span-2">

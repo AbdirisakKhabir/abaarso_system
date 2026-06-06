@@ -159,9 +159,7 @@ export async function POST(req: NextRequest) {
 
     const access = await assertUserCanManageAttendanceSession(
       auth.userId,
-      parsedClassId,
-      parsedCourseId,
-      shift
+      parsedClassId
     );
     if (!access.ok) {
       return NextResponse.json({ error: access.error }, { status: access.status });
