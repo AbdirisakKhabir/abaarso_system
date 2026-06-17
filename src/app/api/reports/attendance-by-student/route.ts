@@ -8,8 +8,8 @@ import {
 import { getSemesterDateRange } from "@/lib/semester-dates";
 
 /**
- * GET /api/reports/attendance-by-student?classId=X&dateFrom=&dateTo=
- * Class attendance summary for admitted students (all courses in date range).
+ * GET /api/reports/attendance-by-student
+ * Supports filters: departmentId, classId, courseId, studentId, dateFrom, dateTo.
  */
 export async function GET(req: NextRequest) {
   try {
@@ -19,38 +19,57 @@ export async function GET(req: NextRequest) {
     }
 
     const { searchParams } = new URL(req.url);
+    const departmentId = searchParams.get("departmentId");
     const classId = searchParams.get("classId");
+    const courseId = searchParams.get("courseId");
+    const studentId = searchParams.get("studentId");
     const dateFrom = searchParams.get("dateFrom");
     const dateTo = searchParams.get("dateTo");
     const semesterParam = searchParams.get("semester");
     const yearParam = searchParams.get("year");
 
-    if (!classId) {
-      return NextResponse.json(
-        { error: "classId is required for attendance-by-student report" },
-        { status: 400 }
-      );
+    const parsedDepartmentId =
+      departmentId && Number.isInteger(Number(departmentId))
+        ? Number(departmentId)
+        : null;
+    const parsedClassId =
+      classId && Number.isInteger(Number(classId)) ? Number(classId) : null;
+    const parsedCourseId =
+      courseId && Number.isInteger(Number(courseId)) ? Number(courseId) : null;
+    const parsedStudentId =
+      studentId && Number.isInteger(Number(studentId)) ? Number(studentId) : null;
+
+    let cls: {
+      id: number;
+      name: string;
+      semester: string;
+      year: number;
+      department: { id: number; name: string; code: string };
+    } | null = null;
+
+    if (parsedClassId) {
+      const classRow = await prisma.class.findUnique({
+        where: { id: parsedClassId },
+        include: {
+          department: { select: { id: true, name: true, code: true } },
+        },
+      });
+      if (!classRow) {
+        return NextResponse.json({ error: "Class not found" }, { status: 404 });
+      }
+      cls = classRow;
     }
 
-    const cls = await prisma.class.findUnique({
-      where: { id: Number(classId) },
-      include: {
-        department: { select: { id: true, name: true, code: true } },
-      },
-    });
-
-    if (!cls) {
-      return NextResponse.json({ error: "Class not found" }, { status: 404 });
-    }
-
-    const semester = semesterParam ?? cls.semester;
-    const year = yearParam ? Number(yearParam) : cls.year;
+    const semester = semesterParam ?? cls?.semester ?? null;
+    const year = yearParam
+      ? Number(yearParam)
+      : cls?.year ?? new Date().getFullYear();
 
     const sessionDateWhere: { gte?: Date; lte?: Date } = {};
     if (dateFrom || dateTo) {
       if (dateFrom) sessionDateWhere.gte = new Date(dateFrom);
       if (dateTo) sessionDateWhere.lte = new Date(dateTo);
-    } else {
+    } else if (semester) {
       const { start, end } = getSemesterDateRange(semester, year);
       sessionDateWhere.gte = start;
       sessionDateWhere.lte = end;
@@ -58,7 +77,11 @@ export async function GET(req: NextRequest) {
 
     const sessionsOrdered = await prisma.attendanceSession.findMany({
       where: {
-        classId: Number(classId),
+        ...(parsedClassId ? { classId: parsedClassId } : {}),
+        ...(parsedCourseId ? { courseId: parsedCourseId } : {}),
+        ...(parsedDepartmentId
+          ? { class: { departmentId: parsedDepartmentId } }
+          : {}),
         date: sessionDateWhere,
       },
       orderBy: [{ date: "asc" }, { shift: "asc" }],
@@ -68,7 +91,12 @@ export async function GET(req: NextRequest) {
     const totalSessions = sessionIds.length;
 
     const students = await prisma.student.findMany({
-      where: { classId: Number(classId), status: "Admitted" },
+      where: {
+        status: "Admitted",
+        ...(parsedStudentId ? { id: parsedStudentId } : {}),
+        ...(parsedClassId ? { classId: parsedClassId } : {}),
+        ...(parsedDepartmentId ? { departmentId: parsedDepartmentId } : {}),
+      },
       select: {
         id: true,
         studentId: true,

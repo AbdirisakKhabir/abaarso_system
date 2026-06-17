@@ -13,6 +13,7 @@ export async function GET(req: NextRequest) {
     const departmentId = searchParams.get("departmentId");
     const classId = searchParams.get("classId");
     const courseId = searchParams.get("courseId");
+    const studentId = searchParams.get("studentId");
     const dateFrom = searchParams.get("dateFrom");
     const dateTo = searchParams.get("dateTo");
 
@@ -21,6 +22,7 @@ export async function GET(req: NextRequest) {
       courseId?: number;
       class?: { departmentId?: number };
       date?: { gte?: Date; lte?: Date };
+      records?: { some: { studentId: number } };
     } = {};
 
     if (departmentId) {
@@ -31,6 +33,9 @@ export async function GET(req: NextRequest) {
     }
     if (courseId) {
       where.courseId = Number(courseId);
+    }
+    if (studentId) {
+      where.records = { some: { studentId: Number(studentId) } };
     }
     if (dateFrom || dateTo) {
       where.date = {};
