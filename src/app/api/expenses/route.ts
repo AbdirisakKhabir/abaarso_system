@@ -75,7 +75,7 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json();
-    const { amount, description, category, bankId } = body;
+    const { amount, description, category, categoryId, bankId } = body;
 
     if (!amount || amount <= 0 || !description?.trim()) {
       return NextResponse.json(
@@ -88,6 +88,7 @@ export async function POST(req: NextRequest) {
       amount: number;
       description: string;
       category?: string;
+      categoryId?: number;
       bankId?: number;
       requestedById: number;
     } = {
@@ -95,7 +96,18 @@ export async function POST(req: NextRequest) {
       description: String(description).trim(),
       requestedById: auth.userId,
     };
-    if (category?.trim()) data.category = String(category).trim();
+
+    if (categoryId) {
+      const cat = await prisma.expenseCategory.findFirst({
+        where: { id: Number(categoryId), isActive: true },
+      });
+      if (cat) {
+        data.categoryId = cat.id;
+        data.category = cat.name;
+      }
+    } else if (category?.trim()) {
+      data.category = String(category).trim();
+    }
     if (bankId) {
       const bank = await prisma.bank.findUnique({ where: { id: Number(bankId) } });
       if (bank?.isActive) data.bankId = bank.id;

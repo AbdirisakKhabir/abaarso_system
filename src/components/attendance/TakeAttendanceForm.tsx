@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import Button from "@/components/ui/button/Button";
@@ -9,6 +9,7 @@ import SearchableSingleSelect from "@/components/form/SearchableSingleSelect";
 import { ATTENDANCE_RECORD_STATUSES } from "@/lib/attendanceConstants";
 import { authFetch } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
+import { useFormDraft } from "@/hooks/useFormDraft";
 
 type DepartmentOption = {
   id: number;
@@ -49,6 +50,28 @@ type MyAssignment = {
 
 const SHIFTS = ["Morning", "Afternoon", "Evening"];
 
+type TakeFormState = {
+  departmentId: string;
+  semesterName: string;
+  year: string;
+  classId: string;
+  courseId: string;
+  date: string;
+  shift: string;
+  note: string;
+};
+
+const takeFormInitial: TakeFormState = {
+  departmentId: "",
+  semesterName: "",
+  year: "",
+  classId: "",
+  courseId: "",
+  date: new Date().toISOString().split("T")[0],
+  shift: "Morning",
+  note: "",
+};
+
 type TakeAttendanceFormProps = {
   onSuccess?: () => void;
 };
@@ -58,16 +81,13 @@ export default function TakeAttendanceForm({ onSuccess }: TakeAttendanceFormProp
   const canCreate = hasPermission("attendance.create");
 
   const [departments, setDepartments] = useState<DepartmentOption[]>([]);
-  const [takeForm, setTakeForm] = useState({
-    departmentId: "",
-    semesterName: "",
-    year: "",
-    classId: "",
-    courseId: "",
-    date: new Date().toISOString().split("T")[0],
-    shift: "Morning",
-    note: "",
-  });
+  const {
+    values: takeForm,
+    setAll: setTakeForm,
+    clearDraft: clearAttendanceDraft,
+    discardDraft: discardAttendanceDraft,
+    hasDraft: hasAttendanceDraft,
+  } = useFormDraft<TakeFormState>("take-attendance", takeFormInitial);
   const [takeClasses, setTakeClasses] = useState<ClassOption[]>([]);
   const [takeContextCourses, setTakeContextCourses] = useState<CourseMeta[]>([]);
   const [takeContextSemesters, setTakeContextSemesters] = useState<SemesterMeta[]>([]);
@@ -175,7 +195,7 @@ export default function TakeAttendanceForm({ onSuccess }: TakeAttendanceFormProp
     }
   }
 
-  async function loadTakeModalContext(departmentId: string) {
+  async function loadTakeModalContext(departmentId: string, preserveForm = false) {
     if (!departmentId) {
       setTakeClasses([]);
       setTakeContextCourses([]);
@@ -202,14 +222,16 @@ export default function TakeAttendanceForm({ onSuccess }: TakeAttendanceFormProp
         );
         setTakeContextCourses(data.courses ?? []);
         setTakeContextSemesters(data.semesters ?? []);
-        setTakeForm((f) => ({
-          ...f,
-          semesterName: "",
-          year: "",
-          classId: "",
-          courseId: "",
-        }));
-        setStudents([]);
+        if (!preserveForm) {
+          setTakeForm((f) => ({
+            ...f,
+            semesterName: "",
+            year: "",
+            classId: "",
+            courseId: "",
+          }));
+          setStudents([]);
+        }
       } else {
         setTakeClasses([]);
         setTakeContextCourses([]);
@@ -223,6 +245,14 @@ export default function TakeAttendanceForm({ onSuccess }: TakeAttendanceFormProp
       setLoadingTakeContext(false);
     }
   }
+
+  const draftRestoredRef = useRef(false);
+  useEffect(() => {
+    if (draftRestoredRef.current || !hasAttendanceDraft || !takeForm.departmentId) return;
+    draftRestoredRef.current = true;
+    void loadTakeModalContext(takeForm.departmentId, true);
+    if (takeForm.classId) void loadStudentsForClass(takeForm.classId);
+  }, [hasAttendanceDraft, takeForm.departmentId, takeForm.classId]);
 
   function updateStudentStatus(studentId: number, status: string) {
     setStudents((prev) =>
@@ -303,6 +333,7 @@ export default function TakeAttendanceForm({ onSuccess }: TakeAttendanceFormProp
         return;
       }
       onSuccess?.();
+      clearAttendanceDraft();
     } finally {
       setSubmitting(false);
     }
@@ -326,6 +357,14 @@ export default function TakeAttendanceForm({ onSuccess }: TakeAttendanceFormProp
         </div>
 
         <div className="px-5 py-5 sm:px-6">
+          {hasAttendanceDraft && (
+            <div className="mb-4 flex items-center justify-between rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:border-amber-900/40 dark:bg-amber-950/30 dark:text-amber-100">
+              <span>Draft restored — selections were saved locally.</span>
+              <button type="button" onClick={discardAttendanceDraft} className="font-medium underline">
+                Discard
+              </button>
+            </div>
+          )}
           {loadingAssignments ? (
             <div className="mb-4 flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
               <div className="h-4 w-4 animate-spin rounded-full border-2 border-brand-500 border-t-transparent" />

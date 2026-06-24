@@ -361,11 +361,25 @@ model BankWithdrawal {
   @@map("bank_withdrawals")
 }
 
+model ExpenseCategory {
+  id          Int       @id @default(autoincrement())
+  name        String    @unique
+  description String?
+  isActive    Boolean   @default(true)
+  expenses    Expense[]
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@map("expense_categories")
+}
+
 model Expense {
-  id              Int       @id @default(autoincrement())
+  id              Int              @id @default(autoincrement())
   amount          Float
   description     String
-  category        String? // e.g. "Operations", "Salaries", "Utilities"
+  category        String? // denormalized label for reports
+  categoryId      Int?
+  expenseCategory ExpenseCategory? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
   bankId          Int? // Bank to withdraw from when approved
   bank            Bank?     @relation(fields: [bankId], references: [id], onDelete: SetNull)
   status          String    @default("pending") // "pending" | "approved" | "rejected"

@@ -8,42 +8,60 @@ import React, {
   useState,
 } from "react";
 import { useRouter } from "next/navigation";
+import SessionLockOverlay from "@/components/auth/SessionLockOverlay";
 import {
   AuthUser,
   clearStoredAuth,
   getStoredAuth,
   setStoredAuth,
   getStoredToken,
-  isSessionExpired,
+  isSessionInactive,
+  touchActivity,
 } from "@/types/auth";
 
 type AuthContextType = {
   user: AuthUser | null;
   token: string | null;
   isLoading: boolean;
+  sessionLocked: boolean;
   login: (email: string, password: string) => Promise<{ error?: string }>;
   logout: () => void;
   refreshUser: () => Promise<void>;
   hasPermission: (permission: string) => boolean;
+  recordActivity: () => void;
 };
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-/** Matches seeded role name "Admin"; bypasses permission list so sidebar/API stay in sync. */
 function isBuiltInAdminRole(roleName: string | null | undefined): boolean {
   return (roleName ?? "").trim().toLowerCase() === "admin";
 }
+
+const ACTIVITY_EVENTS = ["mousedown", "keydown", "scroll", "touchstart"] as const;
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const [user, setUser] = useState<AuthUser | null>(null);
   const [token, setToken] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [sessionLocked, setSessionLocked] = useState(false);
+
+  const recordActivity = useCallback(() => {
+    if (getStoredToken()) {
+      touchActivity();
+      setSessionLocked(false);
+    }
+  }, []);
+
+  const lockSession = useCallback(() => {
+    setSessionLocked(true);
+  }, []);
 
   const forceLogoutAndRedirect = useCallback(() => {
     clearStoredAuth();
     setUser(null);
     setToken(null);
+    setSessionLocked(false);
     setIsLoading(false);
     router.replace("/signin");
   }, [router]);
@@ -56,6 +74,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setIsLoading(false);
       return;
     }
+    if (isSessionInactive()) {
+      lockSession();
+      setIsLoading(false);
+      return;
+    }
     try {
       const res = await fetch("/api/auth/me", {
         headers: { Authorization: `Bearer ${t}` },
@@ -63,45 +86,46 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (res.ok) {
         const data = await res.json();
         const auth = { user: data.user, token: t };
-        setStoredAuth(auth, { preserveLoginAt: true });
+        setStoredAuth(auth, { preserveTimestamps: true });
+        touchActivity();
         setUser(data.user);
         setToken(t);
+        setSessionLocked(false);
       } else {
         clearStoredAuth();
         setUser(null);
         setToken(null);
       }
     } catch {
-      clearStoredAuth();
-      setUser(null);
-      setToken(null);
+      /* Keep local session on network error — drafts remain usable */
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [lockSession]);
 
   useEffect(() => {
     const stored = getStoredAuth();
     if (stored?.user && stored?.token) {
-      if (isSessionExpired()) {
-        forceLogoutAndRedirect();
+      if (isSessionInactive()) {
+        setUser(stored.user);
+        setToken(stored.token);
+        setSessionLocked(true);
+        setIsLoading(false);
         return;
       }
       setUser(stored.user);
       setToken(stored.token);
-      // Let protected routes and sign-in redirect run immediately; validate token in the background.
       setIsLoading(false);
       void refreshUser();
     } else {
       setIsLoading(false);
     }
-  }, [refreshUser, forceLogoutAndRedirect]);
+  }, [refreshUser]);
 
-  // Session expiry: check every minute and on tab focus; logout and redirect after 1 hour
   useEffect(() => {
     const check = () => {
-      if (getStoredToken() && isSessionExpired()) {
-        forceLogoutAndRedirect();
+      if (getStoredToken() && isSessionInactive()) {
+        lockSession();
       }
     };
     const interval = setInterval(check, 60_000);
@@ -113,7 +137,28 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       clearInterval(interval);
       document.removeEventListener("visibilitychange", onVisibility);
     };
-  }, [forceLogoutAndRedirect]);
+  }, [lockSession]);
+
+  useEffect(() => {
+    if (sessionLocked) return;
+
+    let throttle = 0;
+    const onActivity = () => {
+      const now = Date.now();
+      if (now - throttle < 30_000) return;
+      throttle = now;
+      recordActivity();
+    };
+
+    for (const evt of ACTIVITY_EVENTS) {
+      window.addEventListener(evt, onActivity, { passive: true });
+    }
+    return () => {
+      for (const evt of ACTIVITY_EVENTS) {
+        window.removeEventListener(evt, onActivity);
+      }
+    };
+  }, [sessionLocked, recordActivity]);
 
   const login = useCallback(
     async (email: string, password: string): Promise<{ error?: string }> => {
@@ -127,12 +172,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (!res.ok) {
           return { error: data.error || "Login failed" };
         }
-        setStoredAuth({ user: data.user, token: data.token, loginAt: Date.now() });
+        const now = Date.now();
+        setStoredAuth({
+          user: data.user,
+          token: data.token,
+          loginAt: now,
+          lastActivityAt: now,
+        });
         setUser(data.user);
         setToken(data.token);
+        setSessionLocked(false);
         setIsLoading(false);
         return {};
-      } catch (e) {
+      } catch {
         return { error: "Network error" };
       }
     },
@@ -143,6 +195,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     clearStoredAuth();
     setUser(null);
     setToken(null);
+    setSessionLocked(false);
   }, []);
 
   const hasPermission = useCallback(
@@ -163,13 +216,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         user,
         token,
         isLoading,
+        sessionLocked,
         login,
         logout,
         refreshUser,
         hasPermission,
+        recordActivity,
       }}
     >
       {children}
+      {sessionLocked && (
+        <SessionLockOverlay onSignInAgain={forceLogoutAndRedirect} />
+      )}
     </AuthContext.Provider>
   );
 }

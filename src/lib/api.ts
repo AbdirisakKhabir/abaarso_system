@@ -1,4 +1,4 @@
-import { getStoredToken } from "@/types/auth";
+import { getStoredToken, touchActivity } from "@/types/auth";
 
 export async function authFetch(
   url: string,
@@ -10,6 +10,7 @@ export async function authFetch(
   };
   if (token) {
     (headers as Record<string, string>)["Authorization"] = `Bearer ${token}`;
+    touchActivity();
   }
   return fetch(url, { ...options, headers });
 }

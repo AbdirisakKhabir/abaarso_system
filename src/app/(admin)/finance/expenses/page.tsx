@@ -17,7 +17,15 @@ import { usePagination } from "@/hooks/usePagination";
 import { authFetch } from "@/lib/api";
 import { ModalOverlayGate } from "@/context/ModalOverlayContext";
 import { useAuth } from "@/context/AuthContext";
-import { ChevronLeftIcon, PlusIcon } from "@/icons";
+import { useFormDraft } from "@/hooks/useFormDraft";
+import { ChevronLeft, FolderOpen, Pencil, Plus, Trash2 } from "lucide-react";
+
+type ExpenseCategory = {
+  id: number;
+  name: string;
+  description: string | null;
+  isActive: boolean;
+};
 
 type Expense = {
   id: number;
@@ -43,23 +51,57 @@ const STATUS_COLOR: Record<string, "warning" | "success" | "error"> = {
 
 const CURRENT_YEAR = new Date().getFullYear();
 
+type ExpenseDraft = {
+  formAmount: string;
+  formDescription: string;
+  formCategoryId: string;
+  formBankId: string;
+};
+
+const expenseDraftInitial: ExpenseDraft = {
+  formAmount: "",
+  formDescription: "",
+  formCategoryId: "",
+  formBankId: "",
+};
+
 export default function ExpensesPage() {
   const { hasPermission } = useAuth();
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [banks, setBanks] = useState<Bank[]>([]);
+  const [categories, setCategories] = useState<ExpenseCategory[]>([]);
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState("");
   const [yearFilter, setYearFilter] = useState(String(CURRENT_YEAR));
-  const [modal, setModal] = useState<"add" | "reject" | null>(null);
+  const [modal, setModal] = useState<"add" | "reject" | "category" | null>(null);
   const [rejectExpenseId, setRejectExpenseId] = useState<number | null>(null);
   const [rejectReason, setRejectReason] = useState("");
 
-  const [formAmount, setFormAmount] = useState("");
-  const [formDescription, setFormDescription] = useState("");
-  const [formCategory, setFormCategory] = useState("");
-  const [formBankId, setFormBankId] = useState("");
+  const {
+    values: draft,
+    setField: setDraftField,
+    clearDraft,
+    discardDraft,
+    hasDraft,
+  } = useFormDraft<ExpenseDraft>("expense-request", expenseDraftInitial);
+
+  const formAmount = draft.formAmount;
+  const formDescription = draft.formDescription;
+  const formCategoryId = draft.formCategoryId;
+  const formBankId = draft.formBankId;
+  const setFormAmount = (v: string) => setDraftField("formAmount", v);
+  const setFormDescription = (v: string) => setDraftField("formDescription", v);
+  const setFormCategoryId = (v: string) => setDraftField("formCategoryId", v);
+  const setFormBankId = (v: string) => setDraftField("formBankId", v);
+
   const [formError, setFormError] = useState("");
   const [formSubmitting, setFormSubmitting] = useState(false);
+
+  const [editingCategory, setEditingCategory] = useState<ExpenseCategory | null>(null);
+  const [categoryName, setCategoryName] = useState("");
+  const [categoryDescription, setCategoryDescription] = useState("");
+  const [categoryError, setCategoryError] = useState("");
+  const [categorySubmitting, setCategorySubmitting] = useState(false);
 
   const canCreate = hasPermission("expenses.create");
   const canApprove = hasPermission("expenses.approve");
@@ -88,7 +130,71 @@ export default function ExpensesPage() {
         if (d.length > 0 && !formBankId) setFormBankId(String(d[0].id));
       });
     });
+    authFetch("/api/expense-categories").then((r) => {
+      if (r.ok) r.json().then((d: ExpenseCategory[]) => setCategories(d));
+    });
   }, []);
+
+  const loadCategories = useCallback(async () => {
+    const res = await authFetch("/api/expense-categories?active=false");
+    if (res.ok) setCategories(await res.json());
+  }, []);
+
+  const openCategoryModal = (cat?: ExpenseCategory) => {
+    setEditingCategory(cat ?? null);
+    setCategoryName(cat?.name ?? "");
+    setCategoryDescription(cat?.description ?? "");
+    setCategoryError("");
+    setModal("category");
+  };
+
+  const handleSaveCategory = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setCategoryError("");
+    setCategorySubmitting(true);
+    try {
+      const url = editingCategory
+        ? `/api/expense-categories/${editingCategory.id}`
+        : "/api/expense-categories";
+      const method = editingCategory ? "PATCH" : "POST";
+      const res = await authFetch(url, {
+        method,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: categoryName.trim(),
+          description: categoryDescription.trim() || null,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setCategoryError(data.error || "Failed to save category");
+        return;
+      }
+      await loadCategories();
+      setModal(null);
+    } finally {
+      setCategorySubmitting(false);
+    }
+  };
+
+  const handleDeleteCategory = async (id: number) => {
+    if (!confirm("Remove this category?")) return;
+    const res = await authFetch(`/api/expense-categories/${id}`, { method: "DELETE" });
+    if (res.ok) await loadCategories();
+    else {
+      const data = await res.json();
+      alert(data.error || "Failed to delete");
+    }
+  };
+
+  const handleToggleCategory = async (cat: ExpenseCategory) => {
+    const res = await authFetch(`/api/expense-categories/${cat.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ isActive: !cat.isActive }),
+    });
+    if (res.ok) await loadCategories();
+  };
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -101,7 +207,7 @@ export default function ExpensesPage() {
         body: JSON.stringify({
           amount: Number(formAmount),
           description: formDescription.trim(),
-          category: formCategory.trim() || undefined,
+          categoryId: formCategoryId ? Number(formCategoryId) : undefined,
           bankId: formBankId ? Number(formBankId) : undefined,
         }),
       });
@@ -112,9 +218,7 @@ export default function ExpensesPage() {
       }
       await fetchExpenses();
       setModal(null);
-      setFormAmount("");
-      setFormDescription("");
-      setFormCategory("");
+      clearDraft();
     } catch {
       setFormError("Network error");
     } finally {
@@ -191,12 +295,17 @@ export default function ExpensesPage() {
         <PageBreadCrumb pageTitle="Expenses" />
         <div className="flex flex-wrap items-center gap-2">
           <Link href="/finance">
-            <Button variant="outline" size="sm" startIcon={<ChevronLeftIcon />}>
+            <Button variant="outline" size="sm" startIcon={<ChevronLeft className="h-4 w-4" />}>
               Back to Finance
             </Button>
           </Link>
+          {canApprove && (
+            <Button size="sm" variant="outline" startIcon={<FolderOpen className="h-4 w-4" />} onClick={() => openCategoryModal()}>
+              Categories
+            </Button>
+          )}
           {canCreate && (
-            <Button size="sm" startIcon={<PlusIcon />} onClick={() => setModal("add")}>
+            <Button size="sm" startIcon={<Plus className="h-4 w-4" />} onClick={() => setModal("add")}>
               Request Expense
             </Button>
           )}
@@ -314,6 +423,14 @@ export default function ExpensesPage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
           <div className="w-full max-w-md rounded-2xl bg-white p-6 dark:bg-gray-800">
             <h3 className="mb-4 text-lg font-semibold">Request Expense</h3>
+            {hasDraft && (
+              <div className="mb-4 flex items-center justify-between rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:border-amber-900/40 dark:bg-amber-950/30 dark:text-amber-100">
+                <span>Draft restored from your last session.</span>
+                <button type="button" onClick={discardDraft} className="font-medium underline">
+                  Discard
+                </button>
+              </div>
+            )}
             <form onSubmit={handleCreate} className="space-y-4">
               {formError && <p className="text-sm text-red-600">{formError}</p>}
               <div>
@@ -339,14 +456,17 @@ export default function ExpensesPage() {
                 />
               </div>
               <div>
-                <label className="mb-1 block text-sm font-medium">Category (optional)</label>
-                <input
-                  type="text"
-                  value={formCategory}
-                  onChange={(e) => setFormCategory(e.target.value)}
-                  placeholder="e.g. Operations, Salaries"
+                <label className="mb-1 block text-sm font-medium">Category</label>
+                <select
+                  value={formCategoryId}
+                  onChange={(e) => setFormCategoryId(e.target.value)}
                   className="w-full rounded-lg border border-gray-200 px-3 py-2 dark:border-gray-700 dark:bg-gray-900 dark:text-white"
-                />
+                >
+                  <option value="">— Select category —</option>
+                  {categories.filter((c) => c.isActive).map((c) => (
+                    <option key={c.id} value={c.id}>{c.name}</option>
+                  ))}
+                </select>
               </div>
               <div>
                 <label className="mb-1 block text-sm font-medium">Bank (optional)</label>
@@ -370,6 +490,94 @@ export default function ExpensesPage() {
                 </Button>
               </div>
             </form>
+          </div>
+        </div>
+        </ModalOverlayGate>
+      )}
+
+      {/* Category CRUD Modal */}
+      {modal === "category" && (
+        <ModalOverlayGate>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="w-full max-w-lg rounded-2xl bg-white p-6 dark:bg-gray-800">
+            <h3 className="mb-4 text-lg font-semibold">
+              {editingCategory ? "Edit category" : "Expense categories"}
+            </h3>
+
+            {canApprove && (
+              <form onSubmit={handleSaveCategory} className="mb-5 space-y-3 rounded-xl border border-gray-100 p-4 dark:border-gray-700">
+                {categoryError && <p className="text-sm text-red-600">{categoryError}</p>}
+                <div>
+                  <label className="mb-1 block text-sm font-medium">Name</label>
+                  <input
+                    value={categoryName}
+                    onChange={(e) => setCategoryName(e.target.value)}
+                    required
+                    className="w-full rounded-lg border border-gray-200 px-3 py-2 dark:border-gray-700 dark:bg-gray-900 dark:text-white"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-sm font-medium">Description (optional)</label>
+                  <input
+                    value={categoryDescription}
+                    onChange={(e) => setCategoryDescription(e.target.value)}
+                    className="w-full rounded-lg border border-gray-200 px-3 py-2 dark:border-gray-700 dark:bg-gray-900 dark:text-white"
+                  />
+                </div>
+                <Button type="submit" size="sm" disabled={categorySubmitting}>
+                  {categorySubmitting ? "Saving…" : editingCategory ? "Update" : "Add category"}
+                </Button>
+              </form>
+            )}
+
+            <div className="max-h-60 space-y-2 overflow-y-auto">
+              {categories.map((c) => (
+                <div
+                  key={c.id}
+                  className="flex items-center justify-between rounded-lg border border-gray-100 px-3 py-2 dark:border-gray-700"
+                >
+                  <div>
+                    <p className={`text-sm font-medium ${c.isActive ? "" : "text-gray-400 line-through"}`}>
+                      {c.name}
+                    </p>
+                    {c.description && (
+                      <p className="text-xs text-gray-500">{c.description}</p>
+                    )}
+                  </div>
+                  {canApprove && (
+                    <div className="flex gap-1">
+                      <button
+                        type="button"
+                        onClick={() => openCategoryModal(c)}
+                        className="rounded p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-700 dark:hover:bg-white/5"
+                      >
+                        <Pencil className="h-4 w-4" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleToggleCategory(c)}
+                        className="rounded px-2 py-1 text-xs text-gray-500 hover:bg-gray-100 dark:hover:bg-white/5"
+                      >
+                        {c.isActive ? "Deactivate" : "Activate"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteCategory(c.id)}
+                        className="rounded p-1.5 text-gray-400 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-950/30"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+
+            <div className="mt-4 flex justify-end">
+              <Button type="button" variant="outline" onClick={() => setModal(null)}>
+                Close
+              </Button>
+            </div>
           </div>
         </div>
         </ModalOverlayGate>

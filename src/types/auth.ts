@@ -10,13 +10,14 @@ export type AuthUser = {
 export const AUTH_STORAGE_KEY = "university_auth";
 export const TOKEN_KEY = "university_token";
 
-/** Session expires after 1 hour of inactivity from login */
+/** User is locked after 1 hour without activity */
 export const SESSION_TTL_MS = 60 * 60 * 1000;
 
 export type StoredAuth = {
   user: AuthUser;
   token: string;
   loginAt?: number;
+  lastActivityAt?: number;
 };
 
 export function getStoredAuth(): StoredAuth | null {
@@ -30,21 +31,49 @@ export function getStoredAuth(): StoredAuth | null {
   }
 }
 
-export function setStoredAuth(data: StoredAuth, options?: { preserveLoginAt?: boolean }): void {
+export function setStoredAuth(
+  data: StoredAuth,
+  options?: { preserveTimestamps?: boolean }
+): void {
   if (typeof window === "undefined") return;
-  const existing = options?.preserveLoginAt ? getStoredAuth() : null;
+  const existing = options?.preserveTimestamps ? getStoredAuth() : null;
+  const now = Date.now();
   const payload: StoredAuth = {
     ...data,
-    loginAt: options?.preserveLoginAt && existing?.loginAt ? existing.loginAt : (data.loginAt ?? Date.now()),
+    loginAt:
+      options?.preserveTimestamps && existing?.loginAt
+        ? existing.loginAt
+        : (data.loginAt ?? now),
+    lastActivityAt:
+      options?.preserveTimestamps && existing?.lastActivityAt
+        ? existing.lastActivityAt
+        : (data.lastActivityAt ?? now),
   };
   localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(payload));
   localStorage.setItem(TOKEN_KEY, data.token);
 }
 
-export function isSessionExpired(): boolean {
+/** Returns true when the user has been inactive longer than SESSION_TTL_MS. */
+export function isSessionInactive(): boolean {
   const stored = getStoredAuth();
-  if (!stored?.loginAt) return false;
-  return Date.now() - stored.loginAt > SESSION_TTL_MS;
+  if (!stored) return false;
+  const last = stored.lastActivityAt ?? stored.loginAt;
+  if (!last) return false;
+  return Date.now() - last > SESSION_TTL_MS;
+}
+
+/** @deprecated Use isSessionInactive */
+export function isSessionExpired(): boolean {
+  return isSessionInactive();
+}
+
+export function touchActivity(): void {
+  const stored = getStoredAuth();
+  if (!stored) return;
+  setStoredAuth(
+    { ...stored, lastActivityAt: Date.now() },
+    { preserveTimestamps: true }
+  );
 }
 
 export function clearStoredAuth(): void {

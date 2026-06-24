@@ -33,6 +33,7 @@
     "dotenv": "^17.2.4",
     "flatpickr": "^4.6.13",
     "jsonwebtoken": "^9.0.3",
+    "lucide-react": "^1.21.0",
     "mariadb": "^3.4.5",
     "next": "16.0.10",
     "prisma": "^6.19.2",

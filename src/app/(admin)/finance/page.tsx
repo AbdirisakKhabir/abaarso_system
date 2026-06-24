@@ -8,7 +8,20 @@ import { DateInput } from "@/components/form/DateInput";
 import { authFetch } from "@/lib/api";
 import { perSemesterTuition } from "@/lib/tuition-amount";
 import { useAuth } from "@/context/AuthContext";
-import { CheckCircleIcon, InfoIcon, AlertIcon } from "@/icons";
+import { useFormDraft } from "@/hooks/useFormDraft";
+import {
+  AlertCircle,
+  Banknote,
+  Calendar,
+  CheckCircle2,
+  CreditCard,
+  FileText,
+  Info,
+  Search,
+  User,
+  Wallet,
+  X,
+} from "lucide-react";
 
 type Bank = { id: number; name: string; code: string; balance: number; accountNumber?: string | null };
 type SemesterOption = { id: number; name: string; sortOrder: number; isActive: boolean };
@@ -29,32 +42,83 @@ type SearchStudent = {
 
 const CURRENT_YEAR = new Date().getFullYear();
 
+type TuitionDraft = {
+  searchQuery: string;
+  selectedStudentId: string;
+  payBankId: string;
+  paySemester: string;
+  payYear: string;
+  payAmountType: "half" | "full" | "custom";
+  payAmount: string;
+  paymentMethod: "bank_receipt" | "electronic" | "cash_on_hand";
+  receiptNumber: string;
+  transactionId: string;
+  paymentDate: string;
+  payNote: string;
+};
+
+const tuitionDraftInitial: TuitionDraft = {
+  searchQuery: "",
+  selectedStudentId: "",
+  payBankId: "",
+  paySemester: "",
+  payYear: String(CURRENT_YEAR),
+  payAmountType: "full",
+  payAmount: "",
+  paymentMethod: "bank_receipt",
+  receiptNumber: "",
+  transactionId: "",
+  paymentDate: new Date().toISOString().slice(0, 10),
+  payNote: "",
+};
+
 export default function FinancePage() {
   const { hasPermission } = useAuth();
   const [banks, setBanks] = useState<Bank[]>([]);
   const [semesters, setSemesters] = useState<SemesterOption[]>([]);
 
-  // Record Payment Form
-  const [searchQuery, setSearchQuery] = useState("");
+  const {
+    values: draft,
+    setField: setDraftField,
+    setAll: setDraftAll,
+    clearDraft,
+    discardDraft,
+    hasDraft,
+  } = useFormDraft<TuitionDraft>("tuition-payment", tuitionDraftInitial);
+
   const [searchResults, setSearchResults] = useState<SearchStudent[]>([]);
   const [searchLoading, setSearchLoading] = useState(false);
   const [selectedStudent, setSelectedStudent] = useState<SearchStudent | null>(null);
-  const [payBankId, setPayBankId] = useState("");
-  const [paySemester, setPaySemester] = useState("");
-  const [payYear, setPayYear] = useState(String(CURRENT_YEAR));
-  const [payAmountType, setPayAmountType] = useState<"half" | "full" | "custom">("full");
-  const [payAmount, setPayAmount] = useState("");
-  const [paymentMethod, setPaymentMethod] = useState<
-    "bank_receipt" | "electronic" | "cash_on_hand"
-  >("bank_receipt");
-  const [receiptNumber, setReceiptNumber] = useState("");
-  const [transactionId, setTransactionId] = useState("");
-  const [paymentDate, setPaymentDate] = useState(new Date().toISOString().slice(0, 10));
-  const [payNote, setPayNote] = useState("");
   const [paySubmitting, setPaySubmitting] = useState(false);
   const [payError, setPayError] = useState("");
   const [paySuccess, setPaySuccess] = useState(false);
   const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const searchQuery = draft.searchQuery;
+  const payBankId = draft.payBankId;
+  const paySemester = draft.paySemester;
+  const payYear = draft.payYear;
+  const payAmountType = draft.payAmountType;
+  const payAmount = draft.payAmount;
+  const paymentMethod = draft.paymentMethod;
+  const receiptNumber = draft.receiptNumber;
+  const transactionId = draft.transactionId;
+  const paymentDate = draft.paymentDate;
+  const payNote = draft.payNote;
+
+  const setSearchQuery = (v: string) => setDraftField("searchQuery", v);
+  const setPayBankId = (v: string) => setDraftField("payBankId", v);
+  const setPaySemester = (v: string) => setDraftField("paySemester", v);
+  const setPayYear = (v: string) => setDraftField("payYear", v);
+  const setPayAmountType = (v: TuitionDraft["payAmountType"]) =>
+    setDraftField("payAmountType", v);
+  const setPayAmount = (v: string) => setDraftField("payAmount", v);
+  const setPaymentMethod = (v: TuitionDraft["paymentMethod"]) =>
+    setDraftField("paymentMethod", v);
+  const setReceiptNumber = (v: string) => setDraftField("receiptNumber", v);
+  const setTransactionId = (v: string) => setDraftField("transactionId", v);
+  const setPaymentDate = (v: string) => setDraftField("paymentDate", v);
+  const setPayNote = (v: string) => setDraftField("payNote", v);
 
   const canRecordPayment = hasPermission("finance.create") || hasPermission("finance.view");
 
@@ -80,6 +144,20 @@ export default function FinancePage() {
   useEffect(() => {
     if (semesters.length > 0 && !paySemester) setPaySemester(semesters[0].name);
   }, [semesters, paySemester]);
+
+  useEffect(() => {
+    if (!draft.selectedStudentId) return;
+    void (async () => {
+      const res = await authFetch(
+        `/api/students/search?q=${encodeURIComponent(draft.selectedStudentId)}&limit=5`
+      );
+      if (res.ok) {
+        const results: SearchStudent[] = await res.json();
+        const match = results.find((s) => s.studentId === draft.selectedStudentId);
+        if (match) setSelectedStudent(match);
+      }
+    })();
+  }, [draft.selectedStudentId]);
 
   useEffect(() => {
     const q = searchQuery.trim();
@@ -125,12 +203,16 @@ export default function FinancePage() {
   const handleSelectStudent = (s: SearchStudent) => {
     setSelectedStudent(s);
     setSearchResults([]);
-    setSearchQuery(`${s.firstName} ${s.lastName} (${s.studentId})`);
+    setDraftAll((prev) => ({
+      ...prev,
+      selectedStudentId: s.studentId,
+      searchQuery: `${s.firstName} ${s.lastName} (${s.studentId})`,
+    }));
   };
 
   const handleClearStudent = () => {
     setSelectedStudent(null);
-    setSearchQuery("");
+    setDraftAll((prev) => ({ ...prev, selectedStudentId: "", searchQuery: "" }));
   };
 
   const handleRecordPayment = async (e: React.FormEvent) => {
@@ -176,10 +258,8 @@ export default function FinancePage() {
       }
       setPaySuccess(true);
       handleClearStudent();
-      setPayAmount("");
-      setReceiptNumber("");
-      setTransactionId("");
-      setPayNote("");
+      clearDraft();
+      setDraftAll({ ...tuitionDraftInitial, payBankId, paySemester });
       authFetch("/api/banks").then((r) => { if (r.ok) r.json().then(setBanks); });
     } catch {
       setPayError("Network error");
@@ -247,7 +327,23 @@ export default function FinancePage() {
       </div>
 
       <div className="mx-auto min-w-0 max-w-3xl">
-        <div className="overflow-hidden rounded-xl border border-gray-200/90 bg-white dark:border-gray-800 dark:bg-gray-950">
+        {hasDraft && !paySuccess && (
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950 dark:border-amber-900/40 dark:bg-amber-950/25 dark:text-amber-100">
+            <span className="flex items-center gap-2">
+              <FileText className="h-4 w-4 shrink-0 opacity-80" />
+              Draft restored — your previous entries were saved locally.
+            </span>
+            <button
+              type="button"
+              onClick={discardDraft}
+              className="text-xs font-medium underline underline-offset-2"
+            >
+              Discard draft
+            </button>
+          </div>
+        )}
+
+        <div className="overflow-hidden rounded-xl border border-gray-200/90 bg-white shadow-sm dark:border-gray-800 dark:bg-gray-950">
           <form onSubmit={handleRecordPayment} className="divide-y divide-gray-100 dark:divide-gray-800">
             <div className="p-5 sm:p-6">
               {payError && (
@@ -255,13 +351,13 @@ export default function FinancePage() {
                   role="alert"
                   className="mb-6 flex gap-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2.5 text-sm text-red-800 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-200"
                 >
-                  <AlertIcon className="mt-0.5 h-4 w-4 shrink-0 opacity-80" />
+                  <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 opacity-80" />
                   <span>{payError}</span>
                 </div>
               )}
               {paySuccess && (
                 <div className="mb-6 flex gap-3 rounded-lg border border-emerald-200 bg-emerald-50/90 px-3 py-2.5 text-sm text-emerald-950 dark:border-emerald-900/40 dark:bg-emerald-950/30 dark:text-emerald-100">
-                  <CheckCircleIcon className="mt-0.5 h-4 w-4 shrink-0 opacity-80" />
+                  <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 opacity-80" />
                   <div>
                     <p className="font-medium">Saved — student and bank balances are updated.</p>
                     <Link
@@ -274,20 +370,27 @@ export default function FinancePage() {
                 </div>
               )}
 
-              <h2 className="text-sm font-semibold text-gray-900 dark:text-white">Student</h2>
+              <h2 className="flex items-center gap-2 text-sm font-semibold text-gray-900 dark:text-white">
+                <User className="h-4 w-4 text-gray-500" strokeWidth={2} />
+                Student
+              </h2>
               <p className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">Search by name, ID, or phone (2+ characters).</p>
               <div className="relative mt-3">
                 <label className="sr-only">Find student</label>
                 <div className="relative">
+                  <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
                   <input
                     type="text"
                     value={searchQuery}
                     onChange={(e) => {
                       setSearchQuery(e.target.value);
-                      if (!e.target.value) setSelectedStudent(null);
+                      if (!e.target.value) {
+                        setSelectedStudent(null);
+                        setDraftField("selectedStudentId", "");
+                      }
                     }}
                     placeholder="Name, STD-…, or phone"
-                    className={`${inputClass} pr-11`}
+                    className={`${inputClass} pl-10 pr-11`}
                     autoComplete="off"
                   />
                   {searchLoading && (
@@ -337,7 +440,7 @@ export default function FinancePage() {
                       </p>
                     </div>
                   </div>
-                  <Button type="button" variant="outline" size="sm" onClick={handleClearStudent}>
+                  <Button type="button" variant="outline" size="sm" onClick={handleClearStudent} startIcon={<X className="h-3.5 w-3.5" />}>
                     Clear
                   </Button>
                 </div>
@@ -345,7 +448,10 @@ export default function FinancePage() {
             </div>
 
             <div className="p-5 sm:p-6">
-              <h2 className="text-sm font-semibold text-gray-900 dark:text-white">Term &amp; deposit</h2>
+              <h2 className="flex items-center gap-2 text-sm font-semibold text-gray-900 dark:text-white">
+                <Wallet className="h-4 w-4 text-gray-500" strokeWidth={2} />
+                Term &amp; deposit
+              </h2>
               <div className="mt-4 space-y-4">
                 <div>
                   <label className="mb-1.5 block text-sm text-gray-700 dark:text-gray-300">
@@ -402,7 +508,10 @@ export default function FinancePage() {
 
             <div className="p-5 sm:p-6">
               <div className="flex flex-col gap-1 sm:flex-row sm:items-baseline sm:justify-between">
-                <h2 className="text-sm font-semibold text-gray-900 dark:text-white">Amount</h2>
+                <h2 className="flex items-center gap-2 text-sm font-semibold text-gray-900 dark:text-white">
+                  <Banknote className="h-4 w-4 text-gray-500" strokeWidth={2} />
+                  Amount
+                </h2>
                 <p className="text-2xl font-semibold tabular-nums text-gray-900 dark:text-white">
                   ${Number(computedAmount || 0).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 })}
                 </p>
@@ -410,7 +519,7 @@ export default function FinancePage() {
 
               {selectedStudent && expectedFull === 0 && (
                 <div className="mt-3 flex gap-2 rounded-lg border border-amber-200/90 bg-amber-50 px-3 py-2 text-xs text-amber-950 dark:border-amber-900/40 dark:bg-amber-950/25 dark:text-amber-100">
-                  <InfoIcon className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                  <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" />
                   <span>Scheduled fee is $0 (e.g. scholarship). Double-check the amount before saving.</span>
                 </div>
               )}
@@ -454,7 +563,10 @@ export default function FinancePage() {
               </div>
 
               <div className="mt-8">
-                <h2 className="text-sm font-semibold text-gray-900 dark:text-white">How it was paid</h2>
+                <h2 className="flex items-center gap-2 text-sm font-semibold text-gray-900 dark:text-white">
+                  <CreditCard className="h-4 w-4 text-gray-500" strokeWidth={2} />
+                  How it was paid
+                </h2>
                 <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:flex-wrap">
                   {[
                     { value: "bank_receipt" as const, label: "Bank receipt" },
@@ -516,7 +628,10 @@ export default function FinancePage() {
             </div>
 
             <div className="p-5 sm:p-6">
-              <label className="block text-sm font-medium text-gray-900 dark:text-white">Staff note</label>
+              <label className="flex items-center gap-2 text-sm font-medium text-gray-900 dark:text-white">
+                <FileText className="h-4 w-4 text-gray-500" strokeWidth={2} />
+                Staff note
+              </label>
               <p className="text-xs text-gray-500 dark:text-gray-500">Optional. Not shown to students.</p>
               <input
                 type="text"
