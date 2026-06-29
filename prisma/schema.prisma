@@ -343,7 +343,7 @@ model TuitionPayment {
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
-  @@unique([studentId, semester, year])
+  @@index([studentId, semester, year])
   @@map("tuition_payments")
 }
 

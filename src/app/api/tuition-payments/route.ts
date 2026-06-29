@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getAuthUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { isValidSemester } from "@/lib/semesters";
-import { perSemesterTuition } from "@/lib/tuition-amount";
+import { perSemesterTuition, validateSemesterPayment } from "@/lib/tuition-amount";
 
 export async function GET(req: NextRequest) {
   try {
@@ -131,36 +131,29 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Student not found" }, { status: 404 });
     }
 
+    const expectedFee = perSemesterTuition(
+      student.department.tuitionFee ?? 0,
+      student.paymentStatus,
+      student.customSemesterFee
+    );
+
     const amt =
       amount != null
         ? Number(amount)
-        : perSemesterTuition(
-            student.department.tuitionFee ?? 0,
-            student.paymentStatus,
-            student.customSemesterFee
-          );
-    if (amt <= 0) {
-      return NextResponse.json(
-        { error: "Amount must be greater than 0" },
-        { status: 400 }
-      );
-    }
+        : expectedFee;
 
-    const existing = await prisma.tuitionPayment.findUnique({
+    const existingPayments = await prisma.tuitionPayment.findMany({
       where: {
-        studentId_semester_year: {
-          studentId: student.id,
-          semester: String(semester),
-          year: Number(year),
-        },
+        studentId: student.id,
+        semester: String(semester),
+        year: Number(year),
       },
+      select: { amount: true },
     });
 
-    if (existing) {
-      return NextResponse.json(
-        { error: `Student has already paid for ${semester} ${year}` },
-        { status: 400 }
-      );
+    const paymentCheck = validateSemesterPayment(existingPayments, amt, expectedFee);
+    if (!paymentCheck.ok) {
+      return NextResponse.json({ error: paymentCheck.error }, { status: 400 });
     }
 
     const method = String(paymentMethod || "bank_receipt");
@@ -244,17 +237,6 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json(payment);
   } catch (e: unknown) {
-    if (
-      typeof e === "object" &&
-      e !== null &&
-      "code" in e &&
-      (e as { code: string }).code === "P2002"
-    ) {
-      return NextResponse.json(
-        { error: "Payment already exists for this student/semester/year" },
-        { status: 400 }
-      );
-    }
     console.error("Create tuition payment error:", e);
     return NextResponse.json({ error: "Something went wrong" }, { status: 500 });
   }

@@ -6,7 +6,7 @@ import PageBreadCrumb from "@/components/common/PageBreadCrumb";
 import Button from "@/components/ui/button/Button";
 import { DateInput } from "@/components/form/DateInput";
 import { authFetch } from "@/lib/api";
-import { perSemesterTuition } from "@/lib/tuition-amount";
+import { perSemesterTuition, semesterAmountPaid } from "@/lib/tuition-amount";
 import { useAuth } from "@/context/AuthContext";
 import { useFormDraft } from "@/hooks/useFormDraft";
 import {
@@ -189,16 +189,41 @@ export default function FinancePage() {
         selectedStudent.customSemesterFee
       )
     : 0;
-  const computedAmount = payAmountType === "half" ? expectedFull * 0.5
-    : payAmountType === "full" ? expectedFull
-    : payAmount ? Number(payAmount) : expectedFull;
+  const semesterPayments =
+    selectedStudent?.tuitionPayments.filter(
+      (p) => p.semester === paySemester && p.year === Number(payYear)
+    ) ?? [];
+  const semesterPaid = semesterAmountPaid(semesterPayments);
+  const remainingForSemester = Math.max(0, expectedFull - semesterPaid);
+  const computedAmount =
+    payAmountType === "half"
+      ? remainingForSemester > 0
+        ? remainingForSemester * 0.5
+        : expectedFull * 0.5
+      : payAmountType === "full"
+        ? remainingForSemester > 0
+          ? remainingForSemester
+          : expectedFull
+        : payAmount
+          ? Number(payAmount)
+          : remainingForSemester > 0
+            ? remainingForSemester
+            : expectedFull;
+
+  useEffect(() => {
+    setPayError("");
+  }, [selectedStudent, paySemester, payYear]);
 
   useEffect(() => {
     if (selectedStudent) {
-      if (payAmountType === "full") setPayAmount(String(expectedFull));
-      else if (payAmountType === "half") setPayAmount(String(expectedFull * 0.5));
+      if (payAmountType === "full") {
+        setPayAmount(String(remainingForSemester > 0 ? remainingForSemester : expectedFull));
+      } else if (payAmountType === "half") {
+        const halfBase = remainingForSemester > 0 ? remainingForSemester : expectedFull;
+        setPayAmount(String(halfBase * 0.5));
+      }
     }
-  }, [selectedStudent, payAmountType, expectedFull]);
+  }, [selectedStudent, payAmountType, expectedFull, remainingForSemester]);
 
   const handleSelectStudent = (s: SearchStudent) => {
     setSelectedStudent(s);
@@ -517,6 +542,16 @@ export default function FinancePage() {
                 </p>
               </div>
 
+              {selectedStudent && semesterPaid > 0 && remainingForSemester > 0 && (
+                <div className="mt-3 flex gap-2 rounded-lg border border-blue-200/90 bg-blue-50 px-3 py-2 text-xs text-blue-950 dark:border-blue-900/40 dark:bg-blue-950/25 dark:text-blue-100">
+                  <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                  <span>
+                    ${semesterPaid.toLocaleString()} already paid for {paySemester} {payYear}. Remaining: $
+                    {remainingForSemester.toLocaleString()}.
+                  </span>
+                </div>
+              )}
+
               {selectedStudent && expectedFull === 0 && (
                 <div className="mt-3 flex gap-2 rounded-lg border border-amber-200/90 bg-amber-50 px-3 py-2 text-xs text-amber-950 dark:border-amber-900/40 dark:bg-amber-950/25 dark:text-amber-100">
                   <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" />
@@ -526,8 +561,16 @@ export default function FinancePage() {
 
               <div className="mt-4 flex flex-wrap items-center gap-2">
                 {[
-                  { value: "full" as const, label: "Full", hint: `$${expectedFull.toLocaleString()}` },
-                  { value: "half" as const, label: "Half", hint: `$${(expectedFull * 0.5).toLocaleString()}` },
+                  {
+                    value: "full" as const,
+                    label: remainingForSemester > 0 && semesterPaid > 0 ? "Remaining" : "Full",
+                    hint: `$${(remainingForSemester > 0 ? remainingForSemester : expectedFull).toLocaleString()}`,
+                  },
+                  {
+                    value: "half" as const,
+                    label: "Half",
+                    hint: `$${((remainingForSemester > 0 ? remainingForSemester : expectedFull) * 0.5).toLocaleString()}`,
+                  },
                   { value: "custom" as const, label: "Other", hint: null },
                 ].map((opt) => (
                   <label
