@@ -16,14 +16,14 @@ export function perSemesterTuition(
   return base;
 }
 
-export const MAX_PAYMENTS_PER_SEMESTER = 2;
+export const MAX_PAYMENTS_PER_SEMESTER = 5;
 
 /** Sum of amounts already recorded for one student/term. */
 export function semesterAmountPaid(payments: { amount: number }[]): number {
   return payments.reduce((sum, p) => sum + p.amount, 0);
 }
 
-/** Whether another deposit can be posted for this term (up to 2 payments, not over expected fee). */
+/** Whether another deposit can be posted for this term (up to 5 payments, not over expected fee). */
 export function validateSemesterPayment(
   existingPayments: { amount: number }[],
   newAmount: number,
