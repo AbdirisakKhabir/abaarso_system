@@ -199,6 +199,10 @@ export default function ExpensesPage() {
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
     setFormError("");
+    if (!formBankId) {
+      setFormError("Please select a bank account");
+      return;
+    }
     setFormSubmitting(true);
     try {
       const res = await authFetch("/api/expenses", {
@@ -217,6 +221,9 @@ export default function ExpensesPage() {
         return;
       }
       await fetchExpenses();
+      authFetch("/api/banks").then((r) => {
+        if (r.ok) r.json().then((d: Bank[]) => setBanks(d));
+      });
       setModal(null);
       clearDraft();
     } catch {
@@ -229,8 +236,12 @@ export default function ExpensesPage() {
   const handleApprove = async (id: number) => {
     try {
       const res = await authFetch(`/api/expenses/${id}/approve`, { method: "PATCH" });
-      if (res.ok) await fetchExpenses();
-      else {
+      if (res.ok) {
+        await fetchExpenses();
+        authFetch("/api/banks").then((r) => {
+          if (r.ok) r.json().then((d: Bank[]) => setBanks(d));
+        });
+      } else {
         const data = await res.json();
         alert(data.error || "Failed to approve");
       }
@@ -469,17 +480,23 @@ export default function ExpensesPage() {
                 </select>
               </div>
               <div>
-                <label className="mb-1 block text-sm font-medium">Bank (optional)</label>
+                <label className="mb-1 block text-sm font-medium">Bank account</label>
                 <select
                   value={formBankId}
                   onChange={(e) => setFormBankId(e.target.value)}
+                  required
                   className="w-full rounded-lg border border-gray-200 px-3 py-2 dark:border-gray-700 dark:bg-gray-900 dark:text-white"
                 >
-                  <option value="">— Select —</option>
+                  <option value="">— Select bank —</option>
                   {banks.map((b) => (
-                    <option key={b.id} value={b.id}>{b.code} - {b.name}</option>
+                    <option key={b.id} value={b.id}>
+                      {b.code} - {b.name} (${b.balance.toLocaleString()})
+                    </option>
                   ))}
                 </select>
+                <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                  The selected account balance is reduced when this expense is approved.
+                </p>
               </div>
               <div className="flex flex-wrap gap-2 pt-2">
                 <Button type="submit" disabled={formSubmitting}>

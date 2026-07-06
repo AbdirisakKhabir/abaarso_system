@@ -84,16 +84,29 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    if (!bankId) {
+      return NextResponse.json(
+        { error: "Bank account is required" },
+        { status: 400 }
+      );
+    }
+
+    const bank = await prisma.bank.findUnique({ where: { id: Number(bankId) } });
+    if (!bank || !bank.isActive) {
+      return NextResponse.json({ error: "Invalid or inactive bank account" }, { status: 400 });
+    }
+
     const data: {
       amount: number;
       description: string;
       category?: string;
       categoryId?: number;
-      bankId?: number;
+      bankId: number;
       requestedById: number;
     } = {
       amount: Number(amount),
       description: String(description).trim(),
+      bankId: bank.id,
       requestedById: auth.userId,
     };
 
@@ -107,10 +120,6 @@ export async function POST(req: NextRequest) {
       }
     } else if (category?.trim()) {
       data.category = String(category).trim();
-    }
-    if (bankId) {
-      const bank = await prisma.bank.findUnique({ where: { id: Number(bankId) } });
-      if (bank?.isActive) data.bankId = bank.id;
     }
 
     const expense = await prisma.expense.create({

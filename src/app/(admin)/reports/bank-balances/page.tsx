@@ -15,7 +15,11 @@ import {
 import { usePagination } from "@/hooks/usePagination";
 import { authFetch } from "@/lib/api";
 import { DownloadIcon } from "@/icons";
-import { FinanceReportBar } from "@/components/reports/FinanceReportChart";
+import {
+  FinanceReportBar,
+  FinanceReportDonut,
+  FinanceReportChartGrid,
+} from "@/components/reports/FinanceReportChart";
 
 type Bank = { id: number; name: string; code: string; balance: number; accountNumber?: string | null };
 
@@ -110,13 +114,20 @@ export default function BankBalancesReportPage() {
               </p>
             </div>
             {bankChart.categories.length > 0 && (
-              <div className="no-print border-b border-gray-200 px-6 py-6 dark:border-gray-800">
-                <FinanceReportBar
-                  title="Balance by bank code"
-                  categories={bankChart.categories}
-                  data={bankChart.values}
-                  color="#0f766e"
-                />
+              <div className="border-b border-gray-200 px-6 py-6 dark:border-gray-800">
+                <FinanceReportChartGrid>
+                  <FinanceReportDonut
+                    title="Balance share by bank"
+                    labels={bankChart.categories}
+                    series={bankChart.values}
+                  />
+                  <FinanceReportBar
+                    title="Balance by bank code"
+                    categories={bankChart.categories}
+                    data={bankChart.values}
+                    color="#0f766e"
+                  />
+                </FinanceReportChartGrid>
               </div>
             )}
             <div className="overflow-x-auto">

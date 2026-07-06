@@ -58,23 +58,70 @@ export async function PATCH(
       );
     }
 
-    const updated = await prisma.expense.update({
-      where: { id: parsedId },
-      data: {
-        status: "approved",
-        approvedById: auth.userId,
-        approvedAt: new Date(),
-        rejectionReason: null,
-      },
-      include: {
-        requestedBy: { select: { id: true, name: true, email: true } },
-        approvedBy: { select: { id: true, name: true, email: true } },
-        bank: { select: { id: true, name: true, code: true } },
-      },
+    if (!expense.bankId || !expense.bank) {
+      return NextResponse.json(
+        { error: "No bank account selected for this expense" },
+        { status: 400 }
+      );
+    }
+
+    if (!expense.bank.isActive) {
+      return NextResponse.json(
+        { error: "The selected bank account is inactive" },
+        { status: 400 }
+      );
+    }
+
+    const updated = await prisma.$transaction(async (tx) => {
+      const bank = await tx.bank.findUnique({ where: { id: expense.bankId! } });
+      if (!bank) {
+        throw new Error("Bank not found");
+      }
+      if (bank.balance < expense.amount) {
+        throw new Error("Insufficient balance in selected bank account");
+      }
+
+      await tx.bank.update({
+        where: { id: bank.id },
+        data: { balance: { decrement: expense.amount } },
+      });
+
+      const categoryLabel = expense.category ? ` (${expense.category})` : "";
+      await tx.transactionHistory.create({
+        data: {
+          type: "withdrawal",
+          amount: expense.amount,
+          bankId: bank.id,
+          description: `Expense${categoryLabel}: ${expense.description}`,
+          createdById: auth.userId,
+        },
+      });
+
+      return tx.expense.update({
+        where: { id: parsedId },
+        data: {
+          status: "approved",
+          approvedById: auth.userId,
+          approvedAt: new Date(),
+          rejectionReason: null,
+        },
+        include: {
+          requestedBy: { select: { id: true, name: true, email: true } },
+          approvedBy: { select: { id: true, name: true, email: true } },
+          bank: { select: { id: true, name: true, code: true, balance: true } },
+        },
+      });
     });
 
     return NextResponse.json(updated);
-  } catch (e) {
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : "Something went wrong";
+    if (msg === "Bank not found") {
+      return NextResponse.json({ error: msg }, { status: 404 });
+    }
+    if (msg === "Insufficient balance in selected bank account") {
+      return NextResponse.json({ error: msg }, { status: 400 });
+    }
     console.error("Approve expense error:", e);
     return NextResponse.json({ error: "Something went wrong" }, { status: 500 });
   }

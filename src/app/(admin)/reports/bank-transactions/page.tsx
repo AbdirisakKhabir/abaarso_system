@@ -18,6 +18,7 @@ import { DateInput } from "@/components/form/DateInput";
 import {
   FinanceReportBar,
   FinanceReportDonut,
+  FinanceReportChartGrid,
 } from "@/components/reports/FinanceReportChart";
 
 type Bank = { id: number; name: string; code: string };
@@ -193,7 +194,8 @@ export default function BankTransactionsReportPage() {
               </TableBody>
             </Table>
           </div>
-          <div className="no-print grid gap-6 px-4 py-6 lg:grid-cols-2">
+          <div className="px-4 py-6">
+          <FinanceReportChartGrid>
             <FinanceReportDonut
               title="Deposits vs withdrawals"
               labels={["Deposits", "Withdrawals"]}
@@ -205,6 +207,7 @@ export default function BankTransactionsReportPage() {
               data={[depositTotal, withdrawalTotal]}
               color="#1e40af"
             />
+          </FinanceReportChartGrid>
           </div>
         </div>
       )}

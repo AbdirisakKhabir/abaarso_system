@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import PageBreadCrumb from "@/components/common/PageBreadCrumb";
 import Button from "@/components/ui/button/Button";
@@ -17,6 +17,12 @@ import { DateInput } from "@/components/form/DateInput";
 import { authFetch } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import { BoltIcon, DownloadIcon } from "@/icons";
+import {
+  FinanceReportBar,
+  FinanceReportDonut,
+  FinanceReportChartGrid,
+  formatCount,
+} from "@/components/reports/FinanceReportChart";
 
 type ActivityRow = {
   id: number;
@@ -133,10 +139,33 @@ export default function ActivityLogReportPage() {
     );
   }
 
-  const actionCounts = rows.reduce<Record<string, number>>((acc, r) => {
-    acc[r.action] = (acc[r.action] ?? 0) + 1;
-    return acc;
-  }, {});
+  const actionCounts = useMemo(
+    () =>
+      rows.reduce<Record<string, number>>((acc, r) => {
+        acc[r.action] = (acc[r.action] ?? 0) + 1;
+        return acc;
+      }, {}),
+    [rows]
+  );
+
+  const moduleChart = useMemo(() => {
+    if (!rows.length) return { labels: [] as string[], series: [] as number[] };
+    const m = new Map<string, number>();
+    for (const r of rows) {
+      const k = r.module || "Other";
+      m.set(k, (m.get(k) ?? 0) + 1);
+    }
+    const entries = [...m.entries()].sort((a, b) => b[1] - a[1]).slice(0, 8);
+    return { labels: entries.map(([k]) => k), series: entries.map(([, v]) => v) };
+  }, [rows]);
+
+  const actionChart = useMemo(() => {
+    const entries = Object.entries(actionCounts).sort((a, b) => b[1] - a[1]).slice(0, 8);
+    return {
+      categories: entries.map(([k]) => k),
+      values: entries.map(([, v]) => v),
+    };
+  }, [actionCounts]);
 
   return (
     <div className="report-print-area">
@@ -215,26 +244,45 @@ export default function ActivityLogReportPage() {
       </div>
 
       {!loading && rows.length > 0 && (
-        <div className="no-print mb-6 flex flex-wrap gap-3 rounded-xl border border-gray-200 bg-white p-4 dark:border-gray-800 dark:bg-white/5">
-          <div className="rounded-lg bg-gray-50 px-4 py-2 dark:bg-gray-800/50">
-            <span className="text-sm text-gray-600 dark:text-gray-400">Total events: </span>
-            <span className="font-bold text-gray-800 dark:text-white/90">{rows.length}</span>
+        <>
+          <div className="no-print mb-6 flex flex-wrap gap-3 rounded-xl border border-gray-200 bg-white p-4 dark:border-gray-800 dark:bg-white/5">
+            <div className="rounded-lg bg-gray-50 px-4 py-2 dark:bg-gray-800/50">
+              <span className="text-sm text-gray-600 dark:text-gray-400">Total events: </span>
+              <span className="font-bold text-gray-800 dark:text-white/90">{rows.length}</span>
+            </div>
+            {Object.entries(actionCounts)
+              .sort((a, b) => b[1] - a[1])
+              .slice(0, 6)
+              .map(([action, n]) => (
+                <div
+                  key={action}
+                  className="rounded-lg bg-brand-50 px-3 py-2 dark:bg-brand-500/10"
+                >
+                  <code className="text-xs text-brand-700 dark:text-brand-300">{action}</code>
+                  <span className="ml-2 text-sm font-semibold text-gray-800 dark:text-white/90">
+                    {n}
+                  </span>
+                </div>
+              ))}
           </div>
-          {Object.entries(actionCounts)
-            .sort((a, b) => b[1] - a[1])
-            .slice(0, 6)
-            .map(([action, n]) => (
-              <div
-                key={action}
-                className="rounded-lg bg-brand-50 px-3 py-2 dark:bg-brand-500/10"
-              >
-                <code className="text-xs text-brand-700 dark:text-brand-300">{action}</code>
-                <span className="ml-2 text-sm font-semibold text-gray-800 dark:text-white/90">
-                  {n}
-                </span>
-              </div>
-            ))}
-        </div>
+          {actionChart.categories.length > 0 && (
+            <FinanceReportChartGrid>
+              <FinanceReportDonut
+                title="Events by module"
+                labels={moduleChart.labels}
+                series={moduleChart.series}
+                valueFormatter={formatCount}
+              />
+              <FinanceReportBar
+                title="Events by action"
+                categories={actionChart.categories}
+                data={actionChart.values}
+                color="#1e40af"
+                valueFormatter={formatCount}
+              />
+            </FinanceReportChartGrid>
+          )}
+        </>
       )}
 
       <div className="min-w-0 overflow-hidden rounded-2xl border border-gray-200 bg-white dark:border-gray-800 dark:bg-white/5">

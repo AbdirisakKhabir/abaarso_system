@@ -20,6 +20,7 @@ import { DownloadIcon } from "@/icons";
 import {
   FinanceReportBar,
   FinanceReportDonut,
+  FinanceReportChartGrid,
 } from "@/components/reports/FinanceReportChart";
 
 type Bank = { id: number; name: string; code: string };
@@ -246,7 +247,8 @@ export default function TransactionHistoryReportPage() {
             </Table>
           </div>
           {txSummary.typeCategories.length > 0 && (
-            <div className="no-print grid gap-6 px-4 py-6 lg:grid-cols-2">
+            <div className="px-4 py-6">
+            <FinanceReportChartGrid>
               <FinanceReportDonut
                 title="Amount by type"
                 labels={txSummary.typeCategories}
@@ -258,6 +260,7 @@ export default function TransactionHistoryReportPage() {
                 data={txSummary.typeValues}
                 color="#1e40af"
               />
+            </FinanceReportChartGrid>
             </div>
           )}
         </div>

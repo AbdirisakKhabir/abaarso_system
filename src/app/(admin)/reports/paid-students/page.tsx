@@ -15,7 +15,12 @@ import {
 import { usePagination } from "@/hooks/usePagination";
 import { authFetch } from "@/lib/api";
 import { DownloadIcon } from "@/icons";
-import { FinanceReportBar } from "@/components/reports/FinanceReportChart";
+import {
+  FinanceReportBar,
+  FinanceReportDonut,
+  FinanceReportChartGrid,
+  formatCount,
+} from "@/components/reports/FinanceReportChart";
 
 type SemesterOption = { id: number; name: string; sortOrder: number; isActive: boolean };
 type ClassOption = {
@@ -34,6 +39,7 @@ type PaidStudentRow = {
   email: string | null;
   phone: string | null;
   department: { name: string; code: string; tuitionFee: number | null };
+  className?: string | null;
   paymentStatus?: string;
   amountPaid?: number;
   amountExpected?: number;
@@ -50,13 +56,16 @@ export default function PaidStudentsReportPage() {
   const [paidYear, setPaidYear] = useState(String(CURRENT_YEAR));
   const [filterDeptId, setFilterDeptId] = useState<string>("all");
   const [paidClassId, setPaidClassId] = useState("");
+  const [paymentStatusFilter, setPaymentStatusFilter] = useState<string>("Fully Paid");
   const [paidStudents, setPaidStudents] = useState<PaidStudentRow[]>([]);
+  const [reportScope, setReportScope] = useState<"class" | "department">("class");
   const [paidClassInfo, setPaidClassInfo] = useState<{
     name: string;
     semester: string;
     year: number;
     department: { code: string; name: string };
   } | null>(null);
+  const [paidDeptInfo, setPaidDeptInfo] = useState<{ code: string; name: string } | null>(null);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
@@ -85,16 +94,22 @@ export default function PaidStudentsReportPage() {
     });
   }, [classes, paidSemester, paidYear, filterDeptId]);
 
+  const canGenerate =
+    paidSemester &&
+    paidYear &&
+    (paidClassId === "all" ? filterDeptId !== "all" : Boolean(paidClassId));
+
   useEffect(() => {
-    if (paidClassId && !filteredClasses.some((c) => c.id === Number(paidClassId))) {
+    if (paidClassId && paidClassId !== "all" && !filteredClasses.some((c) => c.id === Number(paidClassId))) {
       setPaidClassId("");
     }
   }, [filteredClasses, paidClassId]);
 
   const handleGenerate = async () => {
-    if (!paidSemester || !paidYear || !paidClassId) return;
+    if (!canGenerate) return;
     setLoading(true);
     setPaidClassInfo(null);
+    setPaidDeptInfo(null);
     setPaidStudents([]);
     try {
       const params = new URLSearchParams({
@@ -102,13 +117,22 @@ export default function PaidStudentsReportPage() {
         year: paidYear,
         classId: paidClassId,
       });
+      if (filterDeptId !== "all") params.set("departmentId", filterDeptId);
+      params.set("paymentStatusFilter", paymentStatusFilter);
       const res = await authFetch(`/api/finance/paid-students?${params}`);
       const data = await res.json();
       if (!res.ok) {
         alert(data.error || "Failed to load paid students");
         return;
       }
-      setPaidClassInfo(data.class);
+      setReportScope(data.scope === "department" ? "department" : "class");
+      if (data.scope === "department") {
+        setPaidDeptInfo(data.department);
+        setPaidClassInfo(null);
+      } else {
+        setPaidClassInfo(data.class);
+        setPaidDeptInfo(null);
+      }
       setPaidStudents(data.paidStudents || []);
     } catch {
       alert("Network error");
@@ -131,6 +155,8 @@ export default function PaidStudentsReportPage() {
     to,
   } = usePagination(paidStudents, [paidSemester, paidYear, paidClassId, filterDeptId, paidStudents]);
 
+  const showClassColumn = reportScope === "department";
+
   const paidByDept = useMemo(() => {
     if (!paidStudents.length) return { categories: [] as string[], values: [] as number[] };
     const m = new Map<string, number>();
@@ -140,6 +166,17 @@ export default function PaidStudentsReportPage() {
     }
     const entries = [...m.entries()].sort((a, b) => b[1] - a[1]);
     return { categories: entries.map(([k]) => k), values: entries.map(([, v]) => v) };
+  }, [paidStudents]);
+
+  const paidByStatus = useMemo(() => {
+    if (!paidStudents.length) return { labels: [] as string[], series: [] as number[] };
+    const m = new Map<string, number>();
+    for (const s of paidStudents) {
+      const k = s.paymentStatus || "Fully Paid";
+      m.set(k, (m.get(k) ?? 0) + 1);
+    }
+    const entries = [...m.entries()].sort((a, b) => b[1] - a[1]);
+    return { labels: entries.map(([k]) => k), series: entries.map(([, v]) => v) };
   }, [paidStudents]);
 
   const totalCollected = paidStudents.reduce((s, t) => s + (t.amountPaid ?? 0), 0);
@@ -198,7 +235,7 @@ export default function PaidStudentsReportPage() {
     <div>
       <div className="mb-6 flex flex-wrap items-center justify-between gap-4 no-print">
         <PageBreadCrumb pageTitle="Paid Students Report" />
-        {paidClassInfo && paidStudents.length > 0 && (
+        {(paidClassInfo || paidDeptInfo) && paidStudents.length > 0 && (
           <div className="flex gap-2">
             <Button variant="outline" size="sm" startIcon={<DownloadIcon />} onClick={handleExportCSV}>
               Export CSV
@@ -215,8 +252,8 @@ export default function PaidStudentsReportPage() {
           Paid Students by Semester &amp; Class
         </h3>
         <p className="mb-6 text-sm text-gray-500 dark:text-gray-400">
-          Select semester, year, and class to list students who have met tuition for that term
-          (including full scholarship). Optionally narrow classes by department.
+          Select semester, year, department, and class. Filter by fully paid or half scholarship
+          students. Scholarship students are on a separate report.
         </p>
         <div className="no-print mb-6 flex flex-wrap items-end gap-4">
           <div>
@@ -274,6 +311,20 @@ export default function PaidStudentsReportPage() {
             </select>
           </div>
           <div>
+            <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">
+              Student type
+            </label>
+            <select
+              value={paymentStatusFilter}
+              onChange={(e) => setPaymentStatusFilter(e.target.value)}
+              className="h-10 w-full min-w-0 sm:w-auto sm:min-w-[180px] rounded-lg border border-gray-200 bg-transparent px-3 text-sm text-gray-800 outline-none focus:border-brand-300 dark:border-gray-700 dark:text-white dark:focus:border-brand-500/40"
+            >
+              <option value="Fully Paid">Fully paid students</option>
+              <option value="Half Scholar">Half scholarship students</option>
+              <option value="all">Fully paid + half scholarship</option>
+            </select>
+          </div>
+          <div>
             <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">Class</label>
             <select
               value={paidClassId}
@@ -281,6 +332,9 @@ export default function PaidStudentsReportPage() {
               className="h-10 w-full min-w-0 sm:w-auto sm:min-w-[220px] rounded-lg border border-gray-200 bg-transparent px-3 text-sm text-gray-800 outline-none focus:border-brand-300 dark:border-gray-700 dark:text-white dark:focus:border-brand-500/40"
             >
               <option value="">Select class</option>
+              {filterDeptId !== "all" && (
+                <option value="all">All classes in department</option>
+              )}
               {filteredClasses.map((c) => (
                 <option key={c.id} value={c.id}>
                   {c.department.code} - {c.name} ({c.semester} {c.year})
@@ -288,18 +342,19 @@ export default function PaidStudentsReportPage() {
               ))}
             </select>
           </div>
-          <Button size="sm" onClick={handleGenerate} disabled={!paidClassId || loading || semesters.length === 0}>
+          <Button size="sm" onClick={handleGenerate} disabled={!canGenerate || loading || semesters.length === 0}>
             {loading ? "Loading..." : "Generate List"}
           </Button>
         </div>
 
-        {paidClassInfo && (
+        {(paidClassInfo || paidDeptInfo) && (
           <>
             <div className="mb-4 hidden print:mb-2 print:block">
               <h1 className="text-xl font-bold text-gray-900">Paid Students Report</h1>
               <p className="text-sm text-gray-600">
-                {paidClassInfo.department.code} - {paidClassInfo.name} ({paidClassInfo.semester}{" "}
-                {paidClassInfo.year})
+                {paidClassInfo
+                  ? `${paidClassInfo.department.code} - ${paidClassInfo.name} (${paidClassInfo.semester} ${paidClassInfo.year})`
+                  : `${paidDeptInfo?.code} - ${paidDeptInfo?.name} · All classes (${paidSemester} ${paidYear})`}
               </p>
               <p className="text-sm text-gray-600">Generated: {new Date().toLocaleDateString()}</p>
             </div>
@@ -307,8 +362,9 @@ export default function PaidStudentsReportPage() {
             {paidStudents.length === 0 ? (
               <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-8 text-center dark:border-gray-700 dark:bg-white/5">
                 <p className="text-sm font-medium text-gray-600 dark:text-gray-400">
-                  No students in this class are recorded as paid up for {paidClassInfo.semester}{" "}
-                  {paidClassInfo.year} (or the class has no admitted students).
+                  {paidClassInfo
+                    ? `No students in this class are recorded as paid up for ${paidClassInfo.semester} ${paidClassInfo.year} (or the class has no admitted students).`
+                    : `No students in this department are recorded as paid up for ${paidSemester} ${paidYear}.`}
                 </p>
               </div>
             ) : (
@@ -320,14 +376,22 @@ export default function PaidStudentsReportPage() {
                   </span>
                 </p>
                 {paidByDept.categories.length > 0 && (
-                  <div className="no-print mb-6">
+                  <FinanceReportChartGrid>
+                    {paidByStatus.labels.length > 0 && (
+                      <FinanceReportDonut
+                        title="Students by payment type"
+                        labels={paidByStatus.labels}
+                        series={paidByStatus.series}
+                        valueFormatter={formatCount}
+                      />
+                    )}
                     <FinanceReportBar
                       title="Amount collected by department"
                       categories={paidByDept.categories}
                       data={paidByDept.values}
                       color="#15803d"
                     />
-                  </div>
+                  </FinanceReportChartGrid>
                 )}
                 <div className="overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-700">
                   <Table>
@@ -337,6 +401,7 @@ export default function PaidStudentsReportPage() {
                         <TableCell isHeader>Name</TableCell>
                         <TableCell isHeader>Email</TableCell>
                         <TableCell isHeader>Phone</TableCell>
+                        {showClassColumn && <TableCell isHeader>Class</TableCell>}
                         <TableCell isHeader>Department</TableCell>
                         <TableCell isHeader>Payment</TableCell>
                         <TableCell isHeader className="text-right">Expected</TableCell>
@@ -364,6 +429,7 @@ export default function PaidStudentsReportPage() {
                           </TableCell>
                           <TableCell>{s.email || "—"}</TableCell>
                           <TableCell>{s.phone || "—"}</TableCell>
+                          {showClassColumn && <TableCell>{s.className || "—"}</TableCell>}
                           <TableCell>
                             {s.department.code} - {s.department.name}
                           </TableCell>
@@ -377,7 +443,7 @@ export default function PaidStudentsReportPage() {
                         </TableRow>
                       ))}
                       <TableRow className="bg-gray-50 font-semibold dark:bg-gray-800/50">
-                        <TableCell colSpan={7} className="text-right">
+                        <TableCell colSpan={showClassColumn ? 8 : 7} className="text-right">
                           Total collected
                         </TableCell>
                         <TableCell className="text-right font-bold text-green-600 dark:text-green-400">

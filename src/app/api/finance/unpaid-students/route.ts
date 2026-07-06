@@ -1,7 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAuthUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { perSemesterTuition } from "@/lib/tuition-amount";
+import { financeReportMeta, resolveFinanceReportScope } from "@/lib/finance-report-scope";
+import {
+  classifyStudentTermPayment,
+  computeTermTuition,
+  parseStudentPaymentStatusFilter,
+} from "@/lib/tuition-amount";
 
 export async function GET(req: NextRequest) {
   try {
@@ -14,47 +19,45 @@ export async function GET(req: NextRequest) {
     const semester = searchParams.get("semester");
     const year = searchParams.get("year");
     const classId = searchParams.get("classId");
+    const departmentId = searchParams.get("departmentId");
+    const paymentStatusFilter = parseStudentPaymentStatusFilter(
+      searchParams.get("paymentStatusFilter")
+    );
 
-    if (!semester || !year || !classId) {
+    if (!semester || !year) {
       return NextResponse.json(
-        { error: "semester, year, and classId are required" },
+        { error: "semester and year are required" },
+        { status: 400 }
+      );
+    }
+
+    if (!classId && !departmentId) {
+      return NextResponse.json(
+        { error: "classId or departmentId is required" },
         { status: 400 }
       );
     }
 
     const parsedYear = Number(year);
-    const parsedClassId = Number(classId);
-    if (!Number.isInteger(parsedYear) || !Number.isInteger(parsedClassId)) {
-      return NextResponse.json(
-        { error: "Invalid year or classId" },
-        { status: 400 }
-      );
+    if (!Number.isInteger(parsedYear)) {
+      return NextResponse.json({ error: "Invalid year" }, { status: 400 });
     }
 
-    // Verify class exists and matches semester/year
-    const cls = await prisma.class.findUnique({
-      where: { id: parsedClassId },
-      include: {
-        department: { select: { code: true, name: true, tuitionFee: true } },
-      },
-    });
-
-    if (!cls) {
-      return NextResponse.json({ error: "Class not found" }, { status: 404 });
+    const resolved = await resolveFinanceReportScope(
+      semester,
+      parsedYear,
+      classId,
+      departmentId
+    );
+    if (!resolved.ok) {
+      return NextResponse.json({ error: resolved.error }, { status: resolved.status });
     }
 
-    if (cls.semester !== semester || cls.year !== parsedYear) {
-      return NextResponse.json(
-        { error: "Class semester/year does not match the selected semester and year" },
-        { status: 400 }
-      );
-    }
-
-    // Get all students in this class
-    const studentsInClass = await prisma.student.findMany({
-      where: { classId: parsedClassId, status: "Admitted" },
+    const studentsInScope = await prisma.student.findMany({
+      where: { classId: { in: resolved.classIds }, status: "Admitted" },
       include: {
         department: { select: { name: true, code: true, tuitionFee: true } },
+        class: { select: { id: true, name: true, department: { select: { code: true } } } },
         tuitionPayments: {
           where: { semester, year: parsedYear },
           select: { id: true, amount: true },
@@ -63,27 +66,20 @@ export async function GET(req: NextRequest) {
       orderBy: [{ studentId: "asc" }],
     });
 
-    // Expected amount per term based on payment status (aligned with tuition charges)
-    const unpaidStudents = studentsInClass
+    const unpaidStudents = studentsInScope
       .filter((s) => {
-        const paymentStatus = s.paymentStatus ?? "Fully Paid";
-        const expectedAmount = perSemesterTuition(
-          s.department.tuitionFee ?? 0,
-          paymentStatus,
-          s.customSemesterFee
+        const classification = classifyStudentTermPayment(
+          s,
+          s.tuitionPayments,
+          paymentStatusFilter
         );
-        if (expectedAmount <= 0) return false;
-        const paidAmount = s.tuitionPayments.reduce((sum, p) => sum + p.amount, 0);
-        return paidAmount < expectedAmount - 1e-6;
+        return classification === "unpaid";
       })
       .map((s) => {
-        const paymentStatus = s.paymentStatus ?? "Fully Paid";
-        const expectedAmount = perSemesterTuition(
-          s.department.tuitionFee ?? 0,
-          paymentStatus,
-          s.customSemesterFee
+        const { paymentStatus, expectedAmount, paidAmount } = computeTermTuition(
+          s,
+          s.tuitionPayments
         );
-        const paidAmount = s.tuitionPayments.reduce((sum, p) => sum + p.amount, 0);
         const amountDue = expectedAmount - paidAmount;
         return {
           id: s.id,
@@ -93,7 +89,8 @@ export async function GET(req: NextRequest) {
           email: s.email,
           phone: s.phone,
           department: s.department,
-          tuitionFee: amountDue, // Amount still due for display
+          className: s.class?.name ?? null,
+          tuitionFee: amountDue,
           paymentStatus,
           amountPaid: paidAmount,
           amountDue,
@@ -101,15 +98,10 @@ export async function GET(req: NextRequest) {
       });
 
     return NextResponse.json({
-      class: {
-        id: cls.id,
-        name: cls.name,
-        semester: cls.semester,
-        year: cls.year,
-        department: cls.department,
-      },
+      ...financeReportMeta(resolved.scope),
       semester,
       year: parsedYear,
+      paymentStatusFilter,
       unpaidStudents,
       totalUnpaid: unpaidStudents.length,
     });

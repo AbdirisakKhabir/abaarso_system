@@ -50,9 +50,7 @@ type TuitionDraft = {
   payYear: string;
   payAmountType: "half" | "full" | "custom";
   payAmount: string;
-  paymentMethod: "bank_receipt" | "electronic" | "cash_on_hand";
   receiptNumber: string;
-  transactionId: string;
   paymentDate: string;
   payNote: string;
 };
@@ -65,9 +63,7 @@ const tuitionDraftInitial: TuitionDraft = {
   payYear: String(CURRENT_YEAR),
   payAmountType: "full",
   payAmount: "",
-  paymentMethod: "bank_receipt",
   receiptNumber: "",
-  transactionId: "",
   paymentDate: new Date().toISOString().slice(0, 10),
   payNote: "",
 };
@@ -100,9 +96,7 @@ export default function FinancePage() {
   const payYear = draft.payYear;
   const payAmountType = draft.payAmountType;
   const payAmount = draft.payAmount;
-  const paymentMethod = draft.paymentMethod;
   const receiptNumber = draft.receiptNumber;
-  const transactionId = draft.transactionId;
   const paymentDate = draft.paymentDate;
   const payNote = draft.payNote;
 
@@ -113,10 +107,7 @@ export default function FinancePage() {
   const setPayAmountType = (v: TuitionDraft["payAmountType"]) =>
     setDraftField("payAmountType", v);
   const setPayAmount = (v: string) => setDraftField("payAmount", v);
-  const setPaymentMethod = (v: TuitionDraft["paymentMethod"]) =>
-    setDraftField("paymentMethod", v);
   const setReceiptNumber = (v: string) => setDraftField("receiptNumber", v);
-  const setTransactionId = (v: string) => setDraftField("transactionId", v);
   const setPaymentDate = (v: string) => setDraftField("paymentDate", v);
   const setPayNote = (v: string) => setDraftField("payNote", v);
 
@@ -245,15 +236,11 @@ export default function FinancePage() {
     setPayError("");
     setPaySuccess(false);
     if (!selectedStudent || !payBankId) {
-      setPayError("Please select a student and bank");
+      setPayError("Please select a student and payment method (bank)");
       return;
     }
-    if (paymentMethod === "bank_receipt" && !receiptNumber.trim()) {
-      setPayError("Receipt number is required for bank deposit");
-      return;
-    }
-    if (paymentMethod === "electronic" && !transactionId.trim()) {
-      setPayError("Transaction ID is required for electronic payment");
+    if (!receiptNumber.trim()) {
+      setPayError("Receipt or reference number is required");
       return;
     }
     setPaySubmitting(true);
@@ -267,11 +254,8 @@ export default function FinancePage() {
           year: Number(payYear),
           amount: computedAmount,
           bankId: Number(payBankId),
-          paymentMethod,
-          receiptNumber:
-            paymentMethod === "bank_receipt" ? receiptNumber.trim() : undefined,
-          transactionId:
-            paymentMethod === "electronic" ? transactionId.trim() : undefined,
+          paymentMethod: "bank_receipt",
+          receiptNumber: receiptNumber.trim(),
           paymentDate: paymentDate || new Date().toISOString().slice(0, 10),
           note: payNote || undefined,
         }),
@@ -478,27 +462,6 @@ export default function FinancePage() {
                 Term &amp; deposit
               </h2>
               <div className="mt-4 space-y-4">
-                <div>
-                  <label className="mb-1.5 block text-sm text-gray-700 dark:text-gray-300">
-                    Bank account <span className="text-red-600 dark:text-red-400">*</span>
-                  </label>
-                  <select
-                    value={payBankId}
-                    onChange={(e) => setPayBankId(e.target.value)}
-                    required
-                    className={selectClass}
-                  >
-                    <option value="">Select account…</option>
-                    {banks.map((b) => (
-                      <option key={b.id} value={b.id}>
-                        {b.code} — {b.name}
-                      </option>
-                    ))}
-                  </select>
-                  <p className="mt-1 text-xs text-gray-500 dark:text-gray-500">
-                    Where this deposit landed (include petty cash if you use it as a bank).
-                  </p>
-                </div>
                 <div className="grid gap-4 sm:grid-cols-3">
                   <div>
                     <label className="mb-1.5 block text-sm text-gray-700 dark:text-gray-300">Semester</label>
@@ -608,65 +571,48 @@ export default function FinancePage() {
               <div className="mt-8">
                 <h2 className="flex items-center gap-2 text-sm font-semibold text-gray-900 dark:text-white">
                   <CreditCard className="h-4 w-4 text-gray-500" strokeWidth={2} />
-                  How it was paid
+                  Payment method
                 </h2>
-                <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:flex-wrap">
-                  {[
-                    { value: "bank_receipt" as const, label: "Bank receipt" },
-                    { value: "electronic" as const, label: "Transfer / mobile money" },
-                    { value: "cash_on_hand" as const, label: "Cash" },
-                  ].map((opt) => (
+                <p className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
+                  Select the bank account where this payment was received.
+                </p>
+                <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                  {banks.map((b) => (
                     <label
-                      key={opt.value}
-                      className={`flex-1 cursor-pointer rounded-lg border px-3 py-2.5 text-center text-sm font-medium sm:min-w-30 sm:flex-initial ${
-                        paymentMethod === opt.value
+                      key={b.id}
+                      className={`cursor-pointer rounded-lg border px-3 py-3 text-sm transition-colors ${
+                        payBankId === String(b.id)
                           ? "border-gray-900 bg-gray-900 text-white dark:border-white dark:bg-white dark:text-gray-900"
                           : "border-gray-200 text-gray-800 hover:border-gray-300 dark:border-gray-700 dark:text-gray-200 dark:hover:border-gray-600"
                       }`}
                     >
                       <input
                         type="radio"
-                        name="paymentMethod"
-                        checked={paymentMethod === opt.value}
-                        onChange={() => setPaymentMethod(opt.value)}
+                        name="payBankId"
+                        checked={payBankId === String(b.id)}
+                        onChange={() => setPayBankId(String(b.id))}
                         className="sr-only"
                       />
-                      {opt.label}
+                      <span className="block font-medium">{b.code} — {b.name}</span>
+                      <span className={`mt-0.5 block text-xs tabular-nums ${payBankId === String(b.id) ? "opacity-80" : "text-gray-500 dark:text-gray-400"}`}>
+                        Balance ${b.balance.toLocaleString()}
+                      </span>
                     </label>
                   ))}
                 </div>
               </div>
 
               <div className="mt-5">
-                {paymentMethod === "bank_receipt" ? (
-                  <div>
-                    <label className="mb-1.5 block text-sm text-gray-700 dark:text-gray-300">
-                      Receipt # <span className="text-red-600 dark:text-red-400">*</span>
-                    </label>
-                    <input
-                      type="text"
-                      value={receiptNumber}
-                      onChange={(e) => setReceiptNumber(e.target.value)}
-                      placeholder="Number on the slip"
-                      className={inputClass}
-                    />
-                  </div>
-                ) : paymentMethod === "electronic" ? (
-                  <div>
-                    <label className="mb-1.5 block text-sm text-gray-700 dark:text-gray-300">
-                      Reference / transaction ID <span className="text-red-600 dark:text-red-400">*</span>
-                    </label>
-                    <input
-                      type="text"
-                      value={transactionId}
-                      onChange={(e) => setTransactionId(e.target.value)}
-                      placeholder="From bank SMS or statement"
-                      className={inputClass}
-                    />
-                  </div>
-                ) : (
-                  <p className="text-sm text-gray-600 dark:text-gray-400">Cash — no reference required. Use the note field if you want one on file.</p>
-                )}
+                <label className="mb-1.5 block text-sm text-gray-700 dark:text-gray-300">
+                  Receipt / reference # <span className="text-red-600 dark:text-red-400">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={receiptNumber}
+                  onChange={(e) => setReceiptNumber(e.target.value)}
+                  placeholder="Bank slip number, transfer reference, or mobile money ID"
+                  className={inputClass}
+                />
               </div>
             </div>
 

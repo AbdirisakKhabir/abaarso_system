@@ -17,7 +17,12 @@ import Badge from "@/components/ui/badge/Badge";
 import { authFetch } from "@/lib/api";
 import { DateInput } from "@/components/form/DateInput";
 import { DownloadIcon } from "@/icons";
-import { FinanceReportBarHorizontal } from "@/components/reports/FinanceReportChart";
+import {
+  FinanceReportBarHorizontal,
+  FinanceReportDonut,
+  FinanceReportChartGrid,
+  formatCount,
+} from "@/components/reports/FinanceReportChart";
 
 type Department = { id: number; name: string; code: string };
 type ClassItem = {
@@ -177,6 +182,13 @@ export default function StudentTransactionsReportPage() {
     }
     const entries = [...m.entries()].sort((a, b) => b[1] - a[1]).slice(0, 12);
     return { categories: entries.map(([k]) => k), values: entries.map(([, v]) => v) };
+  }, [transactions]);
+
+  const semesterChart = useMemo(() => {
+    if (!transactions.length) return { labels: [] as string[], series: [] as number[] };
+    const paid = transactions.reduce((s, t) => s + t.paidCount, 0);
+    const unpaid = transactions.reduce((s, t) => s + t.unpaidCount, 0);
+    return { labels: ["Semesters paid", "Semesters unpaid"], series: [paid, unpaid] };
   }, [transactions]);
 
   const handlePrint = () => window.print();
@@ -373,14 +385,22 @@ export default function StudentTransactionsReportPage() {
             )}
           </div>
           {!loading && paidByDept.categories.length > 0 && (
-            <div className="no-print mb-6">
+            <FinanceReportChartGrid>
+              {semesterChart.series.some((n) => n > 0) && (
+                <FinanceReportDonut
+                  title="Semesters paid vs unpaid"
+                  labels={semesterChart.labels}
+                  series={semesterChart.series}
+                  valueFormatter={formatCount}
+                />
+              )}
               <FinanceReportBarHorizontal
                 title="Total paid by department"
                 categories={paidByDept.categories}
                 data={paidByDept.values}
                 height={Math.min(380, 120 + paidByDept.categories.length * 26)}
               />
-            </div>
+            </FinanceReportChartGrid>
           )}
           {loading ? (
             <div className="flex justify-center py-16">

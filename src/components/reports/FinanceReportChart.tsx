@@ -8,6 +8,13 @@ const ReactApexChart = dynamic(() => import("react-apexcharts"), { ssr: false })
 
 const moneyFmt = (v: number) => `$${Number(v).toLocaleString()}`;
 
+export const formatCount = (v: number) => Number(v).toLocaleString();
+
+/** Two-column chart row for report pages (hidden when printing). */
+export function FinanceReportChartGrid({ children }: { children: React.ReactNode }) {
+  return <div className="no-print mb-6 grid gap-6 lg:grid-cols-2">{children}</div>;
+}
+
 const baseChart = (foreColor: string, gridColor: string): Partial<ApexOptions> => ({
   chart: {
     fontFamily: "inherit",

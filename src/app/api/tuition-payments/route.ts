@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import type { Prisma } from "@prisma/client";
 import { getAuthUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { isValidSemester } from "@/lib/semesters";
@@ -12,21 +13,56 @@ export async function GET(req: NextRequest) {
     }
 
     const { searchParams } = new URL(req.url);
-    const studentId = searchParams.get("studentId"); // studentId string e.g. STD-2026-0001
+    const studentId = searchParams.get("studentId");
+    const search = searchParams.get("search")?.trim();
     const semester = searchParams.get("semester");
     const year = searchParams.get("year");
+    const bankId = searchParams.get("bankId");
+    const paymentMethod = searchParams.get("paymentMethod");
+    const departmentId = searchParams.get("departmentId");
+    const classId = searchParams.get("classId");
+    const dateFrom = searchParams.get("dateFrom")?.trim();
+    const dateTo = searchParams.get("dateTo")?.trim();
     const pageParam = searchParams.get("page");
     const pageSizeParam = searchParams.get("pageSize");
     const paginate = pageParam != null || pageSizeParam != null;
     const page = Math.max(1, Number(pageParam || 1));
     const pageSize = Math.min(100, Math.max(1, Number(pageSizeParam || 10)));
 
-    const where: { student?: { studentId?: string }; semester?: string; year?: number } = {};
+    const where: Prisma.TuitionPaymentWhereInput = {};
+    const studentWhere: Prisma.StudentWhereInput = {};
+
     if (studentId) {
-      where.student = { studentId: String(studentId) };
+      studentWhere.studentId = String(studentId);
     }
+    if (search) {
+      studentWhere.OR = [
+        { studentId: { contains: search } },
+        { firstName: { contains: search } },
+        { lastName: { contains: search } },
+        { phone: { contains: search } },
+      ];
+    }
+    if (departmentId) studentWhere.departmentId = Number(departmentId);
+    if (classId) studentWhere.classId = Number(classId);
+    if (Object.keys(studentWhere).length > 0) {
+      where.student = studentWhere;
+    }
+
     if (semester) where.semester = semester;
     if (year) where.year = Number(year);
+    if (bankId) where.bankId = Number(bankId);
+    if (
+      paymentMethod &&
+      ["bank_receipt", "electronic", "cash_on_hand"].includes(paymentMethod)
+    ) {
+      where.paymentMethod = paymentMethod;
+    }
+    if (dateFrom || dateTo) {
+      where.paymentDate = {};
+      if (dateFrom) where.paymentDate.gte = new Date(`${dateFrom}T00:00:00.000Z`);
+      if (dateTo) where.paymentDate.lte = new Date(`${dateTo}T23:59:59.999Z`);
+    }
 
     const include = {
       student: {

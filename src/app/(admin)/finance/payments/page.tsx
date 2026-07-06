@@ -1,8 +1,9 @@
 "use client";
 
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import PageBreadCrumb from "@/components/common/PageBreadCrumb";
+import Button from "@/components/ui/button/Button";
 import {
   Table,
   TableBody,
@@ -33,9 +34,23 @@ export type FinancePaymentRow = {
     firstName: string;
     lastName: string;
     department: { name: string; code: string };
+    class: { name: string } | null;
   };
   recordedBy: { id: number; name: string; email: string } | null;
 };
+
+type Bank = { id: number; name: string; code: string };
+type Department = { id: number; name: string; code: string };
+type ClassOption = {
+  id: number;
+  name: string;
+  semester: string;
+  year: number;
+  department: { id: number; code: string };
+};
+type SemesterOption = { id: number; name: string };
+
+const CURRENT_YEAR = new Date().getFullYear();
 
 function paymentMethodLabel(method: string) {
   switch (method) {
@@ -64,7 +79,46 @@ export default function FinancePaymentsPage() {
   const [financeLoading, setFinanceLoading] = useState(false);
   const [deletingPaymentId, setDeletingPaymentId] = useState<number | null>(null);
 
+  const [banks, setBanks] = useState<Bank[]>([]);
+  const [departments, setDepartments] = useState<Department[]>([]);
+  const [classes, setClasses] = useState<ClassOption[]>([]);
+  const [semesters, setSemesters] = useState<SemesterOption[]>([]);
+
+  const [search, setSearch] = useState("");
+  const [filterSemester, setFilterSemester] = useState("");
+  const [filterYear, setFilterYear] = useState("");
+  const [filterDept, setFilterDept] = useState("");
+  const [filterClass, setFilterClass] = useState("");
+  const [filterBank, setFilterBank] = useState("");
+  const [filterMethod, setFilterMethod] = useState("");
+  const [filterDateFrom, setFilterDateFrom] = useState("");
+  const [filterDateTo, setFilterDateTo] = useState("");
+
   const canDeletePayment = hasPermission("finance.create");
+
+  useEffect(() => {
+    authFetch("/api/banks").then((r) => {
+      if (r.ok) r.json().then((d: Bank[]) => setBanks(Array.isArray(d) ? d : []));
+    });
+    authFetch("/api/departments").then((r) => {
+      if (r.ok) r.json().then((d: Department[]) => setDepartments(Array.isArray(d) ? d : []));
+    });
+    authFetch("/api/classes").then((r) => {
+      if (r.ok) r.json().then((d: ClassOption[]) => setClasses(Array.isArray(d) ? d : []));
+    });
+    authFetch("/api/semesters?active=true").then((r) => {
+      if (r.ok) r.json().then((d: SemesterOption[]) => setSemesters(Array.isArray(d) ? d : []));
+    });
+  }, []);
+
+  const filteredClasses = useMemo(() => {
+    return classes.filter((c) => {
+      if (filterDept && c.department.id !== Number(filterDept)) return false;
+      if (filterSemester && c.semester !== filterSemester) return false;
+      if (filterYear && c.year !== Number(filterYear)) return false;
+      return true;
+    });
+  }, [classes, filterDept, filterSemester, filterYear]);
 
   const fetchFinancePayments = useCallback(
     async (opts?: { page?: number; pageSize?: number }) => {
@@ -76,6 +130,16 @@ export default function FinancePaymentsPage() {
           page: String(page),
           pageSize: String(ps),
         });
+        if (search.trim()) params.set("search", search.trim());
+        if (filterSemester) params.set("semester", filterSemester);
+        if (filterYear) params.set("year", filterYear);
+        if (filterDept) params.set("departmentId", filterDept);
+        if (filterClass) params.set("classId", filterClass);
+        if (filterBank) params.set("bankId", filterBank);
+        if (filterMethod) params.set("paymentMethod", filterMethod);
+        if (filterDateFrom) params.set("dateFrom", filterDateFrom);
+        if (filterDateTo) params.set("dateTo", filterDateTo);
+
         const res = await authFetch(`/api/tuition-payments?${params}`);
         if (res.ok) {
           const data = await res.json();
@@ -92,7 +156,19 @@ export default function FinancePaymentsPage() {
         setFinanceLoading(false);
       }
     },
-    [financePage, financePageSize]
+    [
+      financePage,
+      financePageSize,
+      search,
+      filterSemester,
+      filterYear,
+      filterDept,
+      filterClass,
+      filterBank,
+      filterMethod,
+      filterDateFrom,
+      filterDateTo,
+    ]
   );
 
   useEffect(() => {
@@ -109,6 +185,30 @@ export default function FinancePaymentsPage() {
       setFinancePage(financeTotalPages);
     }
   }, [financeTotal, financePage, financeTotalPages]);
+
+  const handleApplyFilters = () => {
+    setFinancePage(1);
+    void fetchFinancePayments({ page: 1 });
+  };
+
+  const handleClearFilters = () => {
+    setSearch("");
+    setFilterSemester("");
+    setFilterYear("");
+    setFilterDept("");
+    setFilterClass("");
+    setFilterBank("");
+    setFilterMethod("");
+    setFilterDateFrom("");
+    setFilterDateTo("");
+    setFinancePage(1);
+  };
+
+  useEffect(() => {
+    if (filterClass && !filteredClasses.some((c) => c.id === Number(filterClass))) {
+      setFilterClass("");
+    }
+  }, [filteredClasses, filterClass]);
 
   async function handleDeletePayment(p: FinancePaymentRow) {
     if (
@@ -145,6 +245,17 @@ export default function FinancePaymentsPage() {
     );
   }
 
+  const hasActiveFilters =
+    search.trim() ||
+    filterSemester ||
+    filterYear ||
+    filterDept ||
+    filterClass ||
+    filterBank ||
+    filterMethod ||
+    filterDateFrom ||
+    filterDateTo;
+
   return (
     <div>
       <PageBreadCrumb pageTitle="Payments" />
@@ -174,9 +285,137 @@ export default function FinancePaymentsPage() {
             Tuition payments
           </h1>
           <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-            All recorded tuition payments, newest first.
+            Search and filter recorded tuition payments.
           </p>
         </div>
+
+        <div className="border-b border-gray-100 px-5 py-4 dark:border-gray-800">
+          <div className="mb-3">
+            <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400">
+              Search student
+            </label>
+            <input
+              type="search"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && handleApplyFilters()}
+              placeholder="Name, student ID, or phone"
+              className="h-10 w-full max-w-md rounded-lg border border-gray-200 bg-transparent px-3 text-sm text-gray-800 outline-none focus:border-brand-300 dark:border-gray-700 dark:text-white"
+            />
+          </div>
+          <div className="flex flex-wrap items-end gap-3">
+            <div>
+              <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400">Semester</label>
+              <select
+                value={filterSemester}
+                onChange={(e) => setFilterSemester(e.target.value)}
+                className="h-10 min-w-[120px] rounded-lg border border-gray-200 bg-transparent px-3 text-sm dark:border-gray-700 dark:text-white"
+              >
+                <option value="">All</option>
+                {semesters.map((s) => (
+                  <option key={s.id} value={s.name}>{s.name}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400">Year</label>
+              <select
+                value={filterYear}
+                onChange={(e) => setFilterYear(e.target.value)}
+                className="h-10 min-w-[100px] rounded-lg border border-gray-200 bg-transparent px-3 text-sm dark:border-gray-700 dark:text-white"
+              >
+                <option value="">All</option>
+                {[CURRENT_YEAR, CURRENT_YEAR - 1, CURRENT_YEAR - 2].map((y) => (
+                  <option key={y} value={y}>{y}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400">Department</label>
+              <select
+                value={filterDept}
+                onChange={(e) => {
+                  setFilterDept(e.target.value);
+                  setFilterClass("");
+                }}
+                className="h-10 min-w-[160px] rounded-lg border border-gray-200 bg-transparent px-3 text-sm dark:border-gray-700 dark:text-white"
+              >
+                <option value="">All</option>
+                {departments.map((d) => (
+                  <option key={d.id} value={d.id}>{d.code} — {d.name}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400">Class</label>
+              <select
+                value={filterClass}
+                onChange={(e) => setFilterClass(e.target.value)}
+                className="h-10 min-w-[180px] rounded-lg border border-gray-200 bg-transparent px-3 text-sm dark:border-gray-700 dark:text-white"
+              >
+                <option value="">All</option>
+                {filteredClasses.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.department.code} — {c.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400">Bank</label>
+              <select
+                value={filterBank}
+                onChange={(e) => setFilterBank(e.target.value)}
+                className="h-10 min-w-[160px] rounded-lg border border-gray-200 bg-transparent px-3 text-sm dark:border-gray-700 dark:text-white"
+              >
+                <option value="">All</option>
+                {banks.map((b) => (
+                  <option key={b.id} value={b.id}>{b.code} — {b.name}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400">Method</label>
+              <select
+                value={filterMethod}
+                onChange={(e) => setFilterMethod(e.target.value)}
+                className="h-10 min-w-[140px] rounded-lg border border-gray-200 bg-transparent px-3 text-sm dark:border-gray-700 dark:text-white"
+              >
+                <option value="">All</option>
+                <option value="bank_receipt">Bank receipt</option>
+                <option value="electronic">Electronic</option>
+                <option value="cash_on_hand">Cash</option>
+              </select>
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400">From</label>
+              <input
+                type="date"
+                value={filterDateFrom}
+                onChange={(e) => setFilterDateFrom(e.target.value)}
+                className="h-10 rounded-lg border border-gray-200 bg-transparent px-3 text-sm dark:border-gray-700 dark:text-white"
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400">To</label>
+              <input
+                type="date"
+                value={filterDateTo}
+                onChange={(e) => setFilterDateTo(e.target.value)}
+                className="h-10 rounded-lg border border-gray-200 bg-transparent px-3 text-sm dark:border-gray-700 dark:text-white"
+              />
+            </div>
+            <Button size="sm" onClick={handleApplyFilters}>
+              Apply
+            </Button>
+            {hasActiveFilters && (
+              <Button size="sm" variant="outline" onClick={handleClearFilters}>
+                Clear
+              </Button>
+            )}
+          </div>
+        </div>
+
         <div className="p-0">
           {financeLoading ? (
             <div className="flex justify-center py-16">
@@ -187,13 +426,17 @@ export default function FinancePaymentsPage() {
               <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-gray-100 dark:bg-gray-800">
                 <DollarLineIcon className="h-6 w-6 text-gray-400" />
               </div>
-              <p className="text-sm text-gray-500 dark:text-gray-400">No tuition payments recorded yet.</p>
-              <Link
-                href="/finance"
-                className="text-sm font-medium text-brand-600 hover:underline dark:text-brand-400"
-              >
-                Record a payment
-              </Link>
+              <p className="text-sm text-gray-500 dark:text-gray-400">
+                {hasActiveFilters ? "No payments match your filters." : "No tuition payments recorded yet."}
+              </p>
+              {!hasActiveFilters && (
+                <Link
+                  href="/finance"
+                  className="text-sm font-medium text-brand-600 hover:underline dark:text-brand-400"
+                >
+                  Record a payment
+                </Link>
+              )}
             </div>
           ) : (
             <>

@@ -15,7 +15,12 @@ import { usePagination } from "@/hooks/usePagination";
 import Badge from "@/components/ui/badge/Badge";
 import { authFetch } from "@/lib/api";
 import { DownloadIcon } from "@/icons";
-import { FinanceReportBarHorizontal } from "@/components/reports/FinanceReportChart";
+import {
+  FinanceReportBarHorizontal,
+  FinanceReportDonut,
+  FinanceReportChartGrid,
+  formatCount,
+} from "@/components/reports/FinanceReportChart";
 
 type Department = { id: number; name: string; code: string };
 type SemesterOption = { id: number; name: string; sortOrder: number; isActive: boolean };
@@ -30,7 +35,6 @@ export default function ClassRevenueReportPage() {
       name: string;
       semester: string;
       year: number;
-      course: { code: string; name: string };
       department?: { id: number; name: string; code: string };
       studentCount: number;
       paidCount: number;
@@ -91,13 +95,19 @@ export default function ClassRevenueReportPage() {
     };
   }, [revenue]);
 
+  const enrollmentChart = useMemo(() => {
+    if (!revenue.length) return { labels: [] as string[], series: [] as number[] };
+    const paid = revenue.reduce((s, r) => s + r.paidCount, 0);
+    const unpaid = revenue.reduce((s, r) => s + r.unpaidCount, 0);
+    return { labels: ["Paid students", "Unpaid students"], series: [paid, unpaid] };
+  }, [revenue]);
+
   const handlePrint = () => window.print();
 
   const handleExportCSV = () => {
-    const headers = ["Class", "Course", "Department", "Semester", "Students", "Paid", "Unpaid", "Revenue"];
+    const headers = ["Class", "Department", "Semester", "Students", "Paid", "Unpaid", "Revenue"];
     const rows = revenue.map((r) => [
       r.name,
-      r.department ? `${r.department.code} - ${r.department.name}` : "—",
       r.department ? `${r.department.code} - ${r.department.name}` : "—",
       `${r.semester} ${r.year}`,
       r.studentCount,
@@ -193,22 +203,31 @@ export default function ClassRevenueReportPage() {
             </div>
           ) : (
             <>
-              {classRevenueChart.categories.length > 0 && (
-                <div className="no-print mb-6">
-                  <FinanceReportBarHorizontal
-                    title="Top classes by revenue"
-                    categories={classRevenueChart.categories}
-                    data={classRevenueChart.values}
-                    height={Math.min(400, 140 + classRevenueChart.categories.length * 24)}
-                  />
-                </div>
+              {(classRevenueChart.categories.length > 0 || enrollmentChart.series.some((n) => n > 0)) && (
+                <FinanceReportChartGrid>
+                  {enrollmentChart.series.some((n) => n > 0) && (
+                    <FinanceReportDonut
+                      title="Paid vs unpaid students (all classes)"
+                      labels={enrollmentChart.labels}
+                      series={enrollmentChart.series}
+                      valueFormatter={formatCount}
+                    />
+                  )}
+                  {classRevenueChart.categories.length > 0 && (
+                    <FinanceReportBarHorizontal
+                      title="Top classes by revenue"
+                      categories={classRevenueChart.categories}
+                      data={classRevenueChart.values}
+                      height={Math.min(400, 140 + classRevenueChart.categories.length * 24)}
+                    />
+                  )}
+                </FinanceReportChartGrid>
               )}
               <div className="overflow-x-auto">
                 <Table>
                   <TableHeader>
                     <TableRow className="bg-transparent! hover:bg-transparent!">
                       <TableCell isHeader>Class</TableCell>
-                      <TableCell isHeader>Course</TableCell>
                       <TableCell isHeader>Department</TableCell>
                       <TableCell isHeader>Semester</TableCell>
                       <TableCell isHeader className="text-center">Students</TableCell>
@@ -221,7 +240,6 @@ export default function ClassRevenueReportPage() {
                     {paginatedRevenue.map((r) => (
                       <TableRow key={r.id}>
                         <TableCell className="font-medium">{r.name}</TableCell>
-                        <TableCell>{r.department ? `${r.department.code} - ${r.department.name}` : "—"}</TableCell>
                         <TableCell>{r.department ? `${r.department.code} - ${r.department.name}` : "—"}</TableCell>
                         <TableCell>{r.semester} {r.year}</TableCell>
                         <TableCell className="text-center">{r.studentCount}</TableCell>
@@ -238,7 +256,7 @@ export default function ClassRevenueReportPage() {
                     ))}
                     {revenue.length > 0 && (
                       <TableRow className="bg-gray-50 font-semibold dark:bg-gray-800/50">
-                        <TableCell colSpan={4} className="font-bold">
+                        <TableCell colSpan={3} className="font-bold">
                           Total
                         </TableCell>
                         <TableCell className="text-center font-bold">

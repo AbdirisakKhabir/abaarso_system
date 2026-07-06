@@ -16,7 +16,11 @@ import {
 import { usePagination } from "@/hooks/usePagination";
 import { authFetch } from "@/lib/api";
 import { DownloadIcon } from "@/icons";
-import { FinanceReportLine } from "@/components/reports/FinanceReportChart";
+import {
+  FinanceReportBar,
+  FinanceReportLine,
+  FinanceReportChartGrid,
+} from "@/components/reports/FinanceReportChart";
 
 export default function DailyRevenueReportPage() {
   const [data, setData] = useState<{
@@ -133,13 +137,21 @@ export default function DailyRevenueReportPage() {
               </p>
             </div>
             {lineChart.categories.length > 0 && (
-              <div className="no-print border-b border-gray-200 px-6 py-6 dark:border-gray-800">
-                <FinanceReportLine
-                  title="Revenue by day"
-                  categories={lineChart.categories}
-                  data={lineChart.values}
-                  height={280}
-                />
+              <div className="border-b border-gray-200 px-6 py-6 dark:border-gray-800">
+                <FinanceReportChartGrid>
+                  <FinanceReportLine
+                    title="Revenue trend by day"
+                    categories={lineChart.categories}
+                    data={lineChart.values}
+                    height={280}
+                  />
+                  <FinanceReportBar
+                    title="Revenue by day"
+                    categories={lineChart.categories}
+                    data={lineChart.values}
+                    color="#2563eb"
+                  />
+                </FinanceReportChartGrid>
               </div>
             )}
             <div className="overflow-x-auto">

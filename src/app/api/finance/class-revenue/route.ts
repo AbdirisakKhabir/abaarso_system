@@ -1,6 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAuthUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import {
+  classifyStudentTermPayment,
+  computeTermTuition,
+  semesterAmountPaid,
+  type StudentPaymentStatusFilter,
+} from "@/lib/tuition-amount";
 
 export async function GET(req: NextRequest) {
   try {
@@ -14,8 +20,13 @@ export async function GET(req: NextRequest) {
     const departmentId = searchParams.get("departmentId");
     const semester = searchParams.get("semester");
 
+    const parsedYear = Number(year);
+    if (!Number.isInteger(parsedYear)) {
+      return NextResponse.json({ error: "Invalid year" }, { status: 400 });
+    }
+
     const where: { year: number; semester?: string; departmentId?: number } = {
-      year: Number(year),
+      year: parsedYear,
     };
     if (semester) where.semester = semester;
     if (departmentId) where.departmentId = Number(departmentId);
@@ -25,9 +36,10 @@ export async function GET(req: NextRequest) {
       include: {
         department: { select: { id: true, name: true, code: true } },
         students: {
+          where: { status: "Admitted" },
           include: {
+            department: { select: { tuitionFee: true } },
             tuitionPayments: {
-              where: { year: Number(year) },
               select: { semester: true, year: true, amount: true },
             },
           },
@@ -36,13 +48,30 @@ export async function GET(req: NextRequest) {
       orderBy: [{ year: "desc" }, { semester: "asc" }, { name: "asc" }],
     });
 
+    const countFilter: StudentPaymentStatusFilter = "all";
+
     const result = classes.map((cls) => {
-      const revenue = cls.students.reduce((sum, s) => {
-        const paid = s.tuitionPayments.reduce((a, p) => a + p.amount, 0);
-        return sum + paid;
-      }, 0);
-      const studentCount = cls.students.length;
-      const paidCount = cls.students.filter((s) => s.tuitionPayments.length > 0).length;
+      let revenue = 0;
+      let paidCount = 0;
+      let unpaidCount = 0;
+      let studentCount = 0;
+
+      for (const student of cls.students) {
+        const termPayments = student.tuitionPayments.filter(
+          (p) => p.semester === cls.semester && p.year === cls.year
+        );
+        const classification = classifyStudentTermPayment(
+          student,
+          termPayments,
+          countFilter
+        );
+        if (classification === "excluded") continue;
+
+        studentCount++;
+        revenue += semesterAmountPaid(termPayments);
+        if (classification === "paid") paidCount++;
+        else unpaidCount++;
+      }
 
       return {
         id: cls.id,
@@ -52,7 +81,7 @@ export async function GET(req: NextRequest) {
         department: cls.department,
         studentCount,
         paidCount,
-        unpaidCount: studentCount - paidCount,
+        unpaidCount,
         revenue,
       };
     });
