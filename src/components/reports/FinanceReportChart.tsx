@@ -6,7 +6,15 @@ import type { ApexOptions } from "apexcharts";
 
 const ReactApexChart = dynamic(() => import("react-apexcharts"), { ssr: false });
 
-const moneyFmt = (v: number) => `$${Number(v).toLocaleString()}`;
+const moneyFmt = (v: number) => {
+  const n = Number(v);
+  return Number.isFinite(n) ? `$${n.toLocaleString()}` : "$0";
+};
+
+const toNumericSeries = (data: number[]) => data.map((d) => {
+  const n = Number(d);
+  return Number.isFinite(n) ? n : 0;
+});
 
 export const formatCount = (v: number) => Number(v).toLocaleString();
 
@@ -58,6 +66,8 @@ export function FinanceReportBar({
   color = "#2563eb",
   valueFormatter = moneyFmt,
 }: BarProps) {
+  const numericData = useMemo(() => toNumericSeries(data), [data]);
+
   const options: ApexOptions = useMemo(
     () => ({
       ...baseChart("#64748b", "#e2e8f0"),
@@ -86,7 +96,7 @@ export function FinanceReportBar({
     [categories, color, valueFormatter]
   );
 
-  const series = useMemo(() => [{ name: "Amount", data }], [data]);
+  const series = useMemo(() => [{ name: "Amount", data: numericData }], [numericData]);
 
   return (
     <div className="rounded-lg border border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-900/40">
@@ -116,6 +126,8 @@ export function FinanceReportBarHorizontal({
   height = 280,
   valueFormatter = moneyFmt,
 }: HBarProps) {
+  const numericData = useMemo(() => toNumericSeries(data), [data]);
+
   const options: ApexOptions = useMemo(
     () => ({
       ...baseChart("#64748b", "#e2e8f0"),
@@ -126,20 +138,26 @@ export function FinanceReportBarHorizontal({
       },
       xaxis: {
         categories,
-        labels: { maxHeight: 160, style: { fontSize: "11px" } },
+        labels: {
+          formatter: (v) => valueFormatter(Number(v)),
+          style: { fontSize: "11px" },
+        },
         axisBorder: { show: false },
         axisTicks: { show: false },
       },
       yaxis: {
-        labels: { formatter: (v) => valueFormatter(Number(v)) },
+        labels: {
+          maxWidth: 200,
+          style: { fontSize: "11px" },
+        },
       },
-      tooltip: { x: { show: true }, y: { formatter: (v) => valueFormatter(Number(v)) } },
+      tooltip: { y: { formatter: (v) => valueFormatter(Number(v)) } },
       legend: { show: false },
     }),
     [categories, valueFormatter]
   );
 
-  const series = useMemo(() => [{ name: "Amount", data }], [data]);
+  const series = useMemo(() => [{ name: "Amount", data: numericData }], [numericData]);
 
   return (
     <div className="rounded-lg border border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-900/40">
