@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAuthUser } from "@/lib/auth";
+import { genderFilterValues, normalizeGender } from "@/lib/gender";
 import { prisma } from "@/lib/prisma";
 
 type GenderCounts = {
@@ -12,8 +13,9 @@ type GenderCounts = {
 function countByGender(students: { gender: string | null }[]): GenderCounts {
   const counts: GenderCounts = { Male: 0, Female: 0, Unspecified: 0, total: students.length };
   for (const s of students) {
-    if (s.gender === "Male") counts.Male += 1;
-    else if (s.gender === "Female") counts.Female += 1;
+    const normalized = normalizeGender(s.gender);
+    if (normalized === "Male") counts.Male += 1;
+    else if (normalized === "Female") counts.Female += 1;
     else counts.Unspecified += 1;
   }
   return counts;
@@ -36,7 +38,7 @@ export async function GET(req: NextRequest) {
       departmentId?: number;
       classId?: number;
       status?: string;
-      gender?: string;
+      gender?: { in: string[] };
     } = {};
 
     if (departmentId) {
@@ -52,7 +54,9 @@ export async function GET(req: NextRequest) {
     }
 
     if (gender && gender !== "all") {
-      where.gender = gender;
+      if (gender === "Male" || gender === "Female") {
+        where.gender = { in: genderFilterValues(gender) };
+      }
     }
 
     const students = await prisma.student.findMany({
@@ -127,7 +131,9 @@ export async function GET(req: NextRequest) {
           where: {
             departmentId: Number(departmentId),
             ...(status && status !== "all" ? { status } : {}),
-            ...(gender && gender !== "all" ? { gender } : {}),
+            ...(gender && gender !== "all" && (gender === "Male" || gender === "Female")
+              ? { gender: { in: genderFilterValues(gender) } }
+              : {}),
           },
           select: { classId: true, gender: true },
         });

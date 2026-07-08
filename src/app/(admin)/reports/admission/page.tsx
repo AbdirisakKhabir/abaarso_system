@@ -14,6 +14,7 @@ import {
 import { usePagination } from "@/hooks/usePagination";
 import Badge from "@/components/ui/badge/Badge";
 import { authFetch } from "@/lib/api";
+import { formatGenderLabel } from "@/lib/gender";
 
 type Department = { id: number; name: string; code: string };
 type ClassItem = {
@@ -345,7 +346,7 @@ export default function AdmissionReportPage() {
                     <TableCell className="px-5 py-3 font-medium text-gray-800 dark:text-white/90">{s.firstName} {s.lastName}</TableCell>
                     <TableCell className="px-5 py-3 text-sm text-gray-600 dark:text-gray-400">{s.email ?? "—"}</TableCell>
                     {showGenderFilter && (
-                      <TableCell className="px-5 py-3 text-center text-sm text-gray-600 dark:text-gray-400">{s.gender ?? "—"}</TableCell>
+                      <TableCell className="px-5 py-3 text-center text-sm text-gray-600 dark:text-gray-400">{formatGenderLabel(s.gender)}</TableCell>
                     )}
                     <TableCell className="px-5 py-3">
                       <Badge variant="light" color="info">{s.department?.code ?? "—"}</Badge>
