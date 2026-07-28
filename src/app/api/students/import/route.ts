@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getAuthUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import * as XLSX from "xlsx";
+import { DEFAULT_PROGRAM, parseProgram } from "@/lib/program";
 
 function findCol(headerRow: string[], patterns: RegExp[]): number {
   for (const p of patterns) {
@@ -383,7 +384,9 @@ export async function POST(req: NextRequest) {
           departmentId,
           admissionAcademicYearId,
           classId: resolvedClassId,
-          program: programIdx >= 0 ? String(row[programIdx] ?? "").trim() || null : null,
+          program: parseProgram(
+            programIdx >= 0 ? String(row[programIdx] ?? "").trim() : ""
+          ) ?? DEFAULT_PROGRAM,
           status: ["Pending", "Admitted", "Rejected", "Graduated"].includes(status) ? status : "Admitted",
           paymentStatus,
           balance: initialBalance,

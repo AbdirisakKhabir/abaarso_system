@@ -283,12 +283,9 @@ export default function ClassesPage() {
               onChange={(e) => setFilterProgram(e.target.value as Program | "all")}
               className="h-10 rounded-lg border border-gray-200 bg-transparent px-3 text-sm text-gray-700 outline-none focus:border-brand-300 focus:ring-2 focus:ring-brand-500/20 dark:border-gray-700 dark:text-gray-300 dark:focus:border-brand-500/40"
             >
+              <option value="Bachelor">Bachelor Degree</option>
+              <option value="Masters">Masters Degree</option>
               <option value="all">All Programs</option>
-              {PROGRAMS.map((p) => (
-                <option key={p} value={p}>
-                  {programLabel(p)}
-                </option>
-              ))}
             </select>
             <select
               value={filterSemester}

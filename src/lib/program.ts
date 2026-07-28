@@ -8,12 +8,14 @@ export function isProgram(value: unknown): value is Program {
   return value === "Bachelor" || value === "Masters";
 }
 
-/** Parse query/body program; defaults to Bachelor when missing/invalid unless allowAll. */
+/** Parse query/body program; defaults to Bachelor when missing/invalid.
+ *  With allowAll: only an explicit "all" means all programs — empty still defaults to Bachelor.
+ */
 export function parseProgram(
   value: string | null | undefined,
   opts?: { allowAll?: boolean; fallback?: Program | null }
 ): Program | null | "all" {
-  if (opts?.allowAll && (value == null || value === "" || value === "all")) {
+  if (opts?.allowAll && value != null && value.trim().toLowerCase() === "all") {
     return "all";
   }
   if (value == null || value === "") {
@@ -23,10 +25,10 @@ export function parseProgram(
   if (isProgram(trimmed)) return trimmed;
   // Accept common aliases
   const lower = trimmed.toLowerCase();
-  if (lower === "bachelor" || lower === "bachelors" || lower === "undergraduate") {
+  if (lower === "bachelor" || lower === "bachelors" || lower === "undergraduate" || lower === "bachelor degree") {
     return "Bachelor";
   }
-  if (lower === "master" || lower === "masters" || lower === "graduate") {
+  if (lower === "master" || lower === "masters" || lower === "graduate" || lower === "masters degree" || lower === "master degree") {
     return "Masters";
   }
   return opts?.fallback === null ? null : (opts?.fallback ?? DEFAULT_PROGRAM);
