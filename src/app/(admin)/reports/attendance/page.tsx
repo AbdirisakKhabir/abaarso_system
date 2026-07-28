@@ -22,19 +22,18 @@ type CourseItem = {
   code: string;
   departmentId: number;
 };
-type StudentItem = {
-  id: number;
-  studentId: string;
-  firstName: string;
-  lastName: string;
-  classId: number | null;
-  departmentId: number;
+type CourseSessionCount = {
+  courseId: number;
+  code: string;
+  name: string;
+  sessionCount: number;
 };
 type StudentAttendance = {
   studentId: number;
   studentIdStr: string;
   firstName: string;
   lastName: string;
+  phone?: string | null;
   present: number;
   absent: number;
   late: number;
@@ -94,8 +93,9 @@ export default function AttendanceReportPage() {
   const [departments, setDepartments] = useState<Department[]>([]);
   const [classes, setClasses] = useState<ClassItem[]>([]);
   const [courses, setCourses] = useState<CourseItem[]>([]);
-  const [students, setStudents] = useState<StudentItem[]>([]);
   const [sessions, setSessions] = useState<Session[]>([]);
+  const [courseSessions, setCourseSessions] = useState<CourseSessionCount[]>([]);
+  const [attendanceCourses, setAttendanceCourses] = useState<CourseSessionCount[]>([]);
   const [summary, setSummary] = useState({
     totalSessions: 0,
     totalPresent: 0,
@@ -107,7 +107,8 @@ export default function AttendanceReportPage() {
   const [filterDept, setFilterDept] = useState("");
   const [filterClass, setFilterClass] = useState("");
   const [filterCourse, setFilterCourse] = useState("");
-  const [filterStudent, setFilterStudent] = useState("");
+  const [filterSearchInput, setFilterSearchInput] = useState("");
+  const [filterSearch, setFilterSearch] = useState("");
   const [dateMode, setDateMode] = useState<"all" | "single" | "range">("all");
   const [selectedDate, setSelectedDate] = useState("");
   const [dateFrom, setDateFrom] = useState("");
@@ -123,13 +124,19 @@ export default function AttendanceReportPage() {
     department?: { name: string; code: string };
   } | null>(null);
 
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      setFilterSearch(filterSearchInput.trim());
+    }, 400);
+    return () => window.clearTimeout(timer);
+  }, [filterSearchInput]);
 
   const buildParams = useCallback(() => {
     const params = new URLSearchParams();
     if (filterDept) params.set("departmentId", filterDept);
     if (filterClass) params.set("classId", filterClass);
     if (filterCourse) params.set("courseId", filterCourse);
-    if (filterStudent) params.set("studentId", filterStudent);
+    if (filterSearch) params.set("search", filterSearch);
     if (dateMode === "single" && selectedDate) {
       params.set("dateFrom", selectedDate);
       params.set("dateTo", selectedDate);
@@ -142,7 +149,7 @@ export default function AttendanceReportPage() {
     filterDept,
     filterClass,
     filterCourse,
-    filterStudent,
+    filterSearch,
     dateMode,
     selectedDate,
     dateFrom,
@@ -156,7 +163,7 @@ export default function AttendanceReportPage() {
       if (filterDept) params.set("departmentId", filterDept);
       if (filterClass) params.set("classId", filterClass);
       if (filterCourse) params.set("courseId", filterCourse);
-      if (filterStudent) params.set("studentId", filterStudent);
+      if (filterSearch) params.set("search", filterSearch);
       const res = await authFetch(`/api/reports/attendance?${params.toString()}`);
       if (res.ok) {
         const data = await res.json();
@@ -166,6 +173,10 @@ export default function AttendanceReportPage() {
           ),
         ].sort((a, b) => b.localeCompare(a));
         setAvailableDates(dates);
+        if (!filterCourse && Array.isArray(data.courseSessions)) {
+          setCourseSessions(data.courseSessions);
+          setAttendanceCourses(data.courseSessions);
+        }
       } else {
         setAvailableDates([]);
       }
@@ -174,7 +185,7 @@ export default function AttendanceReportPage() {
     } finally {
       setLoadingDates(false);
     }
-  }, [filterDept, filterClass, filterCourse, filterStudent]);
+  }, [filterDept, filterClass, filterCourse, filterSearch]);
 
   const fetchReport = useCallback(async () => {
     setLoading(true);
@@ -184,10 +195,16 @@ export default function AttendanceReportPage() {
         const data = await res.json();
         setSessions(data.sessions || []);
         setSummary(data.summary || { totalSessions: 0, totalPresent: 0, totalAbsent: 0, totalLate: 0, totalExcused: 0 });
+        if (!filterCourse) {
+          setCourseSessions(data.courseSessions || []);
+          setAttendanceCourses(data.courseSessions || []);
+        } else {
+          setCourseSessions([]);
+        }
       }
     } catch { /* empty */ }
     setLoading(false);
-  }, [buildParams]);
+  }, [buildParams, filterCourse]);
 
   const fetchStudentAttendance = useCallback(async () => {
     setLoading(true);
@@ -196,7 +213,7 @@ export default function AttendanceReportPage() {
       if (filterDept) params.set("departmentId", filterDept);
       if (filterClass) params.set("classId", filterClass);
       if (filterCourse) params.set("courseId", filterCourse);
-      if (filterStudent) params.set("studentId", filterStudent);
+      if (filterSearch) params.set("search", filterSearch);
       if (dateMode === "single" && selectedDate) {
         params.set("dateFrom", selectedDate);
         params.set("dateTo", selectedDate);
@@ -208,6 +225,12 @@ export default function AttendanceReportPage() {
       if (res.ok) {
         const data = await res.json();
         setStudentAttendances(data.students || []);
+        if (!filterCourse) {
+          setCourseSessions(data.courseSessions || []);
+          setAttendanceCourses(data.courseSessions || []);
+        } else {
+          setCourseSessions([]);
+        }
         setSelectedClassInfo(
           data.class
             ? { name: data.class.name, semester: data.class.semester, year: data.class.year, department: data.class.department }
@@ -215,10 +238,12 @@ export default function AttendanceReportPage() {
         );
       } else {
         setStudentAttendances([]);
+        setCourseSessions([]);
         setSelectedClassInfo(null);
       }
     } catch {
       setStudentAttendances([]);
+      setCourseSessions([]);
       setSelectedClassInfo(null);
     }
     setLoading(false);
@@ -226,7 +251,7 @@ export default function AttendanceReportPage() {
     filterDept,
     filterClass,
     filterCourse,
-    filterStudent,
+    filterSearch,
     dateMode,
     selectedDate,
     dateFrom,
@@ -239,9 +264,6 @@ export default function AttendanceReportPage() {
     authFetch("/api/courses").then((r) => {
       if (r.ok) r.json().then((d: CourseItem[]) => setCourses(d));
     });
-    authFetch("/api/students?status=Admitted").then((r) => {
-      if (r.ok) r.json().then((d: StudentItem[]) => setStudents(d));
-    });
   }, []);
 
   useEffect(() => {
@@ -249,7 +271,7 @@ export default function AttendanceReportPage() {
     setSelectedDate("");
     setDateFrom("");
     setDateTo("");
-  }, [filterDept, filterClass, filterCourse, filterStudent]);
+  }, [filterDept, filterClass, filterCourse]);
 
   useEffect(() => {
     if (filterClass && !classes.some((c) => String(c.id) === filterClass)) {
@@ -258,16 +280,14 @@ export default function AttendanceReportPage() {
   }, [classes, filterClass]);
 
   useEffect(() => {
-    if (filterCourse && !courses.some((c) => String(c.id) === filterCourse)) {
+    if (
+      filterCourse &&
+      !attendanceCourses.some((c) => String(c.courseId) === filterCourse) &&
+      !courses.some((c) => String(c.id) === filterCourse)
+    ) {
       setFilterCourse("");
     }
-  }, [courses, filterCourse]);
-
-  useEffect(() => {
-    if (filterStudent && !students.some((s) => String(s.id) === filterStudent)) {
-      setFilterStudent("");
-    }
-  }, [students, filterStudent]);
+  }, [courses, attendanceCourses, filterCourse]);
 
   useEffect(() => {
     if (dateFrom && dateTo && dateFrom > dateTo) setDateTo(dateFrom);
@@ -299,24 +319,32 @@ export default function AttendanceReportPage() {
   );
 
   const filteredCourses = useMemo(() => {
+    if (attendanceCourses.length > 0) {
+      return attendanceCourses.map((c) => ({
+        id: c.courseId,
+        code: c.code,
+        name: c.name,
+        sessionCount: c.sessionCount as number | undefined,
+      }));
+    }
+    let list = courses;
     if (filterClass) {
       const cls = classes.find((c) => String(c.id) === filterClass);
       if (!cls) return [];
-      return courses.filter((c) => c.departmentId === cls.department.id);
+      list = courses.filter((c) => c.departmentId === cls.department.id);
+    } else if (filterDept) {
+      list = courses.filter((c) => c.departmentId === Number(filterDept));
     }
-    if (filterDept) return courses.filter((c) => c.departmentId === Number(filterDept));
-    return courses;
-  }, [courses, classes, filterDept, filterClass]);
-
-  const filteredStudents = useMemo(() => {
-    return students.filter((s) => {
-      if (filterDept && s.departmentId !== Number(filterDept)) return false;
-      if (filterClass && s.classId !== Number(filterClass)) return false;
-      return true;
-    });
-  }, [students, filterDept, filterClass]);
+    return list.map((c) => ({
+      id: c.id,
+      code: c.code,
+      name: c.name,
+      sessionCount: undefined as number | undefined,
+    }));
+  }, [courses, classes, filterDept, filterClass, attendanceCourses]);
 
   const selectedDept = departments.find((d) => String(d.id) === filterDept);
+  const showCourseBreakdown = !filterCourse && courseSessions.length > 0;
   const averageAttendancePercent =
     studentAttendances.length > 0
       ? studentAttendances.reduce((total, s) => total + safeNumber(s.attendancePercent), 0) /
@@ -327,6 +355,12 @@ export default function AttendanceReportPage() {
       ? studentAttendances.reduce((total, s) => total + safeNumber(s.attendanceMarks), 0) /
         studentAttendances.length
       : 0;
+
+  const studentSessionCounts = studentAttendances.map((s) => safeNumber(s.totalSessions));
+  const sharedStudentSessions =
+    studentSessionCounts.length > 0 && studentSessionCounts.every((n) => n === studentSessionCounts[0])
+      ? studentSessionCounts[0]
+      : null;
 
   const printTitle = viewMode === "students" ? "Student Attendance Report" : "Attendance Sessions Report";
 
@@ -388,7 +422,9 @@ export default function AttendanceReportPage() {
         {viewMode === "students" && (
           <>
             <span><strong>Total Students:</strong> {studentAttendances.length}</span>
-            <span><strong>Total Sessions:</strong> {studentAttendances[0]?.totalSessions ?? 0}</span>
+            {sharedStudentSessions != null && (
+              <span><strong>Sessions (per student):</strong> {sharedStudentSessions}</span>
+            )}
             <span><strong>Avg Attendance %:</strong> {averageAttendancePercent.toFixed(1)}%</span>
             <span><strong>Avg Marks (10%):</strong> {averageAttendanceMarks.toFixed(2)}</span>
           </>
@@ -458,7 +494,6 @@ export default function AttendanceReportPage() {
                   setFilterDept(e.target.value);
                   setFilterClass("");
                   setFilterCourse("");
-                  setFilterStudent("");
                 }}
                 className={selectClassName}
               >
@@ -476,7 +511,6 @@ export default function AttendanceReportPage() {
                 value={filterClass}
                 onChange={(e) => {
                   setFilterClass(e.target.value);
-                  setFilterStudent("");
                 }}
                 className={`${selectClassName} disabled:opacity-50`}
               >
@@ -501,26 +535,24 @@ export default function AttendanceReportPage() {
                 {filteredCourses.map((c) => (
                   <option key={c.id} value={c.id}>
                     {c.code} - {c.name}
+                    {"sessionCount" in c && typeof c.sessionCount === "number"
+                      ? ` (${c.sessionCount} session${c.sessionCount === 1 ? "" : "s"})`
+                      : ""}
                   </option>
                 ))}
               </select>
             </div>
             <div>
               <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400">
-                Student
+                Student ID / Name / Phone
               </label>
-              <select
-                value={filterStudent}
-                onChange={(e) => setFilterStudent(e.target.value)}
-                className={`${selectClassName} disabled:opacity-50`}
-              >
-                <option value="">All students</option>
-                {filteredStudents.map((s) => (
-                  <option key={s.id} value={s.id}>
-                    {s.studentId} - {s.firstName} {s.lastName}
-                  </option>
-                ))}
-              </select>
+              <input
+                type="search"
+                value={filterSearchInput}
+                onChange={(e) => setFilterSearchInput(e.target.value)}
+                placeholder="Search student ID, name, or phone"
+                className="h-10 w-full min-w-0 sm:w-auto sm:min-w-[240px] rounded-lg border border-gray-200 bg-transparent px-3 text-sm text-gray-800 outline-none focus:border-brand-300 dark:border-gray-700 dark:text-white/80"
+              />
             </div>
             <div>
               <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400">
@@ -613,7 +645,7 @@ export default function AttendanceReportPage() {
             </p>
           ) : (
             <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
-              {availableDates.length} session date{availableDates.length === 1 ? "" : "s"} available — filter by department, class, course, student, and date.
+              {availableDates.length} session date{availableDates.length === 1 ? "" : "s"} available — filter by department, class, course, student ID/name/phone, and date.
             </p>
           )}
         </div>
@@ -628,6 +660,59 @@ export default function AttendanceReportPage() {
           <div className="px-5 py-5 sm:px-6 attendance-report-print-area">
             <PrintHeader />
 
+            {showCourseBreakdown && (
+              <div className="mb-5 overflow-hidden rounded-xl border border-gray-200 dark:border-gray-700">
+                <div className="border-b border-gray-100 bg-gray-50 px-4 py-2.5 dark:border-gray-800 dark:bg-white/5">
+                  <h4 className="text-sm font-semibold text-gray-800 dark:text-white/90">
+                    Sessions by course
+                  </h4>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">
+                    Number of attendance sessions taken for each course (All courses selected)
+                  </p>
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full border-collapse text-sm">
+                    <thead>
+                      <tr className="border-b border-gray-100 dark:border-gray-800">
+                        <th className="px-4 py-2 text-left text-xs font-medium uppercase text-gray-500">#</th>
+                        <th className="px-4 py-2 text-left text-xs font-medium uppercase text-gray-500">Course</th>
+                        <th className="px-4 py-2 text-center text-xs font-medium uppercase text-gray-500">Sessions taken</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {courseSessions.map((c, idx) => (
+                        <tr
+                          key={c.courseId}
+                          className="border-b border-gray-50 dark:border-gray-800 cursor-pointer hover:bg-gray-50 dark:hover:bg-white/5"
+                          onClick={() => setFilterCourse(String(c.courseId))}
+                          title="Filter to this course"
+                        >
+                          <td className="px-4 py-2 text-xs text-gray-400">{idx + 1}</td>
+                          <td className="px-4 py-2">
+                            <span className="font-medium text-gray-800 dark:text-white/90">{c.code}</span>
+                            <span className="ml-2 text-gray-500 dark:text-gray-400">{c.name}</span>
+                          </td>
+                          <td className="px-4 py-2 text-center font-semibold text-brand-600 dark:text-brand-400">
+                            {c.sessionCount}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                    <tfoot>
+                      <tr className="bg-gray-50 font-semibold dark:bg-white/5">
+                        <td className="px-4 py-2" colSpan={2}>
+                          Total courses: {courseSessions.length}
+                        </td>
+                        <td className="px-4 py-2 text-center text-brand-600 dark:text-brand-400">
+                          {courseSessions.reduce((s, c) => s + c.sessionCount, 0)}
+                        </td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
+              </div>
+            )}
+
             {/* ── Screen info bar (hidden on print) ── */}
             <div className="no-print mb-4 flex flex-wrap items-center gap-x-6 gap-y-2 rounded-xl border border-gray-100 bg-gray-50 px-4 py-3 text-sm dark:border-gray-800 dark:bg-white/3">
               {selectedClassInfo && (
@@ -641,9 +726,11 @@ export default function AttendanceReportPage() {
                   <span className="text-gray-600 dark:text-gray-400">
                     <strong className="text-gray-800 dark:text-white/80">{studentAttendances.length}</strong> students
                   </span>
-                  <span className="text-gray-600 dark:text-gray-400">
-                    <strong className="text-gray-800 dark:text-white/80">{studentAttendances[0]?.totalSessions ?? 0}</strong> sessions
-                  </span>
+                  {sharedStudentSessions != null && (
+                    <span className="text-gray-600 dark:text-gray-400">
+                      <strong className="text-gray-800 dark:text-white/80">{sharedStudentSessions}</strong> sessions per student
+                    </span>
+                  )}
                   <span className="text-gray-600 dark:text-gray-400">
                     <strong className="text-gray-800 dark:text-white/80">{averageAttendancePercent.toFixed(1)}%</strong> avg attendance
                   </span>
@@ -760,7 +847,7 @@ export default function AttendanceReportPage() {
                           </td>
                         )}
                         <td className="py-2 px-3 text-center text-gray-700 print:text-black">
-                          {studentAttendances[0]?.totalSessions ?? 0}
+                          {sharedStudentSessions != null ? sharedStudentSessions : "—"}
                         </td>
                         <td className="py-2 px-3 text-center text-gray-700 print:text-black">
                           {averageAttendancePercent.toFixed(1)}%

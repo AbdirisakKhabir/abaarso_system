@@ -14,15 +14,49 @@ export async function GET(req: NextRequest) {
     const classId = searchParams.get("classId");
     const courseId = searchParams.get("courseId");
     const studentId = searchParams.get("studentId");
+    const search = searchParams.get("search")?.trim() || "";
     const dateFrom = searchParams.get("dateFrom");
     const dateTo = searchParams.get("dateTo");
+
+    let matchedStudentIds: number[] | null = null;
+    if (studentId && Number.isInteger(Number(studentId))) {
+      matchedStudentIds = [Number(studentId)];
+    } else if (search) {
+      const matched = await prisma.student.findMany({
+        where: {
+          status: "Admitted",
+          OR: [
+            { studentId: { contains: search } },
+            { firstName: { contains: search } },
+            { lastName: { contains: search } },
+            { phone: { contains: search } },
+          ],
+        },
+        select: { id: true },
+        take: 200,
+      });
+      matchedStudentIds = matched.map((s) => s.id);
+      if (matchedStudentIds.length === 0) {
+        return NextResponse.json({
+          sessions: [],
+          summary: {
+            totalSessions: 0,
+            totalPresent: 0,
+            totalAbsent: 0,
+            totalLate: 0,
+            totalExcused: 0,
+          },
+          courseSessions: [],
+        });
+      }
+    }
 
     const where: {
       classId?: number;
       courseId?: number;
       class?: { departmentId?: number };
       date?: { gte?: Date; lte?: Date };
-      records?: { some: { studentId: number } };
+      records?: { some: { studentId: number | { in: number[] } } };
     } = {};
 
     if (departmentId) {
@@ -34,8 +68,15 @@ export async function GET(req: NextRequest) {
     if (courseId) {
       where.courseId = Number(courseId);
     }
-    if (studentId) {
-      where.records = { some: { studentId: Number(studentId) } };
+    if (matchedStudentIds) {
+      where.records = {
+        some: {
+          studentId:
+            matchedStudentIds.length === 1
+              ? matchedStudentIds[0]
+              : { in: matchedStudentIds },
+        },
+      };
     }
     if (dateFrom || dateTo) {
       where.date = {};
@@ -70,6 +111,11 @@ export async function GET(req: NextRequest) {
       totalExcused: 0,
     };
 
+    const courseMap = new Map<
+      number,
+      { courseId: number; code: string; name: string; sessionCount: number }
+    >();
+
     const enriched = sessions.map((s) => {
       const present = s.records.filter((r) => r.status === "Present").length;
       const absent = s.records.filter((r) => r.status === "Absent").length;
@@ -79,6 +125,20 @@ export async function GET(req: NextRequest) {
       summary.totalAbsent += absent;
       summary.totalLate += late;
       summary.totalExcused += excused;
+
+      if (s.course) {
+        const existing = courseMap.get(s.course.id);
+        if (existing) existing.sessionCount += 1;
+        else {
+          courseMap.set(s.course.id, {
+            courseId: s.course.id,
+            code: s.course.code,
+            name: s.course.name,
+            sessionCount: 1,
+          });
+        }
+      }
+
       return {
         id: s.id,
         class: s.class,
@@ -95,9 +155,14 @@ export async function GET(req: NextRequest) {
       };
     });
 
+    const courseSessions = [...courseMap.values()].sort(
+      (a, b) => b.sessionCount - a.sessionCount || a.code.localeCompare(b.code)
+    );
+
     return NextResponse.json({
       sessions: enriched,
       summary,
+      courseSessions,
     });
   } catch (e) {
     console.error("Attendance report error:", e);

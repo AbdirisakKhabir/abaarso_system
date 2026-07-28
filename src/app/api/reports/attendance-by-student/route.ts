@@ -9,7 +9,7 @@ import { getSemesterDateRange } from "@/lib/semester-dates";
 
 /**
  * GET /api/reports/attendance-by-student
- * Supports filters: departmentId, classId, courseId, studentId, dateFrom, dateTo.
+ * Supports filters: departmentId, classId, courseId, studentId, search, dateFrom, dateTo.
  */
 export async function GET(req: NextRequest) {
   try {
@@ -23,6 +23,7 @@ export async function GET(req: NextRequest) {
     const classId = searchParams.get("classId");
     const courseId = searchParams.get("courseId");
     const studentId = searchParams.get("studentId");
+    const search = searchParams.get("search")?.trim() || "";
     const dateFrom = searchParams.get("dateFrom");
     const dateTo = searchParams.get("dateTo");
     const semesterParam = searchParams.get("semester");
@@ -82,13 +83,39 @@ export async function GET(req: NextRequest) {
         ...(parsedDepartmentId
           ? { class: { departmentId: parsedDepartmentId } }
           : {}),
-        date: sessionDateWhere,
+        ...(Object.keys(sessionDateWhere).length > 0
+          ? { date: sessionDateWhere }
+          : {}),
       },
       orderBy: [{ date: "asc" }, { shift: "asc" }],
-      select: { id: true },
+      select: {
+        id: true,
+        courseId: true,
+        course: { select: { id: true, code: true, name: true } },
+      },
     });
     const sessionIds = sessionsOrdered.map((s) => s.id);
-    const totalSessions = sessionIds.length;
+
+    const courseMap = new Map<
+      number,
+      { courseId: number; code: string; name: string; sessionCount: number }
+    >();
+    for (const s of sessionsOrdered) {
+      if (!s.course) continue;
+      const existing = courseMap.get(s.course.id);
+      if (existing) existing.sessionCount += 1;
+      else {
+        courseMap.set(s.course.id, {
+          courseId: s.course.id,
+          code: s.course.code,
+          name: s.course.name,
+          sessionCount: 1,
+        });
+      }
+    }
+    const courseSessions = [...courseMap.values()].sort(
+      (a, b) => b.sessionCount - a.sessionCount || a.code.localeCompare(b.code)
+    );
 
     const students = await prisma.student.findMany({
       where: {
@@ -96,12 +123,23 @@ export async function GET(req: NextRequest) {
         ...(parsedStudentId ? { id: parsedStudentId } : {}),
         ...(parsedClassId ? { classId: parsedClassId } : {}),
         ...(parsedDepartmentId ? { departmentId: parsedDepartmentId } : {}),
+        ...(search && !parsedStudentId
+          ? {
+              OR: [
+                { studentId: { contains: search } },
+                { firstName: { contains: search } },
+                { lastName: { contains: search } },
+                { phone: { contains: search } },
+              ],
+            }
+          : {}),
       },
       select: {
         id: true,
         studentId: true,
         firstName: true,
         lastName: true,
+        phone: true,
       },
       orderBy: [{ firstName: "asc" }, { lastName: "asc" }],
     });
@@ -113,6 +151,7 @@ export async function GET(req: NextRequest) {
         year,
         students: [],
         totalSessions: 0,
+        courseSessions,
         sheet: null,
       });
     }
@@ -130,59 +169,84 @@ export async function GET(req: NextRequest) {
 
     const byStudent = new Map<
       number,
-      { present: number; absent: number; late: number; excused: number }
+      {
+        present: number;
+        absent: number;
+        late: number;
+        excused: number;
+        sessionIds: Set<number>;
+      }
     >();
     for (const s of students) {
-      byStudent.set(s.id, { present: 0, absent: 0, late: 0, excused: 0 });
+      byStudent.set(s.id, {
+        present: 0,
+        absent: 0,
+        late: 0,
+        excused: 0,
+        sessionIds: new Set(),
+      });
     }
     for (const r of records) {
       const agg = byStudent.get(r.studentId);
       if (!agg) continue;
+      agg.sessionIds.add(r.sessionId);
       if (r.status === "Present") agg.present++;
       else if (r.status === "Absent") agg.absent++;
       else if (r.status === "Late") agg.late++;
       else if (r.status === "Excused") agg.excused++;
     }
 
-    const result = students.map((s) => {
-      const agg = byStudent.get(s.id) ?? {
-        present: 0,
-        absent: 0,
-        late: 0,
-        excused: 0,
-      };
-      const presentPlusExcused = agg.present + agg.excused;
-      const attendancePercent = computeAttendancePercent(
-        presentPlusExcused,
-        totalSessions
-      );
-      const attendanceMarks = computeAttendanceMarks(
-        presentPlusExcused,
-        totalSessions
-      );
+    const result = students
+      .map((s) => {
+        const agg = byStudent.get(s.id) ?? {
+          present: 0,
+          absent: 0,
+          late: 0,
+          excused: 0,
+          sessionIds: new Set<number>(),
+        };
+        const studentTotalSessions = agg.sessionIds.size;
+        const presentPlusExcused = agg.present + agg.excused;
+        const attendancePercent = computeAttendancePercent(
+          presentPlusExcused,
+          studentTotalSessions
+        );
+        const attendanceMarks = computeAttendanceMarks(
+          presentPlusExcused,
+          studentTotalSessions
+        );
 
-      return {
-        studentId: s.id,
-        studentIdStr: s.studentId,
-        firstName: s.firstName,
-        lastName: s.lastName,
-        present: agg.present,
-        absent: agg.absent,
-        late: agg.late,
-        excused: agg.excused,
-        totalSessions,
-        attendancePercent,
-        attendanceMarks,
-        rowDanger: attendancePercent < 35,
-      };
-    });
+        return {
+          studentId: s.id,
+          studentIdStr: s.studentId,
+          firstName: s.firstName,
+          lastName: s.lastName,
+          phone: s.phone,
+          present: agg.present,
+          absent: agg.absent,
+          late: agg.late,
+          excused: agg.excused,
+          totalSessions: studentTotalSessions,
+          attendancePercent,
+          attendanceMarks,
+          rowDanger: attendancePercent < 35,
+        };
+      })
+      // When searching, only show students who actually have attendance in range
+      .filter((s) => (search ? s.totalSessions > 0 : true));
+
+    const maxStudentSessions = result.reduce(
+      (max, s) => Math.max(max, s.totalSessions),
+      0
+    );
 
     return NextResponse.json({
       class: cls,
       semester,
       year,
       students: result,
-      totalSessions,
+      totalSessions: maxStudentSessions,
+      courseSessions,
       sheet: null,
     });
   } catch (e) {
