@@ -77,7 +77,13 @@ async function getOrCreateDepartment(
   if (!faculty) return null;
 
   const created = await prisma.department.create({
-    data: { code: upper, name, facultyId: faculty.id, tuitionFee: 0 },
+    data: {
+      code: upper,
+      name,
+      facultyId: faculty.id,
+      tuitionFee: 0,
+      program: faculty.program || "Bachelor",
+    },
     select: { id: true, tuitionFee: true },
   });
   deptByCode[upper] = { id: created.id, code: upper, tuitionFee: created.tuitionFee };

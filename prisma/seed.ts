@@ -145,17 +145,16 @@ async function main() {
     });
   }
 
-  // Create default semesters (Fall, Spring, Summer)
+  // Create default semesters (Fall, Spring, Summer) for Bachelor
   const defaultSemesters = [
     { name: "Spring", sortOrder: 1 },
     { name: "Summer", sortOrder: 2 },
     { name: "Fall", sortOrder: 3 },
   ];
   for (const s of defaultSemesters) {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    await (prisma as any).semester.upsert({
-      where: { name: s.name },
-      create: { name: s.name, sortOrder: s.sortOrder },
+    await prisma.semester.upsert({
+      where: { name_program: { name: s.name, program: "Bachelor" } },
+      create: { name: s.name, sortOrder: s.sortOrder, program: "Bachelor" },
       update: { sortOrder: s.sortOrder },
     });
   }
@@ -294,8 +293,13 @@ async function main() {
 
   // Create default faculty and departments for student import (ACC, ICT, HRM, LAB, SWE)
   const defaultFaculty = await prisma.faculty.upsert({
-    where: { code: "MAIN" },
-    create: { name: "Main Faculty", code: "MAIN", description: "Default faculty" },
+    where: { code_program: { code: "MAIN", program: "Bachelor" } },
+    create: {
+      name: "Main Faculty",
+      code: "MAIN",
+      description: "Default faculty",
+      program: "Bachelor",
+    },
     update: {},
   });
 
@@ -308,8 +312,13 @@ async function main() {
   ];
   for (const d of defaultDepartments) {
     await prisma.department.upsert({
-      where: { code: d.code },
-      create: { ...d, facultyId: defaultFaculty.id, tuitionFee: 0 },
+      where: { code_program: { code: d.code, program: "Bachelor" } },
+      create: {
+        ...d,
+        facultyId: defaultFaculty.id,
+        tuitionFee: 0,
+        program: "Bachelor",
+      },
       update: { name: d.name },
     });
   }
