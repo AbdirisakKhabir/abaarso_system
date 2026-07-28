@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAuthUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { DEFAULT_PROGRAM, parseProgram } from "@/lib/program";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -73,6 +74,9 @@ export async function PATCH(req: NextRequest, ctx: RouteContext) {
       data.facultyId = fid;
     }
     if (body.tuitionFee !== undefined) data.tuitionFee = body.tuitionFee != null ? Number(body.tuitionFee) : null;
+    if (body.program !== undefined) {
+      data.program = parseProgram(body.program) ?? DEFAULT_PROGRAM;
+    }
     if (body.isActive !== undefined) data.isActive = Boolean(body.isActive);
 
     const department = await prisma.department.update({
@@ -92,7 +96,7 @@ export async function PATCH(req: NextRequest, ctx: RouteContext) {
       (e as { code: string }).code === "P2002"
     ) {
       return NextResponse.json(
-        { error: "A department with this name or code already exists" },
+        { error: "A department with this name or code already exists for this program" },
         { status: 400 }
       );
     }

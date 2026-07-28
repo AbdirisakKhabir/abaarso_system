@@ -156,7 +156,7 @@ export default function TransferStudentPage() {
     <div>
       <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
         <PageBreadCrumb pageTitle="Transfer Student" />
-        <Link href="/admission">
+        <Link href="/admission/bachelor">
           <Button variant="outline" size="sm" startIcon={<ChevronLeftIcon />}>
             Back to Admission
           </Button>

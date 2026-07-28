@@ -4,6 +4,7 @@ import { getAuthUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { parsePaginationParams } from "@/lib/pagination";
 import { perSemesterTuition } from "@/lib/tuition-amount";
+import { DEFAULT_PROGRAM, parseProgram } from "@/lib/program";
 
 // Generate a unique student ID like STD-2026-0001
 async function generateStudentId(): Promise<string> {
@@ -44,6 +45,10 @@ const studentListInclude = {
 
 function buildStudentWhere(searchParams: URLSearchParams): Prisma.StudentWhereInput {
   const where: Prisma.StudentWhereInput = {};
+  const programFilter = parseProgram(searchParams.get("program"), { allowAll: true });
+  if (programFilter && programFilter !== "all") {
+    where.program = programFilter;
+  }
   const status = searchParams.get("status");
   if (status && status !== "all") {
     where.status = status;
@@ -75,6 +80,7 @@ function buildStudentWhere(searchParams: URLSearchParams): Prisma.StudentWhereIn
       { lastName: { contains: q } },
       { email: { contains: q } },
       { motherName: { contains: q } },
+      { phone: { contains: q } },
       { department: { name: { contains: q } } },
     ];
   }
@@ -284,7 +290,7 @@ export async function POST(req: NextRequest) {
         departmentId: parsedDeptId,
         admissionAcademicYearId: parsedAyId,
         classId: Number.isInteger(parsedClassId) ? parsedClassId : null,
-        program: program || null,
+        program: parseProgram(program) ?? DEFAULT_PROGRAM,
         imageUrl: imageUrl || null,
         imagePublicId: imagePublicId || null,
         status: status || "Admitted",

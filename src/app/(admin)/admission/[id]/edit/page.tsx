@@ -6,6 +6,7 @@ import PageBreadCrumb from "@/components/common/PageBreadCrumb";
 import StudentRegistrationForm from "@/components/admission/StudentRegistrationForm";
 import type { StudentFormData } from "@/components/admission/StudentRegistrationForm";
 import { authFetch } from "@/lib/api";
+import { DEFAULT_PROGRAM } from "@/lib/program";
 import { useAuth } from "@/context/AuthContext";
 
 type Department = { id: number; name: string; code: string };
@@ -158,7 +159,7 @@ export default function EditStudentPage() {
         departmentId: String(student.departmentId),
         admissionAcademicYearId: student.admissionAcademicYearId ? String(student.admissionAcademicYearId) : "",
         classId: student.classId ? String(student.classId) : "",
-        program: student.program ?? "",
+        program: student.program || DEFAULT_PROGRAM,
         status: student.status,
         paymentStatus: student.paymentStatus ?? "Fully Paid",
         customSemesterFee:
@@ -180,7 +181,12 @@ export default function EditStudentPage() {
         departments={departments}
         academicYears={academicYears}
         classes={classes}
-        onSuccess={() => router.push("/admission")}
+        listHref={
+          (student?.program === "Masters" ? "/admission/masters" : "/admission/bachelor")
+        }
+        onSuccess={() =>
+          router.push(student?.program === "Masters" ? "/admission/masters" : "/admission/bachelor")
+        }
       />
     </div>
   );

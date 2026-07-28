@@ -5,6 +5,7 @@ import Image from "next/image";
 import Link from "next/link";
 import Button from "@/components/ui/button/Button";
 import { authFetch } from "@/lib/api";
+import { DEFAULT_PROGRAM, PROGRAMS, programLabel } from "@/lib/program";
 import { ChevronLeftIcon } from "@/icons";
 import SearchableMultiSelect, { type SearchableOption } from "./SearchableMultiSelect";
 
@@ -16,6 +17,7 @@ export type LecturerFormState = {
   email: string;
   phone: string;
   degree: string;
+  program: string;
   departmentIds: number[];
   courseIds: number[];
   imageUrl: string;
@@ -29,6 +31,7 @@ const defaultForm: LecturerFormState = {
   email: "",
   phone: "",
   degree: "",
+  program: DEFAULT_PROGRAM,
   departmentIds: [],
   courseIds: [],
   imageUrl: "",
@@ -137,6 +140,7 @@ export default function LecturerForm({
         email: form.email.trim(),
         phone: form.phone.trim() || undefined,
         degree: form.degree.trim() || undefined,
+        program: form.program || DEFAULT_PROGRAM,
         departmentIds: form.departmentIds,
         courseIds: form.courseIds,
         imageUrl: form.imageUrl || undefined,
@@ -254,6 +258,23 @@ export default function LecturerForm({
                 placeholder="e.g. Ph.D., M.Sc."
                 className={inputClass}
               />
+            </div>
+            <div>
+              <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">
+                Program <span className="text-error-500">*</span>
+              </label>
+              <select
+                required
+                value={form.program}
+                onChange={(e) => setForm((f) => ({ ...f, program: e.target.value }))}
+                className={inputClass}
+              >
+                {PROGRAMS.map((p) => (
+                  <option key={p} value={p}>
+                    {programLabel(p)}
+                  </option>
+                ))}
+              </select>
             </div>
           </div>
         </div>

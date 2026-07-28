@@ -3,6 +3,7 @@ import type { Prisma } from "@prisma/client";
 import { getAuthUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { parsePaginationParams } from "@/lib/pagination";
+import { DEFAULT_PROGRAM, parseProgram } from "@/lib/program";
 
 export async function GET(req: NextRequest) {
   try {
@@ -14,7 +15,11 @@ export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url);
     const { paginate, page, pageSize, skip } = parsePaginationParams(searchParams);
     const q = searchParams.get("q")?.trim();
+    const programFilter = parseProgram(searchParams.get("program"), { allowAll: true });
     const where: Prisma.LecturerWhereInput = {};
+    if (programFilter && programFilter !== "all") {
+      where.program = programFilter;
+    }
     if (q) {
       where.OR = [
         { name: { contains: q } },
@@ -93,7 +98,7 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json();
-    const { name, email, phone, degree, departmentIds, courseIds, imageUrl, imagePublicId, cvUrl, cvPublicId } = body;
+    const { name, email, phone, degree, program, departmentIds, courseIds, imageUrl, imagePublicId, cvUrl, cvPublicId } = body;
 
     if (!name || !email) {
       return NextResponse.json(
@@ -101,6 +106,8 @@ export async function POST(req: NextRequest) {
         { status: 400 }
       );
     }
+
+    const resolvedProgram = parseProgram(program) ?? DEFAULT_PROGRAM;
 
     const deptIds = Array.isArray(departmentIds)
       ? departmentIds.map((id: unknown) => Number(id)).filter((id: number) => Number.isInteger(id) && id > 0)
@@ -115,6 +122,7 @@ export async function POST(req: NextRequest) {
         email: String(email).trim().toLowerCase(),
         phone: phone ? String(phone).trim() : null,
         degree: degree ? String(degree).trim() : null,
+        program: resolvedProgram,
         imageUrl: imageUrl ? String(imageUrl).trim() : null,
         imagePublicId: imagePublicId ? String(imagePublicId).trim() : null,
         cvUrl: cvUrl ? String(cvUrl).trim() : null,

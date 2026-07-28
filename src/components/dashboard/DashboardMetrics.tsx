@@ -48,7 +48,7 @@ const metricCards: {
     key: "admitted",
     label: "Students",
     icon: <PageIcon className="size-6" />,
-    href: "/admission",
+    href: "/admission/bachelor",
     gradient: "from-emerald-500/10 via-emerald-500/5 to-transparent dark:from-emerald-500/20 dark:via-emerald-500/10",
     iconBg: "bg-emerald-500/15 dark:bg-emerald-500/25",
     iconColor: "text-emerald-600 dark:text-emerald-400",

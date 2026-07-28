@@ -173,7 +173,7 @@ export default function UpgradeStudentsPage() {
     <div>
       <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
         <PageBreadCrumb pageTitle="Upgrade Students" />
-        <Link href="/admission">
+        <Link href="/admission/bachelor">
           <Button variant="outline" size="sm" startIcon={<ChevronLeftIcon />}>
             Back to Admission
           </Button>

@@ -15,11 +15,12 @@ import { globalRowIndex } from "@/hooks/usePagination";
 import { useServerPagination } from "@/hooks/useServerPagination";
 import Badge from "@/components/ui/badge/Badge";
 import { authFetch } from "@/lib/api";
+import { DEFAULT_PROGRAM, PROGRAMS, programLabel, type Program } from "@/lib/program";
 import { ModalOverlayGate } from "@/context/ModalOverlayContext";
 import { useAuth } from "@/context/AuthContext";
 import { PencilIcon, PlusIcon, TrashBinIcon } from "@/icons";
 
-type Faculty = { id: number; name: string; code: string };
+type Faculty = { id: number; name: string; code: string; program?: string | null };
 
 type DepartmentRow = {
   id: number;
@@ -28,6 +29,7 @@ type DepartmentRow = {
   description: string | null;
   facultyId: number;
   faculty: Faculty;
+  program: string | null;
   tuitionFee: number | null;
   isActive: boolean;
   createdAt: string;
@@ -40,6 +42,7 @@ export default function DepartmentsPage() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [filterFacultyId, setFilterFacultyId] = useState<string>("all");
+  const [filterProgram, setFilterProgram] = useState<Program | "all">(DEFAULT_PROGRAM);
   const [modal, setModal] = useState<"add" | "edit" | null>(null);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [form, setForm] = useState({
@@ -48,6 +51,7 @@ export default function DepartmentsPage() {
     description: "",
     facultyId: "",
     tuitionFee: "",
+    program: DEFAULT_PROGRAM as string,
   });
   const [submitError, setSubmitError] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -62,7 +66,7 @@ export default function DepartmentsPage() {
     totalPages,
     from,
     to,
-  } = useServerPagination([search, filterFacultyId]);
+  } = useServerPagination([search, filterFacultyId, filterProgram]);
 
   const canCreate = hasPermission("departments.create");
   const canEdit = hasPermission("departments.edit");
@@ -76,6 +80,7 @@ export default function DepartmentsPage() {
       params.set("pageSize", String(pageSize));
       if (search.trim()) params.set("q", search.trim());
       if (filterFacultyId !== "all") params.set("facultyId", filterFacultyId);
+      params.set("program", filterProgram);
       const res = await authFetch(`/api/departments?${params.toString()}`);
       if (res.ok) {
         const data = await res.json();
@@ -88,17 +93,21 @@ export default function DepartmentsPage() {
     } finally {
       setLoading(false);
     }
-  }, [page, pageSize, search, filterFacultyId, setTotal]);
+  }, [page, pageSize, search, filterFacultyId, filterProgram, setTotal]);
 
   async function loadFaculties() {
-    const res = await authFetch("/api/faculties");
+    const res = await authFetch("/api/faculties?program=all");
     if (res.ok) {
       const data = await res.json();
-      setFaculties(data.map((f: Faculty & { departmentCount?: number }) => ({
-        id: f.id,
-        name: f.name,
-        code: f.code,
-      })));
+      const list = Array.isArray(data) ? data : Array.isArray(data.items) ? data.items : [];
+      setFaculties(
+        list.map((f: Faculty & { departmentCount?: number }) => ({
+          id: f.id,
+          name: f.name,
+          code: f.code,
+          program: f.program ?? null,
+        }))
+      );
     }
   }
 
@@ -113,12 +122,14 @@ export default function DepartmentsPage() {
   function openAdd() {
     setModal("add");
     setEditingId(null);
+    const firstFaculty = faculties[0];
     setForm({
       name: "",
       code: "",
       description: "",
-      facultyId: faculties[0] ? String(faculties[0].id) : "",
+      facultyId: firstFaculty ? String(firstFaculty.id) : "",
       tuitionFee: "",
+      program: firstFaculty?.program || DEFAULT_PROGRAM,
     });
     setSubmitError("");
   }
@@ -132,6 +143,7 @@ export default function DepartmentsPage() {
       description: d.description ?? "",
       facultyId: String(d.facultyId),
       tuitionFee: d.tuitionFee != null ? String(d.tuitionFee) : "",
+      program: d.program || DEFAULT_PROGRAM,
     });
     setSubmitError("");
   }
@@ -147,6 +159,7 @@ export default function DepartmentsPage() {
         description: form.description || undefined,
         facultyId: Number(form.facultyId),
         tuitionFee: form.tuitionFee ? Number(form.tuitionFee) : undefined,
+        program: form.program || DEFAULT_PROGRAM,
       };
 
       if (modal === "add") {
@@ -232,6 +245,18 @@ export default function DepartmentsPage() {
             </span>
           </div>
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+            <select
+              value={filterProgram}
+              onChange={(e) => setFilterProgram(e.target.value as Program | "all")}
+              className="h-10 rounded-lg border border-gray-200 bg-transparent px-3 text-sm text-gray-700 outline-none focus:border-brand-300 focus:ring-2 focus:ring-brand-500/20 dark:border-gray-700 dark:text-gray-300 dark:focus:border-brand-500/40"
+            >
+              <option value="all">All Programs</option>
+              {PROGRAMS.map((p) => (
+                <option key={p} value={p}>
+                  {programLabel(p)}
+                </option>
+              ))}
+            </select>
             {/* Faculty Filter */}
             <select
               value={filterFacultyId}
@@ -274,7 +299,7 @@ export default function DepartmentsPage() {
               </svg>
             </div>
             <p className="text-sm font-medium text-gray-500 dark:text-gray-400">
-              {search || filterFacultyId !== "all"
+              {search || filterFacultyId !== "all" || filterProgram !== "all"
                 ? "No departments match your filters."
                 : "No departments yet. Create one to get started."}
             </p>
@@ -287,6 +312,7 @@ export default function DepartmentsPage() {
                 <TableCell isHeader>#</TableCell>
                 <TableCell isHeader>Department</TableCell>
                 <TableCell isHeader>Code</TableCell>
+                <TableCell isHeader>Program</TableCell>
                 <TableCell isHeader>Faculty</TableCell>
                 <TableCell isHeader>Tuition Fee</TableCell>
                 <TableCell isHeader>Description</TableCell>
@@ -312,6 +338,9 @@ export default function DepartmentsPage() {
                   </TableCell>
                   <TableCell>
                     <Badge color="primary" size="sm">{d.code}</Badge>
+                  </TableCell>
+                  <TableCell>
+                    <Badge color="warning" size="sm">{d.program ?? "—"}</Badge>
                   </TableCell>
                   <TableCell>
                     <Badge color="info" size="sm">{d.faculty.name}</Badge>
@@ -433,7 +462,15 @@ export default function DepartmentsPage() {
                     <select
                       required
                       value={form.facultyId}
-                      onChange={(e) => setForm((f) => ({ ...f, facultyId: e.target.value }))}
+                      onChange={(e) => {
+                        const facultyId = e.target.value;
+                        const faculty = faculties.find((f) => String(f.id) === facultyId);
+                        setForm((f) => ({
+                          ...f,
+                          facultyId,
+                          program: faculty?.program || f.program || DEFAULT_PROGRAM,
+                        }));
+                      }}
                       className="h-11 w-full appearance-none rounded-lg border border-gray-200 bg-transparent px-4 py-2.5 text-sm text-gray-800 outline-none focus:border-brand-300 focus:ring-2 focus:ring-brand-500/20 dark:border-gray-700 dark:text-white dark:focus:border-brand-500/40"
                     >
                       <option value="">Select a faculty</option>
@@ -444,6 +481,23 @@ export default function DepartmentsPage() {
                       ))}
                     </select>
                   </div>
+                </div>
+                <div>
+                  <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">
+                    Program <span className="text-error-500">*</span>
+                  </label>
+                  <select
+                    required
+                    value={form.program}
+                    onChange={(e) => setForm((f) => ({ ...f, program: e.target.value }))}
+                    className="h-11 w-full appearance-none rounded-lg border border-gray-200 bg-transparent px-4 py-2.5 text-sm text-gray-800 outline-none focus:border-brand-300 focus:ring-2 focus:ring-brand-500/20 dark:border-gray-700 dark:text-white dark:focus:border-brand-500/40"
+                  >
+                    {PROGRAMS.map((p) => (
+                      <option key={p} value={p}>
+                        {programLabel(p)}
+                      </option>
+                    ))}
+                  </select>
                 </div>
                 <div>
                   <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">

@@ -3,6 +3,7 @@ import type { Prisma } from "@prisma/client";
 import { getAuthUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { parsePaginationParams } from "@/lib/pagination";
+import { DEFAULT_PROGRAM, parseProgram } from "@/lib/program";
 
 export async function GET(req: NextRequest) {
   try {
@@ -14,7 +15,11 @@ export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url);
     const { paginate, page, pageSize, skip } = parsePaginationParams(searchParams);
     const q = searchParams.get("q")?.trim();
+    const programFilter = parseProgram(searchParams.get("program"), { allowAll: true });
     const where: Prisma.FacultyWhereInput = {};
+    if (programFilter && programFilter !== "all") {
+      where.program = programFilter;
+    }
     if (q) {
       where.OR = [
         { name: { contains: q } },
@@ -32,7 +37,7 @@ export async function GET(req: NextRequest) {
       name: string;
       code: string;
       description: string | null;
-      program: string | null;
+      program: string;
       isActive: boolean;
       createdAt: Date;
       _count: { departments: number };
@@ -91,6 +96,7 @@ export async function POST(req: NextRequest) {
 
     const body = await req.json();
     const { name, code, description, program } = body;
+    const resolvedProgram = parseProgram(program) ?? DEFAULT_PROGRAM;
 
     if (!name || !code) {
       return NextResponse.json(
@@ -104,7 +110,7 @@ export async function POST(req: NextRequest) {
         name: String(name).trim(),
         code: String(code).trim().toUpperCase(),
         description: description || null,
-        program: program || null,
+        program: resolvedProgram,
       },
     });
 
@@ -117,7 +123,7 @@ export async function POST(req: NextRequest) {
       (e as { code: string }).code === "P2002"
     ) {
       return NextResponse.json(
-        { error: "A faculty with this name or code already exists" },
+        { error: "A faculty with this name or code already exists for this program" },
         { status: 400 }
       );
     }

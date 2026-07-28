@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAuthUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { parseProgram } from "@/lib/program";
 
 /** Grouped counts by status for dashboard-style stats (not paginated). */
 export async function GET(req: NextRequest) {
@@ -10,8 +11,16 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
+    const programFilter = parseProgram(new URL(req.url).searchParams.get("program"), {
+      allowAll: true,
+    });
+
     const groups = await prisma.student.groupBy({
       by: ["status"],
+      where:
+        programFilter && programFilter !== "all"
+          ? { program: programFilter }
+          : undefined,
       _count: { _all: true },
     });
 

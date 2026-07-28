@@ -4,6 +4,7 @@ import { getAuthUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { parsePaginationParams } from "@/lib/pagination";
 import { isValidSemester } from "@/lib/semesters";
+import { DEFAULT_PROGRAM, parseProgram } from "@/lib/program";
 
 export async function GET(req: NextRequest) {
   try {
@@ -18,9 +19,13 @@ export async function GET(req: NextRequest) {
     const departmentId = searchParams.get("departmentId");
     const semester = searchParams.get("semester");
     const activeOnly = searchParams.get("active") === "true";
+    const programFilter = parseProgram(searchParams.get("program"), { allowAll: true });
     const where: Prisma.ClassWhereInput = {};
     if (activeOnly) {
       where.isActive = true;
+    }
+    if (programFilter && programFilter !== "all") {
+      where.program = programFilter;
     }
     if (q) {
       where.OR = [
@@ -39,7 +44,7 @@ export async function GET(req: NextRequest) {
     }
 
     const include = {
-      department: { select: { id: true, name: true, code: true } },
+      department: { select: { id: true, name: true, code: true, program: true } },
     } as const;
 
     const orderBy = [{ year: "desc" as const }, { semester: "asc" as const }, { name: "asc" as const }];
@@ -82,7 +87,7 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json();
-    const { name, departmentId, semester, year, room, schedule, capacity } = body;
+    const { name, departmentId, semester, year, room, schedule, capacity, program } = body;
     const parsedDepartmentId = Number(departmentId);
     const parsedYear = Number(year);
 
@@ -93,9 +98,18 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    if (!(await isValidSemester(semester))) {
+    let resolvedProgram = parseProgram(program) ?? DEFAULT_PROGRAM;
+    if (program == null || program === "") {
+      const dept = await prisma.department.findUnique({
+        where: { id: parsedDepartmentId },
+        select: { program: true },
+      });
+      if (dept?.program) resolvedProgram = parseProgram(dept.program) ?? DEFAULT_PROGRAM;
+    }
+
+    if (!(await isValidSemester(semester, resolvedProgram))) {
       return NextResponse.json(
-        { error: "Invalid semester. Use a semester from the Semesters settings." },
+        { error: "Invalid semester. Use a semester from the Semesters settings for this program." },
         { status: 400 }
       );
     }
@@ -109,9 +123,10 @@ export async function POST(req: NextRequest) {
         room: room || null,
         schedule: schedule || null,
         capacity: Number(capacity) > 0 ? Number(capacity) : 40,
+        program: resolvedProgram,
       },
       include: {
-        department: { select: { id: true, name: true, code: true } },
+        department: { select: { id: true, name: true, code: true, program: true } },
       },
     });
 
@@ -124,7 +139,7 @@ export async function POST(req: NextRequest) {
       (e as { code: string }).code === "P2002"
     ) {
       return NextResponse.json(
-        { error: "A class with this name in the same semester/year already exists" },
+        { error: "A class with this name in the same semester/year already exists for this program" },
         { status: 400 }
       );
     }

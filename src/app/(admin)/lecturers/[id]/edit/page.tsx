@@ -5,6 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import PageBreadCrumb from "@/components/common/PageBreadCrumb";
 import LecturerForm, { type CourseInfo, type DeptInfo, type LecturerFormState } from "@/components/lecturers/LecturerForm";
 import { authFetch } from "@/lib/api";
+import { DEFAULT_PROGRAM } from "@/lib/program";
 import { useAuth } from "@/context/AuthContext";
 
 type LecturerApi = {
@@ -13,6 +14,7 @@ type LecturerApi = {
   email: string;
   phone: string | null;
   degree: string | null;
+  program: string | null;
   imageUrl: string | null;
   imagePublicId: string | null;
   cvUrl: string | null;
@@ -115,6 +117,7 @@ export default function EditLecturerPage() {
     email: lecturer.email,
     phone: lecturer.phone ?? "",
     degree: lecturer.degree ?? "",
+    program: lecturer.program || DEFAULT_PROGRAM,
     departmentIds: (lecturer.departments ?? []).map((d) => d.id),
     courseIds: (lecturer.courses ?? []).map((c) => c.id),
     imageUrl: lecturer.imageUrl ?? "",

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getAuthUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { deleteImage } from "@/lib/cloudinary";
+import { DEFAULT_PROGRAM, parseProgram } from "@/lib/program";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -101,7 +102,7 @@ export async function PATCH(req: NextRequest, ctx: RouteContext) {
     if (body.classId !== undefined) {
       data.classId = body.classId ? Number(body.classId) : null;
     }
-    if (body.program !== undefined) data.program = body.program || null;
+    if (body.program !== undefined) data.program = parseProgram(body.program) ?? DEFAULT_PROGRAM;
     if (body.status !== undefined) data.status = body.status;
     if (body.paymentStatus !== undefined) {
       data.paymentStatus = ["Full Scholarship", "Half Scholar", "Fully Paid"].includes(body.paymentStatus)

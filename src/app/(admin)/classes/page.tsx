@@ -15,27 +15,29 @@ import { globalRowIndex } from "@/hooks/usePagination";
 import { useServerPagination } from "@/hooks/useServerPagination";
 import Badge from "@/components/ui/badge/Badge";
 import { authFetch } from "@/lib/api";
+import { DEFAULT_PROGRAM, PROGRAMS, programLabel, type Program } from "@/lib/program";
 import { ModalOverlayGate } from "@/context/ModalOverlayContext";
 import { useAuth } from "@/context/AuthContext";
 import { PencilIcon, PlusIcon, TrashBinIcon } from "@/icons";
 
-type DepartmentOption = { id: number; name: string; code: string };
+type DepartmentOption = { id: number; name: string; code: string; program?: string | null };
 
 type ClassRow = {
   id: number;
   name: string;
   departmentId: number;
-  department: { id: number; name: string; code: string };
+  department: { id: number; name: string; code: string; program?: string | null };
   semester: string;
   year: number;
   room: string | null;
   schedule: string | null;
   capacity: number;
+  program: string | null;
   isActive: boolean;
   createdAt: string;
 };
 
-type SemesterOption = { id: number; name: string; sortOrder: number; isActive: boolean };
+type SemesterOption = { id: number; name: string; sortOrder: number; isActive: boolean; program?: string | null };
 type AcademicYearOption = { id: number; startYear: number; endYear: number; name: string; isActive?: boolean };
 
 export default function ClassesPage() {
@@ -47,6 +49,7 @@ export default function ClassesPage() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [filterSemester, setFilterSemester] = useState<string>("all");
+  const [filterProgram, setFilterProgram] = useState<Program | "all">(DEFAULT_PROGRAM);
   const [modal, setModal] = useState<"add" | "edit" | null>(null);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [form, setForm] = useState({
@@ -57,6 +60,7 @@ export default function ClassesPage() {
     room: "",
     schedule: "",
     capacity: "40",
+    program: DEFAULT_PROGRAM as string,
   });
   const [submitError, setSubmitError] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -71,11 +75,19 @@ export default function ClassesPage() {
     totalPages,
     from,
     to,
-  } = useServerPagination([search, filterSemester]);
+  } = useServerPagination([search, filterSemester, filterProgram]);
 
   const canCreate = hasPermission("classes.create");
   const canEdit = hasPermission("classes.edit");
   const canDelete = hasPermission("classes.delete");
+
+  const formSemesters = semesters.filter(
+    (s) => !s.program || s.program === form.program
+  );
+  const filterSemesterOptions =
+    filterProgram === "all"
+      ? semesters
+      : semesters.filter((s) => !s.program || s.program === filterProgram);
 
   const loadClasses = useCallback(async () => {
     setLoading(true);
@@ -85,6 +97,7 @@ export default function ClassesPage() {
       params.set("pageSize", String(pageSize));
       if (search.trim()) params.set("q", search.trim());
       if (filterSemester !== "all") params.set("semester", filterSemester);
+      params.set("program", filterProgram);
       const res = await authFetch(`/api/classes?${params.toString()}`);
       if (res.ok) {
         const data = await res.json();
@@ -97,11 +110,15 @@ export default function ClassesPage() {
     } finally {
       setLoading(false);
     }
-  }, [page, pageSize, search, filterSemester, setTotal]);
+  }, [page, pageSize, search, filterSemester, filterProgram, setTotal]);
 
   async function loadDepartments() {
-    const res = await authFetch("/api/departments");
-    if (res.ok) setDepartments(await res.json());
+    const res = await authFetch("/api/departments?program=all");
+    if (res.ok) {
+      const data = await res.json();
+      const list = Array.isArray(data) ? data : Array.isArray(data.items) ? data.items : [];
+      setDepartments(list);
+    }
   }
 
   async function loadAcademicYears() {
@@ -110,8 +127,10 @@ export default function ClassesPage() {
   }
 
   useEffect(() => {
-    authFetch("/api/semesters?active=true").then((r) => {
-      if (r.ok) r.json().then((d: SemesterOption[]) => setSemesters(d));
+    authFetch("/api/semesters?active=true&program=all").then((r) => {
+      if (r.ok) r.json().then((d: SemesterOption[] | { items: SemesterOption[] }) => {
+        setSemesters(Array.isArray(d) ? d : Array.isArray(d.items) ? d.items : []);
+      });
     });
   }, []);
 
@@ -127,14 +146,16 @@ export default function ClassesPage() {
     setModal("add");
     setEditingId(null);
     const defaultYear = academicYears.find((y) => y.isActive) ?? academicYears[academicYears.length - 1];
+    const firstDept = departments[0];
     setForm({
       name: "",
-      departmentId: departments[0] ? String(departments[0].id) : "",
+      departmentId: firstDept ? String(firstDept.id) : "",
       semester: semesters[0]?.name ?? "Fall",
       academicYearId: defaultYear ? String(defaultYear.id) : "",
       room: "",
       schedule: "",
       capacity: "40",
+      program: firstDept?.program || DEFAULT_PROGRAM,
     });
     setSubmitError("");
   }
@@ -151,6 +172,7 @@ export default function ClassesPage() {
       room: c.room ?? "",
       schedule: c.schedule ?? "",
       capacity: String(c.capacity),
+      program: c.program || DEFAULT_PROGRAM,
     });
     setSubmitError("");
   }
@@ -170,6 +192,7 @@ export default function ClassesPage() {
         room: form.room || undefined,
         schedule: form.schedule || undefined,
         capacity: Number(form.capacity),
+        program: form.program || DEFAULT_PROGRAM,
       };
 
       if (modal === "add") {
@@ -256,12 +279,24 @@ export default function ClassesPage() {
           </div>
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
             <select
+              value={filterProgram}
+              onChange={(e) => setFilterProgram(e.target.value as Program | "all")}
+              className="h-10 rounded-lg border border-gray-200 bg-transparent px-3 text-sm text-gray-700 outline-none focus:border-brand-300 focus:ring-2 focus:ring-brand-500/20 dark:border-gray-700 dark:text-gray-300 dark:focus:border-brand-500/40"
+            >
+              <option value="all">All Programs</option>
+              {PROGRAMS.map((p) => (
+                <option key={p} value={p}>
+                  {programLabel(p)}
+                </option>
+              ))}
+            </select>
+            <select
               value={filterSemester}
               onChange={(e) => setFilterSemester(e.target.value)}
               className="h-10 rounded-lg border border-gray-200 bg-transparent px-3 text-sm text-gray-700 outline-none focus:border-brand-300 focus:ring-2 focus:ring-brand-500/20 dark:border-gray-700 dark:text-gray-300 dark:focus:border-brand-500/40"
             >
               <option value="all">All Semesters</option>
-              {semesters.map((s) => (
+              {filterSemesterOptions.map((s) => (
                 <option key={s.id} value={s.name}>{s.name}</option>
               ))}
             </select>
@@ -293,7 +328,7 @@ export default function ClassesPage() {
               </svg>
             </div>
             <p className="text-sm font-medium text-gray-500 dark:text-gray-400">
-              {search || filterSemester !== "all"
+              {search || filterSemester !== "all" || filterProgram !== "all"
                 ? "No classes match your filters."
                 : "No classes yet. Create one to get started."}
             </p>
@@ -305,6 +340,7 @@ export default function ClassesPage() {
               <TableRow className="bg-transparent! hover:bg-transparent!">
                 <TableCell isHeader>#</TableCell>
                 <TableCell isHeader>Class</TableCell>
+                <TableCell isHeader>Program</TableCell>
                 <TableCell isHeader>Department</TableCell>
                 <TableCell isHeader>Semester</TableCell>
                 <TableCell isHeader>Room</TableCell>
@@ -329,6 +365,9 @@ export default function ClassesPage() {
                         {c.name}
                       </span>
                     </div>
+                  </TableCell>
+                  <TableCell>
+                    <Badge color="primary" size="sm">{c.program ?? "—"}</Badge>
                   </TableCell>
                   <TableCell>
                     <Badge color="info" size="sm">{c.department.code}</Badge>
@@ -461,7 +500,15 @@ export default function ClassesPage() {
                     <select
                       required
                       value={form.departmentId}
-                      onChange={(e) => setForm((f) => ({ ...f, departmentId: e.target.value }))}
+                      onChange={(e) => {
+                        const departmentId = e.target.value;
+                        const dept = departments.find((d) => String(d.id) === departmentId);
+                        setForm((f) => ({
+                          ...f,
+                          departmentId,
+                          program: dept?.program || f.program || DEFAULT_PROGRAM,
+                        }));
+                      }}
                       className="h-11 w-full appearance-none rounded-lg border border-gray-200 bg-transparent px-4 py-2.5 text-sm text-gray-800 outline-none focus:border-brand-300 focus:ring-2 focus:ring-brand-500/20 dark:border-gray-700 dark:text-white dark:focus:border-brand-500/40"
                     >
                       <option value="">Select a department</option>
@@ -472,6 +519,23 @@ export default function ClassesPage() {
                       ))}
                     </select>
                   </div>
+                </div>
+                <div>
+                  <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">
+                    Program <span className="text-error-500">*</span>
+                  </label>
+                  <select
+                    required
+                    value={form.program}
+                    onChange={(e) => setForm((f) => ({ ...f, program: e.target.value }))}
+                    className="h-11 w-full appearance-none rounded-lg border border-gray-200 bg-transparent px-4 py-2.5 text-sm text-gray-800 outline-none focus:border-brand-300 focus:ring-2 focus:ring-brand-500/20 dark:border-gray-700 dark:text-white dark:focus:border-brand-500/40"
+                  >
+                    {PROGRAMS.map((p) => (
+                      <option key={p} value={p}>
+                        {programLabel(p)}
+                      </option>
+                    ))}
+                  </select>
                 </div>
                 <div className="grid grid-cols-3 gap-4">
                   <div>
@@ -484,7 +548,7 @@ export default function ClassesPage() {
                       onChange={(e) => setForm((f) => ({ ...f, semester: e.target.value }))}
                       className="h-11 w-full appearance-none rounded-lg border border-gray-200 bg-transparent px-4 py-2.5 text-sm text-gray-800 outline-none focus:border-brand-300 focus:ring-2 focus:ring-brand-500/20 dark:border-gray-700 dark:text-white dark:focus:border-brand-500/40"
                     >
-                      {semesters.map((s) => (
+                      {formSemesters.map((s) => (
                         <option key={s.id} value={s.name}>{s.name}</option>
                       ))}
                     </select>

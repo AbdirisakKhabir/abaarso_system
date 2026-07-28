@@ -86,15 +86,17 @@ model RolePermission {
 
 model Faculty {
   id          Int          @id @default(autoincrement())
-  name        String       @unique
-  code        String       @unique // e.g. "ENG", "SCI", "BUS"
+  name        String
+  code        String // e.g. "ENG", "SCI", "BUS"
   description String?
-  program     String? // "Bachelor", "Masters"
+  program     String       @default("Bachelor") // "Bachelor", "Masters"
   isActive    Boolean      @default(true)
   departments Department[]
   createdAt   DateTime     @default(now())
   updatedAt   DateTime     @updatedAt
 
+  @@unique([name, program])
+  @@unique([code, program])
   @@map("faculties")
 }
 
@@ -104,6 +106,7 @@ model Lecturer {
   email          String               @unique
   phone          String?
   degree         String?
+  program        String               @default("Bachelor") // "Bachelor", "Masters"
   imageUrl       String? // Cloudinary URL
   imagePublicId  String?
   cvUrl          String? // Cloudinary URL for CV PDF
@@ -141,9 +144,10 @@ model LecturerCourse {
 
 model Department {
   id          Int                  @id @default(autoincrement())
-  name        String               @unique
-  code        String               @unique // e.g. "CS", "EE", "ACC"
+  name        String
+  code        String // e.g. "CS", "EE", "ACC"
   description String?
+  program     String               @default("Bachelor") // "Bachelor", "Masters"
   facultyId   Int
   faculty     Faculty              @relation(fields: [facultyId], references: [id], onDelete: Restrict)
   tuitionFee  Float?               @default(0)
@@ -155,6 +159,8 @@ model Department {
   createdAt   DateTime             @default(now())
   updatedAt   DateTime             @updatedAt
 
+  @@unique([name, program])
+  @@unique([code, program])
   @@map("departments")
 }
 
@@ -164,6 +170,7 @@ model Course {
   code           String          // e.g. "CS101", "ENG201" - unique per department
   description    String?
   creditHours    Int             @default(3)
+  program        String          @default("Bachelor") // "Bachelor", "Masters"
   departmentId   Int
   department     Department      @relation(fields: [departmentId], references: [id], onDelete: Restrict)
   isActive       Boolean         @default(true)
@@ -181,12 +188,14 @@ model Course {
 
 model Semester {
   id        Int      @id @default(autoincrement())
-  name      String   @unique // e.g. "Fall", "Spring", "Summer"
+  name      String // e.g. "Fall", "Spring", "Summer"
+  program   String   @default("Bachelor") // "Bachelor", "Masters"
   sortOrder Int      @default(0) // for display/ordering (lower = earlier in year)
   isActive  Boolean  @default(true)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  @@unique([name, program])
   @@map("semesters")
 }
 
@@ -208,6 +217,7 @@ model Class {
   name               String // e.g. "Level 1-A", "Section B"
   departmentId       Int
   department         Department          @relation(fields: [departmentId], references: [id], onDelete: Restrict)
+  program            String              @default("Bachelor") // "Bachelor", "Masters"
   semester           String // e.g. "Fall", "Spring", "Summer"
   year               Int // e.g. 2026 (from academic year)
   room               String? // e.g. "Room 201"
@@ -221,7 +231,7 @@ model Class {
   createdAt          DateTime            @default(now())
   updatedAt          DateTime            @updatedAt
 
-  @@unique([name, semester, year])
+  @@unique([name, semester, year, program])
   @@map("classes")
 }
 
@@ -267,7 +277,7 @@ model Student {
   admissionAcademicYear   AcademicYear?   @relation(fields: [admissionAcademicYearId], references: [id], onDelete: SetNull)
   classId            Int?
   class              Class?               @relation(fields: [classId], references: [id], onDelete: SetNull)
-  program            String? // "Bachelor", "Masters"
+  program            String               @default("Bachelor") // "Bachelor", "Masters"
   admissionDate      DateTime             @default(now())
   status             String               @default("Admitted") // "Pending", "Admitted", "Rejected", "Graduated"
   paymentStatus      String               @default("Fully Paid") // "Full Scholarship", "Half Scholar", "Fully Paid"

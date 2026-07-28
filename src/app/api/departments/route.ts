@@ -3,6 +3,7 @@ import type { Prisma } from "@prisma/client";
 import { getAuthUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { parsePaginationParams } from "@/lib/pagination";
+import { DEFAULT_PROGRAM, parseProgram } from "@/lib/program";
 
 export async function GET(req: NextRequest) {
   try {
@@ -16,9 +17,13 @@ export async function GET(req: NextRequest) {
     const q = searchParams.get("q")?.trim();
     const facultyId = searchParams.get("facultyId");
     const activeOnly = searchParams.get("active") === "true";
+    const programFilter = parseProgram(searchParams.get("program"), { allowAll: true });
     const where: Prisma.DepartmentWhereInput = {};
     if (activeOnly) {
       where.isActive = true;
+    }
+    if (programFilter && programFilter !== "all") {
+      where.program = programFilter;
     }
     if (q) {
       where.OR = [
@@ -34,7 +39,7 @@ export async function GET(req: NextRequest) {
     }
 
     const include = {
-      faculty: { select: { id: true, name: true, code: true } },
+      faculty: { select: { id: true, name: true, code: true, program: true } },
     } as const;
 
     if (paginate) {
@@ -75,7 +80,7 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json();
-    const { name, code, description, facultyId, tuitionFee } = body;
+    const { name, code, description, facultyId, tuitionFee, program } = body;
     const parsedFacultyId = Number(facultyId);
 
     if (!name || !code || !Number.isInteger(parsedFacultyId)) {
@@ -85,6 +90,15 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    let resolvedProgram = parseProgram(program) ?? DEFAULT_PROGRAM;
+    if (program == null || program === "") {
+      const faculty = await prisma.faculty.findUnique({
+        where: { id: parsedFacultyId },
+        select: { program: true },
+      });
+      if (faculty?.program) resolvedProgram = parseProgram(faculty.program) ?? DEFAULT_PROGRAM;
+    }
+
     const department = await prisma.department.create({
       data: {
         name: String(name).trim(),
@@ -92,9 +106,10 @@ export async function POST(req: NextRequest) {
         description: description || null,
         facultyId: parsedFacultyId,
         tuitionFee: tuitionFee != null ? Number(tuitionFee) : null,
+        program: resolvedProgram,
       },
       include: {
-        faculty: { select: { id: true, name: true, code: true } },
+        faculty: { select: { id: true, name: true, code: true, program: true } },
       },
     });
 
@@ -107,7 +122,7 @@ export async function POST(req: NextRequest) {
       (e as { code: string }).code === "P2002"
     ) {
       return NextResponse.json(
-        { error: "A department with this name or code already exists" },
+        { error: "A department with this name or code already exists for this program" },
         { status: 400 }
       );
     }

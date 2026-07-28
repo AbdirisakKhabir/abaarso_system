@@ -116,7 +116,7 @@ export default function StudentProfilePage() {
         <PageBreadCrumb pageTitle="Student Not Found" />
         <div className="mt-6 rounded-2xl border border-gray-200 bg-white p-12 text-center dark:border-gray-800 dark:bg-white/5">
           <p className="text-gray-500 dark:text-gray-400">Student with ID {studentId} not found.</p>
-          <Button className="mt-4" size="sm" onClick={() => router.push("/admission")}>
+          <Button className="mt-4" size="sm" onClick={() => router.push("/admission/bachelor")}>
             Back to Admission
           </Button>
         </div>
@@ -150,7 +150,7 @@ export default function StudentProfilePage() {
 
       <div className="mb-8 flex flex-wrap items-center justify-between gap-4">
         <button
-          onClick={() => router.push("/admission")}
+          onClick={() => router.push("/admission/bachelor")}
           className="inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-gray-600 transition-colors hover:bg-gray-100 hover:text-gray-800 dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-gray-200"
         >
           <ChevronLeftIcon className="h-4 w-4" />

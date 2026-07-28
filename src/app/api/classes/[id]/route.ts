@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getAuthUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { isValidSemester } from "@/lib/semesters";
+import { DEFAULT_PROGRAM, parseProgram } from "@/lib/program";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -65,9 +66,17 @@ export async function PATCH(req: NextRequest, ctx: RouteContext) {
     }
     if (body.semester !== undefined) {
       const sem = String(body.semester).trim();
-      if (!(await isValidSemester(sem))) {
+      const existing = await prisma.class.findUnique({
+        where: { id },
+        select: { program: true },
+      });
+      const prog =
+        body.program !== undefined
+          ? parseProgram(body.program) ?? DEFAULT_PROGRAM
+          : existing?.program ?? DEFAULT_PROGRAM;
+      if (!(await isValidSemester(sem, prog))) {
         return NextResponse.json(
-          { error: "Invalid semester. Use a semester from the Semesters settings." },
+          { error: "Invalid semester. Use a semester from the Semesters settings for this program." },
           { status: 400 }
         );
       }
@@ -85,6 +94,9 @@ export async function PATCH(req: NextRequest, ctx: RouteContext) {
     if (body.capacity !== undefined) {
       const cap = Number(body.capacity);
       if (cap > 0) data.capacity = cap;
+    }
+    if (body.program !== undefined) {
+      data.program = parseProgram(body.program) ?? DEFAULT_PROGRAM;
     }
     if (body.isActive !== undefined) data.isActive = Boolean(body.isActive);
 

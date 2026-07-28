@@ -6,6 +6,7 @@ import Link from "next/link";
 import Button from "@/components/ui/button/Button";
 import { DateInput } from "@/components/form/DateInput";
 import { authFetch } from "@/lib/api";
+import { DEFAULT_PROGRAM, PROGRAMS, programLabel } from "@/lib/program";
 import { ChevronLeftIcon, UserCircleIcon, MailIcon, GroupIcon, UserIcon } from "@/icons";
 
 type Department = { id: number; name: string; code: string };
@@ -63,7 +64,7 @@ const defaultForm: StudentFormData = {
   departmentId: "",
   admissionAcademicYearId: "",
   classId: "",
-  program: "",
+  program: DEFAULT_PROGRAM,
   status: "Admitted",
   paymentStatus: "Fully Paid",
   customSemesterFee: "",
@@ -79,6 +80,8 @@ type Props = {
   departments: Department[];
   academicYears: AcademicYearInfo[];
   classes: ClassInfo[];
+  /** Back / cancel destination (defaults to Bachelor list) */
+  listHref?: string;
   onSuccess: () => void;
 };
 
@@ -89,6 +92,7 @@ export default function StudentRegistrationForm({
   departments,
   academicYears,
   classes,
+  listHref = "/admission/bachelor",
   onSuccess,
 }: Props) {
   const [form, setForm] = useState<StudentFormData>(() => {
@@ -181,7 +185,7 @@ export default function StudentRegistrationForm({
             ? Number(form.admissionAcademicYearId)
             : null,
         classId: form.classId || undefined,
-        program: form.program || undefined,
+        program: form.program || DEFAULT_PROGRAM,
         status: form.status,
         paymentStatus: form.paymentStatus || "Fully Paid",
         customSemesterFee:
@@ -245,7 +249,7 @@ export default function StudentRegistrationForm({
     <div className="mx-auto max-w-3xl">
       <div className="mb-8 flex items-center justify-between">
         <Link
-          href="/admission"
+          href={listHref}
           className="inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-gray-600 transition-colors hover:bg-gray-100 hover:text-brand-600 dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-brand-400"
         >
           <ChevronLeftIcon className="h-4 w-4" />
@@ -468,9 +472,11 @@ export default function StudentRegistrationForm({
             <div>
               <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">Program</label>
               <select value={form.program} onChange={(e) => setForm((f) => ({ ...f, program: e.target.value }))} className={selectClass}>
-                <option value="">Select program</option>
-                <option value="Bachelor">Bachelor Degree</option>
-                <option value="Masters">Masters Degree</option>
+                {PROGRAMS.map((p) => (
+                  <option key={p} value={p}>
+                    {programLabel(p)}
+                  </option>
+                ))}
               </select>
             </div>
           </div>
@@ -478,7 +484,7 @@ export default function StudentRegistrationForm({
 
         {/* Actions */}
         <div className="flex flex-col-reverse items-center justify-between gap-4 rounded-2xl border border-gray-200 bg-white p-6 shadow-sm sm:flex-row dark:border-gray-700 dark:bg-gray-900">
-          <Link href="/admission" className="w-full sm:w-auto">
+          <Link href={listHref} className="w-full sm:w-auto">
             <Button type="button" variant="outline" size="sm" className="w-full sm:w-auto">Cancel</Button>
           </Link>
           <Button type="submit" disabled={submitting || uploading} size="sm" className="w-full sm:w-auto">

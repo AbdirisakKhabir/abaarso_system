@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAuthUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { DEFAULT_PROGRAM, parseProgram } from "@/lib/program";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -69,6 +70,8 @@ export async function PATCH(req: NextRequest, ctx: RouteContext) {
       data.phone = body.phone ? String(body.phone).trim() : null;
     if (body.degree !== undefined)
       data.degree = body.degree ? String(body.degree).trim() : null;
+    if (body.program !== undefined)
+      data.program = parseProgram(body.program) ?? DEFAULT_PROGRAM;
     if (body.isActive !== undefined) data.isActive = Boolean(body.isActive);
     if (body.imageUrl !== undefined) data.imageUrl = body.imageUrl ? String(body.imageUrl).trim() : null;
     if (body.imagePublicId !== undefined) data.imagePublicId = body.imagePublicId ? String(body.imagePublicId).trim() : null;

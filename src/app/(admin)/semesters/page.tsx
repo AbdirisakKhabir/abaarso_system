@@ -15,6 +15,7 @@ import { globalRowIndex } from "@/hooks/usePagination";
 import { useServerPagination } from "@/hooks/useServerPagination";
 import Badge from "@/components/ui/badge/Badge";
 import { authFetch } from "@/lib/api";
+import { DEFAULT_PROGRAM, PROGRAMS, programLabel, type Program } from "@/lib/program";
 import { ModalOverlayGate } from "@/context/ModalOverlayContext";
 import { useAuth } from "@/context/AuthContext";
 import { PencilIcon, PlusIcon, TrashBinIcon } from "@/icons";
@@ -23,6 +24,7 @@ type SemesterRow = {
   id: number;
   name: string;
   sortOrder: number;
+  program: string | null;
   isActive: boolean;
   createdAt: string;
 };
@@ -32,9 +34,10 @@ export default function SemestersPage() {
   const [semesters, setSemesters] = useState<SemesterRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
+  const [filterProgram, setFilterProgram] = useState<Program | "all">(DEFAULT_PROGRAM);
   const [modal, setModal] = useState<"add" | "edit" | null>(null);
   const [editingId, setEditingId] = useState<number | null>(null);
-  const [form, setForm] = useState({ name: "", sortOrder: 0 });
+  const [form, setForm] = useState({ name: "", sortOrder: 0, program: DEFAULT_PROGRAM as string });
   const [submitError, setSubmitError] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
@@ -48,7 +51,7 @@ export default function SemestersPage() {
     totalPages,
     from,
     to,
-  } = useServerPagination([search]);
+  } = useServerPagination([search, filterProgram]);
 
   const canCreate = hasPermission("semesters.create");
   const canEdit = hasPermission("semesters.edit");
@@ -61,6 +64,7 @@ export default function SemestersPage() {
       params.set("page", String(page));
       params.set("pageSize", String(pageSize));
       if (search.trim()) params.set("q", search.trim());
+      params.set("program", filterProgram);
       const res = await authFetch(`/api/semesters?${params.toString()}`);
       if (res.ok) {
         const data = await res.json();
@@ -73,7 +77,7 @@ export default function SemestersPage() {
     } finally {
       setLoading(false);
     }
-  }, [page, pageSize, search, setTotal]);
+  }, [page, pageSize, search, filterProgram, setTotal]);
 
   useEffect(() => {
     void loadSemesters();
@@ -82,14 +86,14 @@ export default function SemestersPage() {
   function openAdd() {
     setModal("add");
     setEditingId(null);
-    setForm({ name: "", sortOrder: 0 });
+    setForm({ name: "", sortOrder: 0, program: DEFAULT_PROGRAM });
     setSubmitError("");
   }
 
   function openEdit(s: SemesterRow) {
     setModal("edit");
     setEditingId(s.id);
-    setForm({ name: s.name, sortOrder: s.sortOrder });
+    setForm({ name: s.name, sortOrder: s.sortOrder, program: s.program || DEFAULT_PROGRAM });
     setSubmitError("");
   }
 
@@ -98,7 +102,11 @@ export default function SemestersPage() {
     setSubmitError("");
     setSubmitting(true);
     try {
-      const payload = { name: form.name.trim(), sortOrder: form.sortOrder };
+      const payload = {
+        name: form.name.trim(),
+        sortOrder: form.sortOrder,
+        program: form.program || DEFAULT_PROGRAM,
+      };
 
       if (modal === "add") {
         const res = await authFetch("/api/semesters", {
@@ -192,17 +200,31 @@ export default function SemestersPage() {
               {total}
             </span>
           </div>
-          <div className="relative w-full sm:w-64">
-            <svg className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-            </svg>
-            <input
-              type="text"
-              placeholder="Search semesters..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="h-10 w-full rounded-lg border border-gray-200 bg-transparent py-2 pl-9 pr-4 text-sm text-gray-700 outline-none placeholder:text-gray-400 focus:border-brand-300 focus:ring-2 focus:ring-brand-500/20 dark:border-gray-700 dark:text-gray-300 dark:placeholder:text-gray-500 dark:focus:border-brand-500/40"
-            />
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+            <select
+              value={filterProgram}
+              onChange={(e) => setFilterProgram(e.target.value as Program | "all")}
+              className="h-10 rounded-lg border border-gray-200 bg-transparent px-3 text-sm text-gray-700 outline-none focus:border-brand-300 focus:ring-2 focus:ring-brand-500/20 dark:border-gray-700 dark:text-gray-300 dark:focus:border-brand-500/40"
+            >
+              <option value="all">All Programs</option>
+              {PROGRAMS.map((p) => (
+                <option key={p} value={p}>
+                  {programLabel(p)}
+                </option>
+              ))}
+            </select>
+            <div className="relative w-full sm:w-64">
+              <svg className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              </svg>
+              <input
+                type="text"
+                placeholder="Search semesters..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="h-10 w-full rounded-lg border border-gray-200 bg-transparent py-2 pl-9 pr-4 text-sm text-gray-700 outline-none placeholder:text-gray-400 focus:border-brand-300 focus:ring-2 focus:ring-brand-500/20 dark:border-gray-700 dark:text-gray-300 dark:placeholder:text-gray-500 dark:focus:border-brand-500/40"
+              />
+            </div>
           </div>
         </div>
 
@@ -218,7 +240,9 @@ export default function SemestersPage() {
               </svg>
             </div>
             <p className="text-sm font-medium text-gray-500 dark:text-gray-400">
-              {search ? "No semesters match your search." : "No semesters yet. Create one to get started."}
+              {search || filterProgram !== "all"
+                ? "No semesters match your filters."
+                : "No semesters yet. Create one to get started."}
             </p>
           </div>
         ) : (
@@ -228,6 +252,7 @@ export default function SemestersPage() {
               <TableRow className="bg-transparent! hover:bg-transparent!">
                 <TableCell isHeader>#</TableCell>
                 <TableCell isHeader>Name</TableCell>
+                <TableCell isHeader>Program</TableCell>
                 <TableCell isHeader>Sort Order</TableCell>
                 <TableCell isHeader>Status</TableCell>
                 <TableCell isHeader className="text-right">Actions</TableCell>
@@ -243,6 +268,9 @@ export default function SemestersPage() {
                     <span className="font-semibold text-gray-800 dark:text-white/90">
                       {s.name}
                     </span>
+                  </TableCell>
+                  <TableCell>
+                    <Badge color="primary" size="sm">{s.program ?? "—"}</Badge>
                   </TableCell>
                   <TableCell>
                     <span className="inline-flex h-6 min-w-[24px] items-center justify-center rounded-full bg-gray-100 px-2 text-xs font-semibold text-gray-600 dark:bg-white/5 dark:text-gray-300">
@@ -346,6 +374,23 @@ export default function SemestersPage() {
                     placeholder="e.g. Fall, Spring, Summer"
                     className="h-11 w-full rounded-lg border border-gray-200 bg-transparent px-4 py-2.5 text-sm text-gray-800 outline-none placeholder:text-gray-400 focus:border-brand-300 focus:ring-2 focus:ring-brand-500/20 dark:border-gray-700 dark:text-white dark:placeholder:text-gray-500 dark:focus:border-brand-500/40"
                   />
+                </div>
+                <div>
+                  <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">
+                    Program <span className="text-error-500">*</span>
+                  </label>
+                  <select
+                    required
+                    value={form.program}
+                    onChange={(e) => setForm((f) => ({ ...f, program: e.target.value }))}
+                    className="h-11 w-full appearance-none rounded-lg border border-gray-200 bg-transparent px-4 py-2.5 text-sm text-gray-800 outline-none focus:border-brand-300 focus:ring-2 focus:ring-brand-500/20 dark:border-gray-700 dark:text-white dark:focus:border-brand-500/40"
+                  >
+                    {PROGRAMS.map((p) => (
+                      <option key={p} value={p}>
+                        {programLabel(p)}
+                      </option>
+                    ))}
+                  </select>
                 </div>
                 <div>
                   <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">

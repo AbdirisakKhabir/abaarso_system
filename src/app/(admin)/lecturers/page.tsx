@@ -16,6 +16,7 @@ import { globalRowIndex } from "@/hooks/usePagination";
 import { useServerPagination } from "@/hooks/useServerPagination";
 import Badge from "@/components/ui/badge/Badge";
 import { authFetch } from "@/lib/api";
+import { DEFAULT_PROGRAM, PROGRAMS, programLabel, type Program } from "@/lib/program";
 import { useAuth } from "@/context/AuthContext";
 import { PencilIcon, PlusIcon, TrashBinIcon } from "@/icons";
 
@@ -28,6 +29,7 @@ type LecturerRow = {
   email: string;
   phone: string | null;
   degree: string | null;
+  program: string | null;
   imageUrl: string | null;
   cvUrl: string | null;
   isActive: boolean;
@@ -41,6 +43,7 @@ export default function LecturersPage() {
   const [lecturers, setLecturers] = useState<LecturerRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
+  const [filterProgram, setFilterProgram] = useState<Program | "all">(DEFAULT_PROGRAM);
 
   const {
     page,
@@ -52,7 +55,7 @@ export default function LecturersPage() {
     totalPages,
     from,
     to,
-  } = useServerPagination([search]);
+  } = useServerPagination([search, filterProgram]);
 
   const canCreate = hasPermission("lecturers.create");
   const canEdit = hasPermission("lecturers.edit");
@@ -65,6 +68,7 @@ export default function LecturersPage() {
       params.set("page", String(page));
       params.set("pageSize", String(pageSize));
       if (search.trim()) params.set("q", search.trim());
+      params.set("program", filterProgram);
       const res = await authFetch(`/api/lecturers?${params.toString()}`);
       if (res.ok) {
         const data = await res.json();
@@ -77,7 +81,7 @@ export default function LecturersPage() {
     } finally {
       setLoading(false);
     }
-  }, [page, pageSize, search, setTotal]);
+  }, [page, pageSize, search, filterProgram, setTotal]);
 
   useEffect(() => {
     void loadLecturers();
@@ -149,17 +153,31 @@ export default function LecturersPage() {
               {total}
             </span>
           </div>
-          <div className="relative w-full sm:w-64">
-            <svg className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-            </svg>
-            <input
-              type="text"
-              placeholder="Search lecturers..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="h-10 w-full rounded-lg border border-gray-200 bg-transparent py-2 pl-9 pr-4 text-sm text-gray-700 outline-none placeholder:text-gray-400 focus:border-brand-300 focus:ring-2 focus:ring-brand-500/20 dark:border-gray-700 dark:text-gray-300 dark:placeholder:text-gray-500 dark:focus:border-brand-500/40"
-            />
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+            <select
+              value={filterProgram}
+              onChange={(e) => setFilterProgram(e.target.value as Program | "all")}
+              className="h-10 rounded-lg border border-gray-200 bg-transparent px-3 text-sm text-gray-700 outline-none focus:border-brand-300 focus:ring-2 focus:ring-brand-500/20 dark:border-gray-700 dark:text-gray-300 dark:focus:border-brand-500/40"
+            >
+              <option value="all">All Programs</option>
+              {PROGRAMS.map((p) => (
+                <option key={p} value={p}>
+                  {programLabel(p)}
+                </option>
+              ))}
+            </select>
+            <div className="relative w-full sm:w-64">
+              <svg className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              </svg>
+              <input
+                type="text"
+                placeholder="Search lecturers..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="h-10 w-full rounded-lg border border-gray-200 bg-transparent py-2 pl-9 pr-4 text-sm text-gray-700 outline-none placeholder:text-gray-400 focus:border-brand-300 focus:ring-2 focus:ring-brand-500/20 dark:border-gray-700 dark:text-gray-300 dark:placeholder:text-gray-500 dark:focus:border-brand-500/40"
+              />
+            </div>
           </div>
         </div>
 
@@ -175,7 +193,9 @@ export default function LecturersPage() {
               </svg>
             </div>
             <p className="text-sm font-medium text-gray-500 dark:text-gray-400">
-              {search ? "No lecturers match your search." : "No lecturers yet. Create one to get started."}
+              {search || filterProgram !== "all"
+                ? "No lecturers match your filters."
+                : "No lecturers yet. Create one to get started."}
             </p>
           </div>
         ) : (
@@ -186,6 +206,7 @@ export default function LecturersPage() {
                 <TableCell isHeader>#</TableCell>
                 <TableCell isHeader>Name</TableCell>
                 <TableCell isHeader>Email</TableCell>
+                <TableCell isHeader>Program</TableCell>
                 <TableCell isHeader>Departments</TableCell>
                 <TableCell isHeader>Courses</TableCell>
                 <TableCell isHeader>Status</TableCell>
@@ -218,6 +239,9 @@ export default function LecturersPage() {
                   </TableCell>
                   <TableCell>
                     <span className="text-gray-600 dark:text-gray-300">{l.email}</span>
+                  </TableCell>
+                  <TableCell>
+                    <Badge color="primary" size="sm">{l.program ?? "—"}</Badge>
                   </TableCell>
                   <TableCell>
                     <div className="flex flex-wrap gap-1">

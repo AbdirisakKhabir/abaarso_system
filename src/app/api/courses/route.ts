@@ -3,6 +3,7 @@ import type { Prisma } from "@prisma/client";
 import { getAuthUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { parsePaginationParams } from "@/lib/pagination";
+import { DEFAULT_PROGRAM, parseProgram } from "@/lib/program";
 
 export async function GET(req: NextRequest) {
   try {
@@ -15,7 +16,11 @@ export async function GET(req: NextRequest) {
     const { paginate, page, pageSize, skip } = parsePaginationParams(searchParams);
     const q = searchParams.get("q")?.trim();
     const departmentId = searchParams.get("departmentId");
+    const programFilter = parseProgram(searchParams.get("program"), { allowAll: true });
     const where: Prisma.CourseWhereInput = {};
+    if (programFilter && programFilter !== "all") {
+      where.program = programFilter;
+    }
     if (q) {
       where.OR = [
         { name: { contains: q } },
@@ -30,7 +35,7 @@ export async function GET(req: NextRequest) {
 
     const include = {
       department: {
-        select: { id: true, name: true, code: true },
+        select: { id: true, name: true, code: true, program: true },
       },
       _count: { select: { classSchedules: true } },
     } as const;
@@ -41,8 +46,9 @@ export async function GET(req: NextRequest) {
       code: string;
       description: string | null;
       creditHours: number;
+      program: string;
       departmentId: number;
-      department: { id: number; name: string; code: string };
+      department: { id: number; name: string; code: string; program: string };
       isActive: boolean;
       createdAt: Date;
       _count: { classSchedules: number };
@@ -52,6 +58,7 @@ export async function GET(req: NextRequest) {
       code: c.code,
       description: c.description,
       creditHours: c.creditHours,
+      program: c.program,
       departmentId: c.departmentId,
       department: c.department,
       isActive: c.isActive,
@@ -102,7 +109,7 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json();
-    const { name, code, description, creditHours, departmentId } = body;
+    const { name, code, description, creditHours, departmentId, program } = body;
     const parsedDeptId = Number(departmentId);
     const parsedCredits = Number(creditHours);
 
@@ -113,6 +120,15 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    let resolvedProgram = parseProgram(program) ?? DEFAULT_PROGRAM;
+    if (program == null || program === "") {
+      const dept = await prisma.department.findUnique({
+        where: { id: parsedDeptId },
+        select: { program: true },
+      });
+      if (dept?.program) resolvedProgram = parseProgram(dept.program) ?? DEFAULT_PROGRAM;
+    }
+
     const course = await prisma.course.create({
       data: {
         name: String(name).trim(),
@@ -120,9 +136,10 @@ export async function POST(req: NextRequest) {
         description: description || null,
         creditHours: Number.isInteger(parsedCredits) && parsedCredits > 0 ? parsedCredits : 3,
         departmentId: parsedDeptId,
+        program: resolvedProgram,
       },
       include: {
-        department: { select: { id: true, name: true, code: true } },
+        department: { select: { id: true, name: true, code: true, program: true } },
       },
     });
 

@@ -100,7 +100,8 @@ const academicsItems: NavItem[] = [
     path: "/admission",
     permission: "admission.view",
     subItems: [
-      { name: "Student List", path: "/admission", permission: "admission.view" },
+      { name: "Bachelor Degree", path: "/admission/bachelor", permission: "admission.view" },
+      { name: "Masters Degree", path: "/admission/masters", permission: "admission.view" },
       { name: "Upgrade Students", path: "/admission/upgrade", permission: "admission.edit" },
       { name: "Transfer Student", path: "/admission/transfer", permission: "admission.edit" },
     ],

@@ -3,6 +3,7 @@ import type { Prisma } from "@prisma/client";
 import { getAuthUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { parsePaginationParams } from "@/lib/pagination";
+import { DEFAULT_PROGRAM, parseProgram } from "@/lib/program";
 
 export async function GET(req: NextRequest) {
   try {
@@ -15,9 +16,13 @@ export async function GET(req: NextRequest) {
     const { paginate, page, pageSize, skip } = parsePaginationParams(searchParams);
     const activeOnly = searchParams.get("active") === "true";
     const q = searchParams.get("q")?.trim();
+    const programFilter = parseProgram(searchParams.get("program"), { allowAll: true });
 
     const where: Prisma.SemesterWhereInput = {};
     if (activeOnly) where.isActive = true;
+    if (programFilter && programFilter !== "all") {
+      where.program = programFilter;
+    }
     if (q) {
       where.name = { contains: q };
     }
@@ -60,7 +65,8 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json();
-    const { name, sortOrder } = body;
+    const { name, sortOrder, program } = body;
+    const resolvedProgram = parseProgram(program) ?? DEFAULT_PROGRAM;
 
     if (!name || typeof name !== "string" || !name.trim()) {
       return NextResponse.json(
@@ -73,6 +79,7 @@ export async function POST(req: NextRequest) {
       data: {
         name: String(name).trim(),
         sortOrder: Number.isInteger(Number(sortOrder)) ? Number(sortOrder) : 0,
+        program: resolvedProgram,
       },
     });
 
@@ -85,7 +92,7 @@ export async function POST(req: NextRequest) {
       (e as { code: string }).code === "P2002"
     ) {
       return NextResponse.json(
-        { error: "A semester with this name already exists" },
+        { error: "A semester with this name already exists for this program" },
         { status: 400 }
       );
     }

@@ -15,6 +15,7 @@ import { globalRowIndex } from "@/hooks/usePagination";
 import { useServerPagination } from "@/hooks/useServerPagination";
 import Badge from "@/components/ui/badge/Badge";
 import { authFetch } from "@/lib/api";
+import { DEFAULT_PROGRAM, PROGRAMS, programLabel, type Program } from "@/lib/program";
 import { ModalOverlayGate } from "@/context/ModalOverlayContext";
 import { useAuth } from "@/context/AuthContext";
 import { PencilIcon, PlusIcon, TrashBinIcon } from "@/icons";
@@ -35,9 +36,10 @@ export default function FacultiesPage() {
   const [faculties, setFaculties] = useState<FacultyRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
+  const [filterProgram, setFilterProgram] = useState<Program | "all">(DEFAULT_PROGRAM);
   const [modal, setModal] = useState<"add" | "edit" | null>(null);
   const [editingId, setEditingId] = useState<number | null>(null);
-  const [form, setForm] = useState({ name: "", code: "", description: "", program: "" });
+  const [form, setForm] = useState({ name: "", code: "", description: "", program: DEFAULT_PROGRAM as string });
   const [submitError, setSubmitError] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
@@ -51,7 +53,7 @@ export default function FacultiesPage() {
     totalPages,
     from,
     to,
-  } = useServerPagination([search]);
+  } = useServerPagination([search, filterProgram]);
 
   const canCreate = hasPermission("faculties.create");
   const canEdit = hasPermission("faculties.edit");
@@ -64,6 +66,7 @@ export default function FacultiesPage() {
       params.set("page", String(page));
       params.set("pageSize", String(pageSize));
       if (search.trim()) params.set("q", search.trim());
+      params.set("program", filterProgram);
       const res = await authFetch(`/api/faculties?${params.toString()}`);
       if (res.ok) {
         const data = await res.json();
@@ -76,7 +79,7 @@ export default function FacultiesPage() {
     } finally {
       setLoading(false);
     }
-  }, [page, pageSize, search, setTotal]);
+  }, [page, pageSize, search, filterProgram, setTotal]);
 
   useEffect(() => {
     void loadFaculties();
@@ -85,14 +88,19 @@ export default function FacultiesPage() {
   function openAdd() {
     setModal("add");
     setEditingId(null);
-    setForm({ name: "", code: "", description: "", program: "" });
+    setForm({ name: "", code: "", description: "", program: DEFAULT_PROGRAM });
     setSubmitError("");
   }
 
   function openEdit(f: FacultyRow) {
     setModal("edit");
     setEditingId(f.id);
-    setForm({ name: f.name, code: f.code, description: f.description ?? "", program: f.program ?? "" });
+    setForm({
+      name: f.name,
+      code: f.code,
+      description: f.description ?? "",
+      program: f.program || DEFAULT_PROGRAM,
+    });
     setSubmitError("");
   }
 
@@ -105,7 +113,7 @@ export default function FacultiesPage() {
         name: form.name,
         code: form.code,
         description: form.description || undefined,
-        program: form.program || undefined,
+        program: form.program || DEFAULT_PROGRAM,
       };
 
       if (modal === "add") {
@@ -190,17 +198,31 @@ export default function FacultiesPage() {
               {total}
             </span>
           </div>
-          <div className="relative w-full sm:w-64">
-            <svg className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-            </svg>
-            <input
-              type="text"
-              placeholder="Search faculties..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="h-10 w-full rounded-lg border border-gray-200 bg-transparent py-2 pl-9 pr-4 text-sm text-gray-700 outline-none placeholder:text-gray-400 focus:border-brand-300 focus:ring-2 focus:ring-brand-500/20 dark:border-gray-700 dark:text-gray-300 dark:placeholder:text-gray-500 dark:focus:border-brand-500/40"
-            />
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+            <select
+              value={filterProgram}
+              onChange={(e) => setFilterProgram(e.target.value as Program | "all")}
+              className="h-10 rounded-lg border border-gray-200 bg-transparent px-3 text-sm text-gray-700 outline-none focus:border-brand-300 focus:ring-2 focus:ring-brand-500/20 dark:border-gray-700 dark:text-gray-300 dark:focus:border-brand-500/40"
+            >
+              <option value="all">All Programs</option>
+              {PROGRAMS.map((p) => (
+                <option key={p} value={p}>
+                  {programLabel(p)}
+                </option>
+              ))}
+            </select>
+            <div className="relative w-full sm:w-64">
+              <svg className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              </svg>
+              <input
+                type="text"
+                placeholder="Search faculties..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="h-10 w-full rounded-lg border border-gray-200 bg-transparent py-2 pl-9 pr-4 text-sm text-gray-700 outline-none placeholder:text-gray-400 focus:border-brand-300 focus:ring-2 focus:ring-brand-500/20 dark:border-gray-700 dark:text-gray-300 dark:placeholder:text-gray-500 dark:focus:border-brand-500/40"
+              />
+            </div>
           </div>
         </div>
 
@@ -217,7 +239,9 @@ export default function FacultiesPage() {
               </svg>
             </div>
             <p className="text-sm font-medium text-gray-500 dark:text-gray-400">
-              {search ? "No faculties match your search." : "No faculties yet. Create one to get started."}
+              {search || filterProgram !== "all"
+                ? "No faculties match your filters."
+                : "No faculties yet. Create one to get started."}
             </p>
           </div>
         ) : (
@@ -254,7 +278,11 @@ export default function FacultiesPage() {
                   <TableCell>
                     <Badge color="info" size="sm">{f.code}</Badge>
                   </TableCell>
-                  <TableCell className="text-xs">{f.program ?? "—"}</TableCell>
+                  <TableCell>
+                    <Badge color="primary" size="sm">
+                      {f.program ?? "—"}
+                    </Badge>
+                  </TableCell>
                   <TableCell className="max-w-[200px] truncate text-gray-500 dark:text-gray-400">
                     {f.description || "—"}
                   </TableCell>
@@ -368,16 +396,19 @@ export default function FacultiesPage() {
                 </div>
                 <div>
                   <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">
-                    Program
+                    Program <span className="text-error-500">*</span>
                   </label>
                   <select
+                    required
                     value={form.program}
                     onChange={(e) => setForm((f) => ({ ...f, program: e.target.value }))}
                     className="h-11 w-full appearance-none rounded-lg border border-gray-200 bg-transparent px-4 py-2.5 text-sm text-gray-800 outline-none focus:border-brand-300 focus:ring-2 focus:ring-brand-500/20 dark:border-gray-700 dark:text-white dark:focus:border-brand-500/40"
                   >
-                    <option value="">Select program</option>
-                    <option value="Bachelor">Bachelor Degree</option>
-                    <option value="Masters">Masters Degree</option>
+                    {PROGRAMS.map((p) => (
+                      <option key={p} value={p}>
+                        {programLabel(p)}
+                      </option>
+                    ))}
                   </select>
                 </div>
                 <div>

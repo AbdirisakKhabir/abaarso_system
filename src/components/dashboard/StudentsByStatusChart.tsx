@@ -96,7 +96,7 @@ export default function StudentsByStatusChart() {
           </div>
         </div>
         <Link
-          href="/admission"
+          href="/admission/bachelor"
           className="text-sm font-medium text-brand-600 hover:text-brand-700 dark:text-brand-400"
         >
           View all

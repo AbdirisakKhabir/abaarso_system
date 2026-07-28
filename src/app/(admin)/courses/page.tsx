@@ -15,11 +15,12 @@ import { globalRowIndex } from "@/hooks/usePagination";
 import { useServerPagination } from "@/hooks/useServerPagination";
 import Badge from "@/components/ui/badge/Badge";
 import { authFetch } from "@/lib/api";
+import { DEFAULT_PROGRAM, PROGRAMS, programLabel, type Program } from "@/lib/program";
 import { ModalOverlayGate } from "@/context/ModalOverlayContext";
 import { useAuth } from "@/context/AuthContext";
 import { DownloadIcon, PencilIcon, PlusIcon, TrashBinIcon } from "@/icons";
 
-type Department = { id: number; name: string; code: string };
+type Department = { id: number; name: string; code: string; program?: string | null };
 
 type CourseRow = {
   id: number;
@@ -29,6 +30,7 @@ type CourseRow = {
   creditHours: number;
   departmentId: number;
   department: Department;
+  program: string | null;
   isActive: boolean;
   classCount: number;
   createdAt: string;
@@ -41,6 +43,7 @@ export default function CoursesPage() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [filterDeptId, setFilterDeptId] = useState<string>("all");
+  const [filterProgram, setFilterProgram] = useState<Program | "all">(DEFAULT_PROGRAM);
   const [modal, setModal] = useState<"add" | "edit" | "import" | null>(null);
   const [importFile, setImportFile] = useState<File | null>(null);
   const [importDepartmentId, setImportDepartmentId] = useState("");
@@ -53,6 +56,7 @@ export default function CoursesPage() {
     description: "",
     creditHours: "3",
     departmentId: "",
+    program: DEFAULT_PROGRAM as string,
   });
   const [submitError, setSubmitError] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -69,7 +73,7 @@ export default function CoursesPage() {
     totalPages,
     from,
     to,
-  } = useServerPagination([search, filterDeptId]);
+  } = useServerPagination([search, filterDeptId, filterProgram]);
 
   const canCreate = hasPermission("courses.create");
   const canEdit = hasPermission("courses.edit");
@@ -83,6 +87,7 @@ export default function CoursesPage() {
       params.set("pageSize", String(pageSize));
       if (search.trim()) params.set("q", search.trim());
       if (filterDeptId !== "all") params.set("departmentId", filterDeptId);
+      params.set("program", filterProgram);
       const res = await authFetch(`/api/courses?${params.toString()}`);
       if (res.ok) {
         const data = await res.json();
@@ -95,17 +100,19 @@ export default function CoursesPage() {
     } finally {
       setLoading(false);
     }
-  }, [page, pageSize, search, filterDeptId, setTotal]);
+  }, [page, pageSize, search, filterDeptId, filterProgram, setTotal]);
 
   async function loadDepartments() {
-    const res = await authFetch("/api/departments");
+    const res = await authFetch("/api/departments?program=all");
     if (res.ok) {
       const data = await res.json();
+      const list = Array.isArray(data) ? data : Array.isArray(data.items) ? data.items : [];
       setDepartments(
-        data.map((d: Department & Record<string, unknown>) => ({
+        list.map((d: Department & Record<string, unknown>) => ({
           id: d.id,
           name: d.name,
           code: d.code,
+          program: (d.program as string | null | undefined) ?? null,
         }))
       );
     }
@@ -126,12 +133,14 @@ export default function CoursesPage() {
   function openAdd() {
     setModal("add");
     setEditingId(null);
+    const firstDept = departments[0];
     setForm({
       name: "",
       code: "",
       description: "",
       creditHours: "3",
-      departmentId: departments[0] ? String(departments[0].id) : "",
+      departmentId: firstDept ? String(firstDept.id) : "",
+      program: firstDept?.program || DEFAULT_PROGRAM,
     });
     setSubmitError("");
   }
@@ -145,6 +154,7 @@ export default function CoursesPage() {
       description: c.description ?? "",
       creditHours: String(c.creditHours),
       departmentId: String(c.departmentId),
+      program: c.program || DEFAULT_PROGRAM,
     });
     setSubmitError("");
   }
@@ -160,6 +170,7 @@ export default function CoursesPage() {
         description: form.description || undefined,
         creditHours: Number(form.creditHours),
         departmentId: Number(form.departmentId),
+        program: form.program || DEFAULT_PROGRAM,
       };
 
       if (modal === "add") {
@@ -412,6 +423,18 @@ export default function CoursesPage() {
               </div>
             )}
             <select
+              value={filterProgram}
+              onChange={(e) => setFilterProgram(e.target.value as Program | "all")}
+              className="h-10 rounded-lg border border-gray-200 bg-transparent px-3 text-sm text-gray-700 outline-none focus:border-brand-300 focus:ring-2 focus:ring-brand-500/20 dark:border-gray-700 dark:text-gray-300 dark:focus:border-brand-500/40"
+            >
+              <option value="all">All Programs</option>
+              {PROGRAMS.map((p) => (
+                <option key={p} value={p}>
+                  {programLabel(p)}
+                </option>
+              ))}
+            </select>
+            <select
               value={filterDeptId}
               onChange={(e) => setFilterDeptId(e.target.value)}
               className="h-10 rounded-lg border border-gray-200 bg-transparent px-3 text-sm text-gray-700 outline-none focus:border-brand-300 focus:ring-2 focus:ring-brand-500/20 dark:border-gray-700 dark:text-gray-300 dark:focus:border-brand-500/40"
@@ -451,7 +474,7 @@ export default function CoursesPage() {
               </svg>
             </div>
             <p className="text-sm font-medium text-gray-500 dark:text-gray-400">
-              {search || filterDeptId !== "all"
+              {search || filterDeptId !== "all" || filterProgram !== "all"
                 ? "No courses match your filters."
                 : "No courses yet. Create one to get started."}
             </p>
@@ -478,6 +501,7 @@ export default function CoursesPage() {
                 <TableCell isHeader>#</TableCell>
                 <TableCell isHeader>Course</TableCell>
                 <TableCell isHeader>Code</TableCell>
+                <TableCell isHeader>Program</TableCell>
                 <TableCell isHeader>Department</TableCell>
                 <TableCell isHeader>Credits</TableCell>
                 <TableCell isHeader>Classes</TableCell>
@@ -525,6 +549,9 @@ export default function CoursesPage() {
                   </TableCell>
                   <TableCell>
                     <Badge color="warning" size="sm">{c.code}</Badge>
+                  </TableCell>
+                  <TableCell>
+                    <Badge color="primary" size="sm">{c.program ?? "—"}</Badge>
                   </TableCell>
                   <TableCell>
                     <Badge color="info" size="sm">{c.department.name}</Badge>
@@ -751,13 +778,38 @@ export default function CoursesPage() {
                   <select
                     required
                     value={form.departmentId}
-                    onChange={(e) => setForm((f) => ({ ...f, departmentId: e.target.value }))}
+                    onChange={(e) => {
+                      const departmentId = e.target.value;
+                      const dept = departments.find((d) => String(d.id) === departmentId);
+                      setForm((f) => ({
+                        ...f,
+                        departmentId,
+                        program: dept?.program || f.program || DEFAULT_PROGRAM,
+                      }));
+                    }}
                     className="h-11 w-full appearance-none rounded-lg border border-gray-200 bg-transparent px-4 py-2.5 text-sm text-gray-800 outline-none focus:border-brand-300 focus:ring-2 focus:ring-brand-500/20 dark:border-gray-700 dark:text-white dark:focus:border-brand-500/40"
                   >
                     <option value="">Select a department</option>
                     {departments.map((d) => (
                       <option key={d.id} value={String(d.id)}>
                         {d.name} ({d.code})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">
+                    Program <span className="text-error-500">*</span>
+                  </label>
+                  <select
+                    required
+                    value={form.program}
+                    onChange={(e) => setForm((f) => ({ ...f, program: e.target.value }))}
+                    className="h-11 w-full appearance-none rounded-lg border border-gray-200 bg-transparent px-4 py-2.5 text-sm text-gray-800 outline-none focus:border-brand-300 focus:ring-2 focus:ring-brand-500/20 dark:border-gray-700 dark:text-white dark:focus:border-brand-500/40"
+                  >
+                    {PROGRAMS.map((p) => (
+                      <option key={p} value={p}>
+                        {programLabel(p)}
                       </option>
                     ))}
                   </select>
