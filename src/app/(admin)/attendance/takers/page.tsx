@@ -62,9 +62,13 @@ export default function AttendanceTakersPage() {
   const [loading, setLoading] = useState(true);
   const [filterDepartmentId, setFilterDepartmentId] = useState("all");
   const [filterLecturerId, setFilterLecturerId] = useState("all");
+  const [filterSearch, setFilterSearch] = useState("");
   const [modal, setModal] = useState<"add" | "edit" | null>(null);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [form, setForm] = useState<FormState>(emptyForm);
+  const [modalDepartmentId, setModalDepartmentId] = useState("all");
+  const [modalLecturerSearch, setModalLecturerSearch] = useState("");
+  const [modalClassSearch, setModalClassSearch] = useState("");
   const [submitError, setSubmitError] = useState("");
   const [submitInfo, setSubmitInfo] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -107,12 +111,12 @@ export default function AttendanceTakersPage() {
     if (classRes.ok) {
       const data = await classRes.json();
       setClasses(
-        data.map((c: ClassOption & Record<string, unknown>) => ({
+        data.map((c: ClassOption & Record<string, unknown> & { department?: { id: number; name: string; code: string } }) => ({
           id: c.id,
           name: c.name,
           semester: c.semester,
           year: c.year,
-          departmentId: c.departmentId,
+          departmentId: c.departmentId ?? c.department?.id ?? 0,
           department: c.department,
         }))
       );
@@ -147,7 +151,24 @@ export default function AttendanceTakersPage() {
     void loadRows();
   }, [loadRows]);
 
-  const filtered = useMemo(() => rows, [rows]);
+  const filtered = useMemo(() => {
+    const q = filterSearch.trim().toLowerCase();
+    if (!q) return rows;
+    return rows.filter((row) => {
+      const haystack = [
+        row.lecturer.name,
+        row.lecturer.email,
+        row.class.name,
+        row.class.department.code,
+        row.class.department.name,
+        row.class.semester,
+        String(row.class.year),
+      ]
+        .join(" ")
+        .toLowerCase();
+      return haystack.includes(q);
+    });
+  }, [rows, filterSearch]);
 
   const {
     paginatedItems,
@@ -159,7 +180,7 @@ export default function AttendanceTakersPage() {
     total: filteredTotal,
     from,
     to,
-  } = usePagination(filtered, [filterDepartmentId, filterLecturerId]);
+  } = usePagination(filtered, [filterDepartmentId, filterLecturerId, filterSearch]);
 
   const assignedClassIdsForLecturer = useMemo(() => {
     if (!form.lecturerId) return new Set<number>();
@@ -170,14 +191,64 @@ export default function AttendanceTakersPage() {
     );
   }, [rows, form.lecturerId]);
 
+  const filteredLecturersForModal = useMemo(() => {
+    const q = modalLecturerSearch.trim().toLowerCase();
+    if (!q) return lecturers;
+    return lecturers.filter(
+      (l) =>
+        l.name.toLowerCase().includes(q) ||
+        l.email.toLowerCase().includes(q)
+    );
+  }, [lecturers, modalLecturerSearch]);
+
   const availableClassesForAdd = useMemo(() => {
-    return classes.filter((c) => !assignedClassIdsForLecturer.has(c.id));
-  }, [classes, assignedClassIdsForLecturer]);
+    const q = modalClassSearch.trim().toLowerCase();
+    return classes.filter((c) => {
+      if (assignedClassIdsForLecturer.has(c.id)) return false;
+      if (modalDepartmentId !== "all" && c.departmentId !== Number(modalDepartmentId)) {
+        return false;
+      }
+      if (!q) return true;
+      const haystack = [
+        c.name,
+        c.semester,
+        String(c.year),
+        c.department?.code,
+        c.department?.name,
+      ]
+        .join(" ")
+        .toLowerCase();
+      return haystack.includes(q);
+    });
+  }, [classes, assignedClassIdsForLecturer, modalDepartmentId, modalClassSearch]);
+
+  const classesForEdit = useMemo(() => {
+    const q = modalClassSearch.trim().toLowerCase();
+    return classes.filter((c) => {
+      if (modalDepartmentId !== "all" && c.departmentId !== Number(modalDepartmentId)) {
+        return false;
+      }
+      if (!q) return true;
+      const haystack = [
+        c.name,
+        c.semester,
+        String(c.year),
+        c.department?.code,
+        c.department?.name,
+      ]
+        .join(" ")
+        .toLowerCase();
+      return haystack.includes(q);
+    });
+  }, [classes, modalDepartmentId, modalClassSearch]);
 
   function openAdd() {
     setModal("add");
     setEditingId(null);
     setForm(emptyForm);
+    setModalDepartmentId("all");
+    setModalLecturerSearch("");
+    setModalClassSearch("");
     setSubmitError("");
     setSubmitInfo("");
   }
@@ -190,6 +261,9 @@ export default function AttendanceTakersPage() {
       classId: String(row.classId),
       classIds: [],
     });
+    setModalDepartmentId(String(row.class.departmentId || row.class.department?.id || "all"));
+    setModalLecturerSearch("");
+    setModalClassSearch("");
     setSubmitError("");
     setSubmitInfo("");
   }
@@ -335,6 +409,24 @@ export default function AttendanceTakersPage() {
             </span>
           </div>
           <div className="flex flex-wrap gap-2">
+            <div className="relative min-w-[200px] flex-1 sm:max-w-xs">
+              <svg
+                className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                strokeWidth={2}
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              </svg>
+              <input
+                type="search"
+                value={filterSearch}
+                onChange={(e) => setFilterSearch(e.target.value)}
+                placeholder="Search lecturer, class, department..."
+                className="h-10 w-full rounded-lg border border-gray-200 bg-transparent py-2 pl-9 pr-3 text-sm text-gray-700 outline-none placeholder:text-gray-400 focus:border-brand-300 focus:ring-2 focus:ring-brand-500/20 dark:border-gray-700 dark:text-gray-300 dark:placeholder:text-gray-500"
+              />
+            </div>
             <select
               value={filterDepartmentId}
               onChange={(e) => setFilterDepartmentId(e.target.value)}
@@ -369,7 +461,9 @@ export default function AttendanceTakersPage() {
         ) : filtered.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-16">
             <p className="text-sm font-medium text-gray-500 dark:text-gray-400">
-              No attendance taker assignments yet.
+              {filterSearch.trim() || filterDepartmentId !== "all" || filterLecturerId !== "all"
+                ? "No assignments match your filters."
+                : "No attendance taker assignments yet."}
             </p>
             {canCreate && (
               <button
@@ -503,6 +597,13 @@ export default function AttendanceTakersPage() {
                     <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">
                       Lecturer <span className="text-error-500">*</span>
                     </label>
+                    <input
+                      type="search"
+                      value={modalLecturerSearch}
+                      onChange={(e) => setModalLecturerSearch(e.target.value)}
+                      placeholder="Search lecturer by name or email..."
+                      className="mb-2 h-10 w-full rounded-lg border border-gray-200 bg-transparent px-3 text-sm text-gray-800 outline-none placeholder:text-gray-400 focus:border-brand-300 dark:border-gray-700 dark:text-white dark:placeholder:text-gray-500"
+                    />
                     <select
                       required
                       value={form.lecturerId}
@@ -518,12 +619,56 @@ export default function AttendanceTakersPage() {
                       className="h-11 w-full rounded-lg border border-gray-200 bg-transparent px-3 text-sm text-gray-800 outline-none focus:border-brand-300 dark:border-gray-700 dark:text-white"
                     >
                       <option value="">Select lecturer</option>
-                      {lecturers.map((l) => (
+                      {filteredLecturersForModal.map((l) => (
                         <option key={l.id} value={String(l.id)}>
                           {l.name} ({l.email})
                         </option>
                       ))}
                     </select>
+                    {modalLecturerSearch.trim() && filteredLecturersForModal.length === 0 && (
+                      <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                        No lecturers match your search.
+                      </p>
+                    )}
+                  </div>
+
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                    <div>
+                      <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">
+                        Department
+                      </label>
+                      <select
+                        value={modalDepartmentId}
+                        onChange={(e) => {
+                          setModalDepartmentId(e.target.value);
+                          setForm((f) => ({
+                            ...f,
+                            classId: "",
+                            classIds: [],
+                          }));
+                        }}
+                        className="h-11 w-full rounded-lg border border-gray-200 bg-transparent px-3 text-sm text-gray-800 outline-none focus:border-brand-300 dark:border-gray-700 dark:text-white"
+                      >
+                        <option value="all">All departments</option>
+                        {departments.map((d) => (
+                          <option key={d.id} value={String(d.id)}>
+                            {d.code} — {d.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">
+                        Search classes
+                      </label>
+                      <input
+                        type="search"
+                        value={modalClassSearch}
+                        onChange={(e) => setModalClassSearch(e.target.value)}
+                        placeholder="Class name, semester..."
+                        className="h-11 w-full rounded-lg border border-gray-200 bg-transparent px-3 text-sm text-gray-800 outline-none placeholder:text-gray-400 focus:border-brand-300 dark:border-gray-700 dark:text-white dark:placeholder:text-gray-500"
+                      />
+                    </div>
                   </div>
 
                   {modal === "edit" ? (
@@ -540,7 +685,7 @@ export default function AttendanceTakersPage() {
                         className="h-11 w-full rounded-lg border border-gray-200 bg-transparent px-3 text-sm text-gray-800 outline-none focus:border-brand-300 dark:border-gray-700 dark:text-white"
                       >
                         <option value="">Select class</option>
-                        {classes.map((c) => (
+                        {classesForEdit.map((c) => (
                           <option key={c.id} value={String(c.id)}>
                             {c.name} · {c.semester} {c.year} ({c.department.code})
                           </option>
@@ -553,7 +698,7 @@ export default function AttendanceTakersPage() {
                         <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
                           Classes <span className="text-error-500">*</span>
                         </label>
-                        {form.lecturerId && (
+                        {form.lecturerId && availableClassesForAdd.length > 0 && (
                           <button
                             type="button"
                             onClick={() =>
@@ -574,7 +719,9 @@ export default function AttendanceTakersPage() {
                         </p>
                       ) : availableClassesForAdd.length === 0 ? (
                         <p className="rounded-lg border border-dashed border-gray-200 px-4 py-6 text-sm text-gray-500 dark:border-gray-700 dark:text-gray-400">
-                          This lecturer is already assigned to all active classes.
+                          {modalDepartmentId !== "all" || modalClassSearch.trim()
+                            ? "No classes match the selected department/search filters."
+                            : "This lecturer is already assigned to all active classes."}
                         </p>
                       ) : (
                         <div className="max-h-72 space-y-2 overflow-y-auto rounded-lg border border-gray-200 p-3 dark:border-gray-700">
