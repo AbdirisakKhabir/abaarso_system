@@ -16,6 +16,8 @@ import {
 import { usePagination } from "@/hooks/usePagination";
 import Badge from "@/components/ui/badge/Badge";
 import { authFetch } from "@/lib/api";
+import { ReportProgramFilter } from "@/components/reports/ReportProgramFilter";
+import { DEFAULT_PROGRAM, type Program } from "@/lib/program";
 
 type Department = { id: number; name: string; code: string };
 type Course = { id: number; name: string; code: string; department?: Department };
@@ -35,22 +37,23 @@ export default function LecturersReportPage() {
   const [departments, setDepartments] = useState<Department[]>([]);
   const [lecturers, setLecturers] = useState<Lecturer[]>([]);
   const [loading, setLoading] = useState(true);
+  const [program, setProgram] = useState<Program>(DEFAULT_PROGRAM);
   const [filterDept, setFilterDept] = useState("");
 
   const fetchReport = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await authFetch("/api/lecturers");
+      const res = await authFetch(`/api/lecturers?program=${encodeURIComponent(program)}`);
       if (res.ok) setLecturers(await res.json());
     } catch { /* empty */ }
     setLoading(false);
-  }, []);
+  }, [program]);
 
   useEffect(() => {
-    authFetch("/api/departments").then((r) => {
+    authFetch(`/api/departments?program=${encodeURIComponent(program)}`).then((r) => {
       if (r.ok) r.json().then((d: Department[]) => setDepartments(d));
     });
-  }, []);
+  }, [program]);
 
   useEffect(() => {
     fetchReport();
@@ -132,6 +135,17 @@ export default function LecturersReportPage() {
         <div className="no-print border-b border-gray-100 px-5 py-4 dark:border-gray-800">
           <h3 className="mb-4 text-lg font-semibold text-gray-800 dark:text-white/90">Filters</h3>
           <div className="flex flex-wrap gap-4">
+            <div>
+              <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400">Program</label>
+              <ReportProgramFilter
+                value={program}
+                onChange={(p) => {
+                  setProgram(p);
+                  setFilterDept("");
+                }}
+                className="h-10 w-full min-w-0 sm:w-auto sm:min-w-[180px] rounded-lg border border-gray-200 bg-transparent px-3 text-sm text-gray-800 outline-none focus:border-brand-300 dark:border-gray-700 dark:text-white/80"
+              />
+            </div>
             <div>
               <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400">Department</label>
               <select

@@ -9,7 +9,7 @@ import { authFetch } from "@/lib/api";
 import { DEFAULT_PROGRAM } from "@/lib/program";
 import { useAuth } from "@/context/AuthContext";
 
-type Department = { id: number; name: string; code: string };
+type Department = { id: number; name: string; code: string; program?: string };
 type AcademicYearInfo = { id: number; name: string; startYear: number; endYear: number };
 type ClassInfo = {
   id: number;
@@ -18,6 +18,7 @@ type ClassInfo = {
   year: number;
   course: { code: string };
   departmentId?: number;
+  department?: { id: number; code: string; name: string };
 };
 
 type Student = {
@@ -45,6 +46,16 @@ type Student = {
   imagePublicId: string | null;
 };
 
+function toDateOnly(value: string | null | undefined): string {
+  if (!value) return "";
+  const raw = String(value).trim();
+  const m = /^(\d{4}-\d{2}-\d{2})/.exec(raw);
+  if (m) return m[1];
+  const d = new Date(raw);
+  if (Number.isNaN(d.getTime())) return "";
+  return d.toISOString().slice(0, 10);
+}
+
 export default function EditStudentPage() {
   const params = useParams();
   const router = useRouter();
@@ -65,22 +76,35 @@ export default function EditStudentPage() {
     }
     (async () => {
       try {
-        const [studentRes, deptRes, yearsRes, classRes] = await Promise.all([
-          authFetch(`/api/students/${id}`),
-          authFetch("/api/departments"),
-          authFetch("/api/academic-years"),
-          authFetch("/api/classes"),
-        ]);
+        const studentRes = await authFetch(`/api/students/${id}`);
         if (!studentRes.ok) {
           setError("Student not found");
           setLoading(false);
           return;
         }
-        const s = await studentRes.json();
+        const s: Student = await studentRes.json();
         setStudent(s);
+
+        const program = s.program || DEFAULT_PROGRAM;
+        const [deptRes, yearsRes, classRes] = await Promise.all([
+          authFetch(`/api/departments?program=${encodeURIComponent(program)}`),
+          authFetch("/api/academic-years"),
+          authFetch(
+            `/api/classes?program=${encodeURIComponent(program)}&departmentId=${s.departmentId}`
+          ),
+        ]);
+
         if (deptRes.ok) {
           const data = await deptRes.json();
-          setDepartments(data.map((d: Department & Record<string, unknown>) => ({ id: d.id, name: d.name, code: d.code })));
+          const list = Array.isArray(data) ? data : data.items;
+          setDepartments(
+            (list || []).map((d: Department) => ({
+              id: d.id,
+              name: d.name,
+              code: d.code,
+              program: d.program,
+            }))
+          );
         }
         if (yearsRes.ok) {
           const data = await yearsRes.json();
@@ -95,15 +119,29 @@ export default function EditStudentPage() {
         }
         if (classRes.ok) {
           const data = await classRes.json();
+          const list = Array.isArray(data) ? data : data.items;
           setClasses(
-            data.map((c: { id: number; name: string; semester: string; year: number; department?: { code?: string; id?: number } }) => ({
-              id: c.id,
-              name: c.name,
-              semester: c.semester,
-              year: c.year,
-              department: { code: c.department?.code ?? "" },
-              departmentId: c.department?.id ?? 0,
-            }))
+            (list || []).map(
+              (c: {
+                id: number;
+                name: string;
+                semester: string;
+                year: number;
+                department?: { code?: string; id?: number; name?: string };
+              }) => ({
+                id: c.id,
+                name: c.name,
+                semester: c.semester,
+                year: c.year,
+                course: { code: "" },
+                department: {
+                  id: c.department?.id ?? 0,
+                  code: c.department?.code ?? "",
+                  name: c.department?.name ?? "",
+                },
+                departmentId: c.department?.id ?? 0,
+              })
+            )
           );
         }
       } catch {
@@ -142,38 +180,38 @@ export default function EditStudentPage() {
 
   if (!student) return null;
 
+  const listHref = student.program === "Masters" ? "/admission/masters" : "/admission/bachelor";
+
   const initialData: Partial<StudentFormData> = {
-        studentId: student.studentId,
-        firstName: student.firstName,
-        lastName: student.lastName,
-        motherName: student.motherName ?? "",
-        parentPhone: student.parentPhone ?? "",
-        email: student.email ?? "",
-        phone: student.phone ?? "",
-        dateOfBirth: student.dateOfBirth ? student.dateOfBirth.split("T")[0] : "",
-        admissionDate: student.admissionDate
-          ? new Date(student.admissionDate).toISOString().slice(0, 10)
-          : new Date().toISOString().slice(0, 10),
-        gender: student.gender ?? "",
-        address: student.address ?? "",
-        departmentId: String(student.departmentId),
-        admissionAcademicYearId: student.admissionAcademicYearId ? String(student.admissionAcademicYearId) : "",
-        classId: student.classId ? String(student.classId) : "",
-        program: student.program || DEFAULT_PROGRAM,
-        status: student.status,
-        paymentStatus: student.paymentStatus ?? "Fully Paid",
-        customSemesterFee:
-          student.customSemesterFee != null
-            ? String(student.customSemesterFee)
-            : "",
-        balance: String(Number(student.balance ?? 0)),
-        imageUrl: student.imageUrl ?? "",
-        imagePublicId: student.imagePublicId ?? "",
-      };
+    studentId: student.studentId,
+    firstName: student.firstName,
+    lastName: student.lastName,
+    motherName: student.motherName ?? "",
+    parentPhone: student.parentPhone ?? "",
+    email: student.email ?? "",
+    phone: student.phone ?? "",
+    dateOfBirth: toDateOnly(student.dateOfBirth),
+    admissionDate: toDateOnly(student.admissionDate) || new Date().toISOString().slice(0, 10),
+    gender: student.gender ?? "",
+    address: student.address ?? "",
+    departmentId: String(student.departmentId),
+    admissionAcademicYearId: student.admissionAcademicYearId
+      ? String(student.admissionAcademicYearId)
+      : "",
+    classId: student.classId ? String(student.classId) : "",
+    program: student.program || DEFAULT_PROGRAM,
+    status: student.status,
+    paymentStatus: student.paymentStatus ?? "Fully Paid",
+    customSemesterFee:
+      student.customSemesterFee != null ? String(student.customSemesterFee) : "",
+    balance: String(Number(student.balance ?? 0)),
+    imageUrl: student.imageUrl ?? "",
+    imagePublicId: student.imagePublicId ?? "",
+  };
 
   return (
     <div>
-      <PageBreadCrumb pageTitle={`Edit ${student?.firstName} ${student?.lastName}`} />
+      <PageBreadCrumb pageTitle={`Edit ${student.firstName} ${student.lastName}`} />
       <StudentRegistrationForm
         mode="edit"
         editingId={id}
@@ -181,12 +219,8 @@ export default function EditStudentPage() {
         departments={departments}
         academicYears={academicYears}
         classes={classes}
-        listHref={
-          (student?.program === "Masters" ? "/admission/masters" : "/admission/bachelor")
-        }
-        onSuccess={() =>
-          router.push(student?.program === "Masters" ? "/admission/masters" : "/admission/bachelor")
-        }
+        listHref={listHref}
+        onSuccess={() => router.push(listHref)}
       />
     </div>
   );

@@ -13,6 +13,8 @@ import {
 } from "@/components/ui/table";
 import { usePagination } from "@/hooks/usePagination";
 import { authFetch } from "@/lib/api";
+import { ReportProgramFilter } from "@/components/reports/ReportProgramFilter";
+import { DEFAULT_PROGRAM, type Program } from "@/lib/program";
 
 type Department = { id: number; name: string; code: string };
 type ClassItem = {
@@ -62,6 +64,7 @@ export default function AttendanceExamReportPage() {
     totalSessions: number;
   } | null>(null);
   const [loading, setLoading] = useState(false);
+  const [program, setProgram] = useState<Program>(DEFAULT_PROGRAM);
   const [filterDept, setFilterDept] = useState("");
   const [filterClass, setFilterClass] = useState("");
   const [filterCourse, setFilterCourse] = useState("");
@@ -75,7 +78,7 @@ export default function AttendanceExamReportPage() {
     }
     setLoading(true);
     try {
-      const params = new URLSearchParams({ classId: filterClass });
+      const params = new URLSearchParams({ classId: filterClass, program });
       if (filterCourse) params.set("courseId", filterCourse);
       const res = await authFetch(`/api/reports/attendance-exam?${params.toString()}`);
       if (res.ok) {
@@ -101,16 +104,16 @@ export default function AttendanceExamReportPage() {
       setClassInfo(null);
     }
     setLoading(false);
-  }, [filterClass, filterCourse]);
+  }, [program, filterClass, filterCourse]);
 
   useEffect(() => {
-    authFetch("/api/departments").then((r) => {
+    authFetch(`/api/departments?program=${encodeURIComponent(program)}`).then((r) => {
       if (r.ok) r.json().then((d: Department[]) => setDepartments(d));
     });
-    authFetch("/api/classes").then((r) => {
+    authFetch(`/api/classes?program=${encodeURIComponent(program)}`).then((r) => {
       if (r.ok) r.json().then((d: ClassItem[]) => setClasses(d));
     });
-  }, []);
+  }, [program]);
 
   useEffect(() => {
     fetchReport();
@@ -162,6 +165,21 @@ export default function AttendanceExamReportPage() {
             Filters
           </h3>
           <div className="flex flex-wrap gap-4">
+            <div>
+              <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400">
+                Program
+              </label>
+              <ReportProgramFilter
+                value={program}
+                onChange={(p) => {
+                  setProgram(p);
+                  setFilterDept("");
+                  setFilterClass("");
+                  setFilterCourse("");
+                }}
+                className="h-10 w-full min-w-0 sm:w-auto sm:min-w-[180px] rounded-lg border border-gray-200 bg-transparent px-3 text-sm text-gray-800 outline-none focus:border-brand-300 dark:border-gray-700 dark:text-white/80"
+              />
+            </div>
             <div>
               <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400">
                 Department

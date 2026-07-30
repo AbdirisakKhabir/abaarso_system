@@ -15,6 +15,8 @@ import {
 import { usePagination } from "@/hooks/usePagination";
 import { authFetch } from "@/lib/api";
 import { DownloadIcon } from "@/icons";
+import { ReportProgramFilter } from "@/components/reports/ReportProgramFilter";
+import { DEFAULT_PROGRAM, type Program } from "@/lib/program";
 import {
   FinanceReportBar,
   FinanceReportDonut,
@@ -49,6 +51,7 @@ const CURRENT_YEAR = new Date().getFullYear();
 const YEAR_OPTIONS = Array.from({ length: 14 }, (_, i) => CURRENT_YEAR + 1 - i);
 
 export default function PaidStudentsReportPage() {
+  const [program, setProgram] = useState<Program>(DEFAULT_PROGRAM);
   const [semesters, setSemesters] = useState<SemesterOption[]>([]);
   const [classes, setClasses] = useState<ClassOption[]>([]);
   const [departments, setDepartments] = useState<DepartmentOption[]>([]);
@@ -69,22 +72,28 @@ export default function PaidStudentsReportPage() {
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    authFetch("/api/semesters?active=true").then((r) => {
+    authFetch(`/api/semesters?active=true&program=${encodeURIComponent(program)}`).then((r) => {
       if (r.ok) r.json().then((d: SemesterOption[]) => {
         setSemesters(Array.isArray(d) ? d : []);
       });
     });
-    authFetch("/api/classes").then((r) => {
+    authFetch(`/api/classes?program=${encodeURIComponent(program)}`).then((r) => {
       if (r.ok) r.json().then((d: ClassOption[]) => setClasses(Array.isArray(d) ? d : []));
     });
-    authFetch("/api/departments").then((r) => {
+    authFetch(`/api/departments?program=${encodeURIComponent(program)}`).then((r) => {
       if (r.ok) r.json().then((d: DepartmentOption[]) => setDepartments(Array.isArray(d) ? d : []));
     });
-  }, []);
+  }, [program]);
 
   useEffect(() => {
-    if (semesters.length > 0 && !paidSemester) setPaidSemester(semesters[0].name);
-  }, [semesters, paidSemester]);
+    if (semesters.length > 0) {
+      setPaidSemester((prev) =>
+        prev && semesters.some((s) => s.name === prev) ? prev : semesters[0].name
+      );
+    } else {
+      setPaidSemester("");
+    }
+  }, [semesters]);
 
   const filteredClasses = useMemo(() => {
     return classes.filter((c) => {
@@ -116,6 +125,7 @@ export default function PaidStudentsReportPage() {
         semester: paidSemester,
         year: paidYear,
         classId: paidClassId,
+        program,
       });
       if (filterDeptId !== "all") params.set("departmentId", filterDeptId);
       params.set("paymentStatusFilter", paymentStatusFilter);
@@ -256,6 +266,21 @@ export default function PaidStudentsReportPage() {
           students. Scholarship students are on a separate report.
         </p>
         <div className="no-print mb-6 flex flex-wrap items-end gap-4">
+          <div>
+            <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">
+              Program
+            </label>
+            <ReportProgramFilter
+              value={program}
+              onChange={(p) => {
+                setProgram(p);
+                setFilterDeptId("all");
+                setPaidClassId("");
+                setPaidSemester("");
+              }}
+              className="h-10 w-full min-w-0 sm:w-auto sm:min-w-[180px] rounded-lg border border-gray-200 bg-transparent px-3 text-sm text-gray-800 outline-none focus:border-brand-300 dark:border-gray-700 dark:text-white dark:focus:border-brand-500/40"
+            />
+          </div>
           <div>
             <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">
               Semester

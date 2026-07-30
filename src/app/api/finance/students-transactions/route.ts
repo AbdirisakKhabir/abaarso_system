@@ -3,6 +3,7 @@ import type { Prisma } from "@prisma/client";
 import { getAuthUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getActiveSemesterNames } from "@/lib/semesters";
+import { parseProgram } from "@/lib/program";
 
 export async function GET(req: NextRequest) {
   try {
@@ -12,6 +13,7 @@ export async function GET(req: NextRequest) {
     }
 
     const { searchParams } = new URL(req.url);
+    const program = parseProgram(searchParams.get("program")) as "Bachelor" | "Masters";
     const departmentId = searchParams.get("departmentId");
     const classId = searchParams.get("classId");
     const year = searchParams.get("year");
@@ -24,14 +26,14 @@ export async function GET(req: NextRequest) {
     const classYearRaw = searchParams.get("classYear");
     const paidOnly = searchParams.get("paidOnly") !== "false";
 
-    const where: Prisma.StudentWhereInput = { status: "Admitted" };
+    const where: Prisma.StudentWhereInput = { status: "Admitted", program };
     if (departmentId) where.departmentId = Number(departmentId);
     if (classId) {
       where.classId = Number(classId);
     } else if (classSemester && classSemester !== "all" && classYearRaw) {
       const cy = Number(classYearRaw);
       if (Number.isInteger(cy)) {
-        where.class = { is: { semester: classSemester, year: cy } };
+        where.class = { is: { semester: classSemester, year: cy, program } };
       }
     }
     if (search) {

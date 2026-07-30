@@ -1,15 +1,15 @@
 "use client";
 
-import React, { useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import Button from "@/components/ui/button/Button";
 import { DateInput } from "@/components/form/DateInput";
 import { authFetch } from "@/lib/api";
-import { DEFAULT_PROGRAM, PROGRAMS, programLabel } from "@/lib/program";
+import { DEFAULT_PROGRAM, PROGRAMS, programLabel, type Program } from "@/lib/program";
 import { ChevronLeftIcon, UserCircleIcon, MailIcon, GroupIcon, UserIcon } from "@/icons";
 
-type Department = { id: number; name: string; code: string };
+type Department = { id: number; name: string; code: string; program?: string };
 type AcademicYearInfo = { id: number; name: string; startYear: number; endYear: number };
 type ClassInfo = {
   id: number;
@@ -49,6 +49,41 @@ export type StudentFormData = {
 const STATUSES = ["Pending", "Admitted", "Rejected", "Graduated"];
 const PAYMENT_STATUSES = ["Full Scholarship", "Half Scholar", "Fully Paid"] as const;
 
+const MONTHS = [
+  { value: "01", label: "January" },
+  { value: "02", label: "February" },
+  { value: "03", label: "March" },
+  { value: "04", label: "April" },
+  { value: "05", label: "May" },
+  { value: "06", label: "June" },
+  { value: "07", label: "July" },
+  { value: "08", label: "August" },
+  { value: "09", label: "September" },
+  { value: "10", label: "October" },
+  { value: "11", label: "November" },
+  { value: "12", label: "December" },
+];
+
+function parseDobParts(iso: string): { year: string; month: string; day: string } {
+  const raw = iso?.trim() || "";
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(raw);
+  if (m) return { year: m[1], month: m[2], day: m[3] };
+  const d = new Date(raw);
+  if (!Number.isNaN(d.getTime())) {
+    return {
+      year: String(d.getUTCFullYear()),
+      month: String(d.getUTCMonth() + 1).padStart(2, "0"),
+      day: String(d.getUTCDate()).padStart(2, "0"),
+    };
+  }
+  return { year: "", month: "", day: "" };
+}
+
+function daysInMonth(year: number, month: number): number {
+  if (!year || !month) return 31;
+  return new Date(year, month, 0).getDate();
+}
+
 const defaultForm: StudentFormData = {
   studentId: "",
   firstName: "",
@@ -79,7 +114,7 @@ type Props = {
   initialData?: Partial<StudentFormData>;
   departments: Department[];
   academicYears: AcademicYearInfo[];
-  classes: ClassInfo[];
+  classes?: ClassInfo[];
   /** Back / cancel destination (defaults to Bachelor list) */
   listHref?: string;
   onSuccess: () => void;
@@ -89,9 +124,9 @@ export default function StudentRegistrationForm({
   mode,
   editingId,
   initialData,
-  departments,
+  departments: departmentsProp,
   academicYears,
-  classes,
+  classes: classesProp = [],
   listHref = "/admission/bachelor",
   onSuccess,
 }: Props) {
@@ -100,7 +135,8 @@ export default function StudentRegistrationForm({
       ...defaultForm,
       ...initialData,
       departmentId:
-        initialData?.departmentId ?? (departments[0] ? String(departments[0].id) : ""),
+        initialData?.departmentId ?? (departmentsProp[0] ? String(departmentsProp[0].id) : ""),
+      program: initialData?.program || DEFAULT_PROGRAM,
     };
     if (!merged.admissionDate?.trim()) {
       merged.admissionDate = new Date().toISOString().slice(0, 10);
@@ -117,6 +153,133 @@ export default function StudentRegistrationForm({
   const [uploading, setUploading] = useState(false);
   const [imagePreview, setImagePreview] = useState<string | null>(initialData?.imageUrl ?? null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [departments, setDepartments] = useState<Department[]>(departmentsProp);
+  const [classOptions, setClassOptions] = useState<ClassInfo[]>(classesProp);
+  const [loadingClasses, setLoadingClasses] = useState(false);
+  const [loadingDepartments, setLoadingDepartments] = useState(false);
+  const [dobParts, setDobParts] = useState(() => parseDobParts(initialData?.dateOfBirth || ""));
+
+  const dobYearOptions = useMemo(() => {
+    const current = new Date().getFullYear();
+    const years: number[] = [];
+    for (let y = current - 10; y >= current - 80; y--) years.push(y);
+    return years;
+  }, []);
+  const dobDayOptions = useMemo(() => {
+    const max = daysInMonth(Number(dobParts.year) || 0, Number(dobParts.month) || 0);
+    return Array.from({ length: max }, (_, i) => String(i + 1).padStart(2, "0"));
+  }, [dobParts.year, dobParts.month]);
+
+  function setDobPart(part: "year" | "month" | "day", value: string) {
+    const next = { ...dobParts, [part]: value };
+    const maxDay = daysInMonth(Number(next.year) || 0, Number(next.month) || 0);
+    if (next.day && Number(next.day) > maxDay) {
+      next.day = String(maxDay).padStart(2, "0");
+    }
+    const complete = Boolean(next.year && next.month && next.day);
+    setDobParts(next);
+    setForm((f) => ({
+      ...f,
+      dateOfBirth: complete ? `${next.year}-${next.month}-${next.day}` : "",
+    }));
+  }
+
+  // Keep departments in sync with program (Bachelor / Masters)
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      setLoadingDepartments(true);
+      try {
+        const program = (form.program || DEFAULT_PROGRAM) as Program;
+        const res = await authFetch(
+          `/api/departments?program=${encodeURIComponent(program)}`
+        );
+        if (!res.ok) return;
+        const data = await res.json();
+        const list = Array.isArray(data) ? data : data.items;
+        if (cancelled) return;
+        const mapped = (list || []).map((d: Department) => ({
+          id: d.id,
+          name: d.name,
+          code: d.code,
+          program: d.program,
+        }));
+        setDepartments(mapped);
+        setForm((f) => {
+          if (!f.departmentId) return f;
+          const stillValid = mapped.some((d: Department) => String(d.id) === f.departmentId);
+          return stillValid ? f : { ...f, departmentId: "", classId: "" };
+        });
+      } finally {
+        if (!cancelled) setLoadingDepartments(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [form.program]);
+
+  // Fetch classes for selected department + program
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      if (!form.departmentId) {
+        setClassOptions([]);
+        return;
+      }
+      setLoadingClasses(true);
+      try {
+        const program = form.program || DEFAULT_PROGRAM;
+        const params = new URLSearchParams({
+          departmentId: form.departmentId,
+          program,
+        });
+        const res = await authFetch(`/api/classes?${params.toString()}`);
+        if (!res.ok) {
+          if (!cancelled) setClassOptions([]);
+          return;
+        }
+        const data = await res.json();
+        const list = Array.isArray(data) ? data : data.items;
+        if (cancelled) return;
+        const mapped = (list || []).map(
+          (c: {
+            id: number;
+            name: string;
+            semester: string;
+            year: number;
+            departmentId?: number;
+            department?: { id: number; code: string; name: string };
+          }) => ({
+            id: c.id,
+            name: c.name,
+            semester: c.semester,
+            year: c.year,
+            departmentId: c.departmentId ?? c.department?.id,
+            department: c.department,
+          })
+        );
+
+        // Preserve the currently selected class when editing if it is missing
+        // from the active filtered list (e.g. inactive class).
+        const currentClassId = form.classId;
+        if (
+          currentClassId &&
+          !mapped.some((c: ClassInfo) => String(c.id) === currentClassId)
+        ) {
+          const fromProp = classesProp.find((c) => String(c.id) === currentClassId);
+          if (fromProp) mapped.unshift(fromProp);
+        }
+
+        if (!cancelled) setClassOptions(mapped);
+      } finally {
+        if (!cancelled) setLoadingClasses(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [form.departmentId, form.program]);
 
   async function handleImageUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -363,13 +526,50 @@ export default function StudentRegistrationForm({
           <SectionHeader icon={UserIcon} title="Personal Details" subtitle="Dates, gender, status, and account balance" />
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
             <div>
-              <DateInput
-                id="student-dob"
-                label="Date of Birth"
-                value={form.dateOfBirth}
-                onChange={(v) => setForm((f) => ({ ...f, dateOfBirth: v }))}
-                inputClassName={`${inputClass} [color-scheme:light] dark:[color-scheme:dark]`}
-              />
+              <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">
+                Date of Birth
+              </label>
+              <div className="grid grid-cols-3 gap-2">
+                <select
+                  value={dobParts.day}
+                  onChange={(e) => setDobPart("day", e.target.value)}
+                  className={selectClass}
+                  aria-label="Day of birth"
+                >
+                  <option value="">Day</option>
+                  {dobDayOptions.map((d) => (
+                    <option key={d} value={d}>
+                      {Number(d)}
+                    </option>
+                  ))}
+                </select>
+                <select
+                  value={dobParts.month}
+                  onChange={(e) => setDobPart("month", e.target.value)}
+                  className={selectClass}
+                  aria-label="Month of birth"
+                >
+                  <option value="">Month</option>
+                  {MONTHS.map((m) => (
+                    <option key={m.value} value={m.value}>
+                      {m.label}
+                    </option>
+                  ))}
+                </select>
+                <select
+                  value={dobParts.year}
+                  onChange={(e) => setDobPart("year", e.target.value)}
+                  className={selectClass}
+                  aria-label="Year of birth"
+                >
+                  <option value="">Year</option>
+                  {dobYearOptions.map((y) => (
+                    <option key={y} value={String(y)}>
+                      {y}
+                    </option>
+                  ))}
+                </select>
+              </div>
             </div>
             <div>
               <DateInput
@@ -402,7 +602,7 @@ export default function StudentRegistrationForm({
             </div>
             <div>
               <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">
-                Custom Fee / Semester
+                Student Fee Per Semester
               </label>
               <input
                 type="number"
@@ -441,10 +641,47 @@ export default function StudentRegistrationForm({
           <SectionHeader icon={GroupIcon} title="Academic Information" subtitle="Department, admission year, class, and program" />
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <div>
-              <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">Department <span className="text-error-500">*</span></label>
-              <select required value={form.departmentId} onChange={(e) => setForm((f) => ({ ...f, departmentId: e.target.value, classId: "" }))} className={selectClass}>
-                <option value="">Select a department</option>
-                {departments.map((d) => <option key={d.id} value={String(d.id)}>{d.name} ({d.code})</option>)}
+              <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">Program</label>
+              <select
+                value={form.program}
+                onChange={(e) =>
+                  setForm((f) => ({
+                    ...f,
+                    program: e.target.value,
+                    departmentId: "",
+                    classId: "",
+                  }))
+                }
+                className={selectClass}
+              >
+                {PROGRAMS.map((p) => (
+                  <option key={p} value={p}>
+                    {programLabel(p)}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">
+                Department <span className="text-error-500">*</span>
+              </label>
+              <select
+                required
+                value={form.departmentId}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, departmentId: e.target.value, classId: "" }))
+                }
+                className={selectClass}
+                disabled={loadingDepartments}
+              >
+                <option value="">
+                  {loadingDepartments ? "Loading departments..." : "Select a department"}
+                </option>
+                {departments.map((d) => (
+                  <option key={d.id} value={String(d.id)}>
+                    {d.name} ({d.code})
+                  </option>
+                ))}
               </select>
             </div>
             <div>
@@ -462,19 +699,24 @@ export default function StudentRegistrationForm({
             </div>
             <div>
               <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">Class</label>
-              <select value={form.classId} onChange={(e) => setForm((f) => ({ ...f, classId: e.target.value }))} className={selectClass}>
-                <option value="">Optional</option>
-                {classes.filter((c) => !form.departmentId || (c.departmentId ?? c.department?.id) === Number(form.departmentId)).map((c) => (
-                  <option key={c.id} value={String(c.id)}>{c.department?.code ?? "—"} - {c.name} ({c.semester} {c.year})</option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">Program</label>
-              <select value={form.program} onChange={(e) => setForm((f) => ({ ...f, program: e.target.value }))} className={selectClass}>
-                {PROGRAMS.map((p) => (
-                  <option key={p} value={p}>
-                    {programLabel(p)}
+              <select
+                value={form.classId}
+                onChange={(e) => setForm((f) => ({ ...f, classId: e.target.value }))}
+                className={selectClass}
+                disabled={!form.departmentId || loadingClasses}
+              >
+                <option value="">
+                  {!form.departmentId
+                    ? "Select department first"
+                    : loadingClasses
+                      ? "Loading classes..."
+                      : classOptions.length === 0
+                        ? "No classes for this department"
+                        : "Optional"}
+                </option>
+                {classOptions.map((c) => (
+                  <option key={c.id} value={String(c.id)}>
+                    {c.department?.code ?? "—"} - {c.name} ({c.semester} {c.year})
                   </option>
                 ))}
               </select>

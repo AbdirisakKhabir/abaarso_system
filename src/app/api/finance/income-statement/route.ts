@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAuthUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { parseProgram } from "@/lib/program";
 
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -12,6 +13,7 @@ export async function GET(req: NextRequest) {
     }
 
     const { searchParams } = new URL(req.url);
+    const program = parseProgram(searchParams.get("program")) as "Bachelor" | "Masters";
     const dateFromParam = searchParams.get("dateFrom");
     const dateToParam = searchParams.get("dateTo");
 
@@ -59,12 +61,13 @@ export async function GET(req: NextRequest) {
       ? await prisma.tuitionPayment.aggregate({
           where: {
             paidAt: { gte: rangeStart, lte: rangeEnd },
+            student: { program },
           },
           _sum: { amount: true },
           _count: true,
         })
       : await prisma.tuitionPayment.aggregate({
-          where: { year },
+          where: { year, student: { program } },
           _sum: { amount: true },
           _count: true,
         });

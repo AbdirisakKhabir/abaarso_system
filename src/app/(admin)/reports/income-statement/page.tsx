@@ -16,6 +16,8 @@ import { usePagination } from "@/hooks/usePagination";
 import { authFetch } from "@/lib/api";
 import { DateInput } from "@/components/form/DateInput";
 import { DownloadIcon } from "@/icons";
+import { ReportProgramFilter } from "@/components/reports/ReportProgramFilter";
+import { DEFAULT_PROGRAM, type Program } from "@/lib/program";
 import {
   FinanceReportBar,
   FinanceReportBarHorizontal,
@@ -42,6 +44,7 @@ export default function IncomeStatementReportPage() {
     generatedAt: string;
   } | null>(null);
   const [loading, setLoading] = useState(true);
+  const [program, setProgram] = useState<Program>(DEFAULT_PROGRAM);
   const [presetYear, setPresetYear] = useState(String(CURRENT_YEAR));
   const [dateFrom, setDateFrom] = useState(`${CURRENT_YEAR}-01-01`);
   const [dateTo, setDateTo] = useState(`${CURRENT_YEAR}-12-31`);
@@ -49,14 +52,14 @@ export default function IncomeStatementReportPage() {
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
-      const params = new URLSearchParams({ dateFrom, dateTo });
+      const params = new URLSearchParams({ dateFrom, dateTo, program });
       const res = await authFetch(`/api/finance/income-statement?${params}`);
       if (res.ok) setData(await res.json());
     } catch {
       /* empty */
     }
     setLoading(false);
-  }, [dateFrom, dateTo]);
+  }, [dateFrom, dateTo, program]);
 
   useEffect(() => {
     fetchData();
@@ -115,6 +118,11 @@ export default function IncomeStatementReportPage() {
       <div className="mb-6 flex flex-wrap items-center justify-between gap-4 no-print">
         <PageBreadCrumb pageTitle="Income Statement" />
         <div className="flex flex-wrap items-center gap-2">
+          <ReportProgramFilter
+            value={program}
+            onChange={setProgram}
+            className="h-10 rounded-lg border border-gray-200 px-3 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-white"
+          />
           <div className="flex flex-wrap items-center gap-2">
             <DateInput
               id="income-stmt-from"

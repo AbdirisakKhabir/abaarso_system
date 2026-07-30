@@ -1,10 +1,12 @@
 import { prisma } from "@/lib/prisma";
+import { DEFAULT_PROGRAM, parseProgram, type Program } from "@/lib/program";
 
 type ClassWithDept = {
   id: number;
   name: string;
   semester: string;
   year: number;
+  program?: string;
   department: { id: number; code: string; name: string; tuitionFee: number | null };
 };
 
@@ -20,11 +22,14 @@ export async function resolveFinanceReportScope(
   semester: string,
   year: number,
   classId: string | null,
-  departmentId: string | null
+  departmentId: string | null,
+  program?: string | null
 ): Promise<
-  | { ok: true; classIds: number[]; scope: FinanceReportScope }
+  | { ok: true; classIds: number[]; scope: FinanceReportScope; program: Program }
   | { ok: false; status: number; error: string }
 > {
+  const resolvedProgram =
+    (parseProgram(program) as Program | null) ?? DEFAULT_PROGRAM;
   const parsedYear = year;
   const parsedDeptId = departmentId ? Number(departmentId) : null;
   const allClassesInDept = classId === "all";
@@ -44,6 +49,14 @@ export async function resolveFinanceReportScope(
 
     if (!cls) {
       return { ok: false, status: 404, error: "Class not found" };
+    }
+
+    if (cls.program !== resolvedProgram) {
+      return {
+        ok: false,
+        status: 400,
+        error: "Selected class does not belong to the chosen program",
+      };
     }
 
     if (cls.semester !== semester || cls.year !== parsedYear) {
@@ -66,6 +79,7 @@ export async function resolveFinanceReportScope(
       ok: true,
       classIds: [cls.id],
       scope: { mode: "class", class: cls },
+      program: resolvedProgram,
     };
   }
 
@@ -79,15 +93,28 @@ export async function resolveFinanceReportScope(
 
   const department = await prisma.department.findUnique({
     where: { id: parsedDeptId },
-    select: { id: true, code: true, name: true },
+    select: { id: true, code: true, name: true, program: true },
   });
 
   if (!department) {
     return { ok: false, status: 404, error: "Department not found" };
   }
 
+  if (department.program !== resolvedProgram) {
+    return {
+      ok: false,
+      status: 400,
+      error: "Selected department does not belong to the chosen program",
+    };
+  }
+
   const classes = await prisma.class.findMany({
-    where: { departmentId: parsedDeptId, semester, year: parsedYear },
+    where: {
+      departmentId: parsedDeptId,
+      semester,
+      year: parsedYear,
+      program: resolvedProgram,
+    },
     include: {
       department: { select: { id: true, code: true, name: true, tuitionFee: true } },
     },
@@ -114,6 +141,7 @@ export async function resolveFinanceReportScope(
     ok: true,
     classIds: classes.map((c) => c.id),
     scope: { mode: "department", department, classes },
+    program: resolvedProgram,
   };
 }
 

@@ -6,6 +6,7 @@ import {
   computeAttendancePercent,
 } from "@/lib/attendance";
 import { getSemesterDateRange } from "@/lib/semester-dates";
+import { parseProgram } from "@/lib/program";
 
 export async function GET(req: NextRequest) {
   try {
@@ -15,6 +16,7 @@ export async function GET(req: NextRequest) {
     }
 
     const { searchParams } = new URL(req.url);
+    const program = parseProgram(searchParams.get("program")) as "Bachelor" | "Masters";
     const departmentId = searchParams.get("departmentId");
     const classId = searchParams.get("classId");
     const semester = searchParams.get("semester");
@@ -23,10 +25,12 @@ export async function GET(req: NextRequest) {
     let where: {
       course?: { departmentId?: number };
       courseId?: number;
-      student?: { classId: number };
+      student?: { classId?: number; program?: "Bachelor" | "Masters" };
       semester?: string;
       year?: number;
-    } = {};
+    } = {
+      student: { program },
+    };
 
     if (departmentId) {
       where.course = { departmentId: Number(departmentId) };
@@ -35,10 +39,16 @@ export async function GET(req: NextRequest) {
     if (classId) {
       const cls = await prisma.class.findUnique({
         where: { id: Number(classId) },
-        select: { departmentId: true, semester: true, year: true },
+        select: { departmentId: true, semester: true, year: true, program: true },
       });
       if (cls) {
-        where.student = { classId: Number(classId) };
+        if (cls.program !== program) {
+          return NextResponse.json(
+            { error: "Selected class does not belong to the chosen program" },
+            { status: 400 }
+          );
+        }
+        where.student = { classId: Number(classId), program };
         where.course = { departmentId: cls.departmentId };
         where.semester = cls.semester;
         where.year = cls.year;

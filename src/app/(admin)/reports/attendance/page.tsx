@@ -7,6 +7,8 @@ import Button from "@/components/ui/button/Button";
 import Badge from "@/components/ui/badge/Badge";
 import { authFetch } from "@/lib/api";
 import { TRANSCRIPT_BRAND } from "@/lib/transcript-brand";
+import { ReportProgramFilter } from "@/components/reports/ReportProgramFilter";
+import { DEFAULT_PROGRAM, type Program } from "@/lib/program";
 
 type Department = { id: number; name: string; code: string };
 type ClassItem = {
@@ -104,6 +106,7 @@ export default function AttendanceReportPage() {
     totalExcused: 0,
   });
   const [loading, setLoading] = useState(false);
+  const [program, setProgram] = useState<Program>(DEFAULT_PROGRAM);
   const [filterDept, setFilterDept] = useState("");
   const [filterClass, setFilterClass] = useState("");
   const [filterCourse, setFilterCourse] = useState("");
@@ -133,6 +136,7 @@ export default function AttendanceReportPage() {
 
   const buildParams = useCallback(() => {
     const params = new URLSearchParams();
+    params.set("program", program);
     if (filterDept) params.set("departmentId", filterDept);
     if (filterClass) params.set("classId", filterClass);
     if (filterCourse) params.set("courseId", filterCourse);
@@ -146,6 +150,7 @@ export default function AttendanceReportPage() {
     }
     return params;
   }, [
+    program,
     filterDept,
     filterClass,
     filterCourse,
@@ -160,6 +165,7 @@ export default function AttendanceReportPage() {
     setLoadingDates(true);
     try {
       const params = new URLSearchParams();
+      params.set("program", program);
       if (filterDept) params.set("departmentId", filterDept);
       if (filterClass) params.set("classId", filterClass);
       if (filterCourse) params.set("courseId", filterCourse);
@@ -185,7 +191,7 @@ export default function AttendanceReportPage() {
     } finally {
       setLoadingDates(false);
     }
-  }, [filterDept, filterClass, filterCourse, filterSearch]);
+  }, [program, filterDept, filterClass, filterCourse, filterSearch]);
 
   const fetchReport = useCallback(async () => {
     setLoading(true);
@@ -210,6 +216,7 @@ export default function AttendanceReportPage() {
     setLoading(true);
     try {
       const params = new URLSearchParams();
+      params.set("program", program);
       if (filterDept) params.set("departmentId", filterDept);
       if (filterClass) params.set("classId", filterClass);
       if (filterCourse) params.set("courseId", filterCourse);
@@ -248,6 +255,7 @@ export default function AttendanceReportPage() {
     }
     setLoading(false);
   }, [
+    program,
     filterDept,
     filterClass,
     filterCourse,
@@ -259,12 +267,12 @@ export default function AttendanceReportPage() {
   ]);
 
   useEffect(() => {
-    authFetch("/api/departments").then((r) => { if (r.ok) r.json().then((d: Department[]) => setDepartments(d)); });
-    authFetch("/api/classes").then((r) => { if (r.ok) r.json().then((d: ClassItem[]) => setClasses(d)); });
-    authFetch("/api/courses").then((r) => {
+    authFetch(`/api/departments?program=${encodeURIComponent(program)}`).then((r) => { if (r.ok) r.json().then((d: Department[]) => setDepartments(d)); });
+    authFetch(`/api/classes?program=${encodeURIComponent(program)}`).then((r) => { if (r.ok) r.json().then((d: ClassItem[]) => setClasses(d)); });
+    authFetch(`/api/courses?program=${encodeURIComponent(program)}`).then((r) => {
       if (r.ok) r.json().then((d: CourseItem[]) => setCourses(d));
     });
-  }, []);
+  }, [program]);
 
   useEffect(() => {
     setDateMode("all");
@@ -484,6 +492,21 @@ export default function AttendanceReportPage() {
             </div>
           </div>
           <div className="flex flex-wrap gap-4">
+            <div>
+              <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400">
+                Program
+              </label>
+              <ReportProgramFilter
+                value={program}
+                onChange={(p) => {
+                  setProgram(p);
+                  setFilterDept("");
+                  setFilterClass("");
+                  setFilterCourse("");
+                }}
+                className={selectClassName}
+              />
+            </div>
             <div>
               <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400">
                 Department

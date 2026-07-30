@@ -6,6 +6,7 @@ import {
   computeAttendancePercent,
 } from "@/lib/attendance";
 import { getSemesterDateRange } from "@/lib/semester-dates";
+import { parseProgram } from "@/lib/program";
 
 /**
  * GET /api/reports/attendance-exam?classId=X&courseId=Y
@@ -21,6 +22,7 @@ export async function GET(req: NextRequest) {
     }
 
     const { searchParams } = new URL(req.url);
+    const program = parseProgram(searchParams.get("program")) as "Bachelor" | "Masters";
     const classId = searchParams.get("classId");
     const courseId = searchParams.get("courseId");
 
@@ -42,8 +44,15 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: "Class not found" }, { status: 404 });
     }
 
+    if (cls.program !== program) {
+      return NextResponse.json(
+        { error: "Selected class does not belong to the chosen program" },
+        { status: 400 }
+      );
+    }
+
     const students = await prisma.student.findMany({
-      where: { classId: Number(classId), status: "Admitted" },
+      where: { classId: Number(classId), status: "Admitted", program },
       select: {
         id: true,
         studentId: true,

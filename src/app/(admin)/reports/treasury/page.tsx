@@ -15,6 +15,8 @@ import {
 import { usePagination } from "@/hooks/usePagination";
 import { authFetch } from "@/lib/api";
 import { DownloadIcon } from "@/icons";
+import { ReportProgramFilter } from "@/components/reports/ReportProgramFilter";
+import { DEFAULT_PROGRAM, type Program } from "@/lib/program";
 import {
   FinanceReportBar,
   FinanceReportDonut,
@@ -33,16 +35,18 @@ export default function TreasuryReportPage() {
     generatedAt: string;
   } | null>(null);
   const [loading, setLoading] = useState(true);
+  const [program, setProgram] = useState<Program>(DEFAULT_PROGRAM);
   const [year, setYear] = useState(String(CURRENT_YEAR));
 
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await authFetch(`/api/finance/treasury?year=${year}`);
+      const params = new URLSearchParams({ year, program });
+      const res = await authFetch(`/api/finance/treasury?${params}`);
       if (res.ok) setData(await res.json());
     } catch { /* empty */ }
     setLoading(false);
-  }, [year]);
+  }, [year, program]);
 
   useEffect(() => {
     fetchData();
@@ -100,6 +104,11 @@ export default function TreasuryReportPage() {
       <div className="mb-6 flex flex-wrap items-center justify-between gap-4 no-print">
         <PageBreadCrumb pageTitle="Treasury Summary Report" />
         <div className="flex gap-2">
+          <ReportProgramFilter
+            value={program}
+            onChange={setProgram}
+            className="h-10 rounded-lg border border-gray-200 px-3 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-white"
+          />
           <select
             value={year}
             onChange={(e) => setYear(e.target.value)}

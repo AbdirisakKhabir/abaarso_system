@@ -7,6 +7,7 @@ import {
   SCHOLARSHIP_STATUSES,
   type ScholarshipStatus,
 } from "@/lib/tuition-amount";
+import { parseProgram } from "@/lib/program";
 
 export async function GET(req: NextRequest) {
   try {
@@ -16,6 +17,7 @@ export async function GET(req: NextRequest) {
     }
 
     const { searchParams } = new URL(req.url);
+    const program = parseProgram(searchParams.get("program")) as "Bachelor" | "Masters";
     const semester = searchParams.get("semester");
     const year = searchParams.get("year");
     const classId = searchParams.get("classId");
@@ -55,6 +57,13 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: "Class not found" }, { status: 404 });
     }
 
+    if (cls.program !== program) {
+      return NextResponse.json(
+        { error: "Selected class does not belong to the chosen program" },
+        { status: 400 }
+      );
+    }
+
     if (cls.semester !== semester || cls.year !== parsedYear) {
       return NextResponse.json(
         { error: "Class semester/year does not match the selected semester and year" },
@@ -66,6 +75,7 @@ export async function GET(req: NextRequest) {
       where: {
         classId: parsedClassId,
         status: "Admitted",
+        program,
         paymentStatus:
           scholarshipType === "all"
             ? { in: [...SCHOLARSHIP_STATUSES] }

@@ -20,6 +20,7 @@ export async function GET(req: NextRequest) {
     const year = searchParams.get("year");
     const classId = searchParams.get("classId");
     const departmentId = searchParams.get("departmentId");
+    const program = searchParams.get("program");
     const paymentStatusFilter = parseStudentPaymentStatusFilter(
       searchParams.get("paymentStatusFilter")
     );
@@ -47,14 +48,19 @@ export async function GET(req: NextRequest) {
       semester,
       parsedYear,
       classId,
-      departmentId
+      departmentId,
+      program
     );
     if (!resolved.ok) {
       return NextResponse.json({ error: resolved.error }, { status: resolved.status });
     }
 
     const studentsInScope = await prisma.student.findMany({
-      where: { classId: { in: resolved.classIds }, status: "Admitted" },
+      where: {
+        classId: { in: resolved.classIds },
+        status: "Admitted",
+        program: resolved.program,
+      },
       include: {
         department: { select: { name: true, code: true, tuitionFee: true } },
         class: { select: { id: true, name: true, department: { select: { code: true } } } },

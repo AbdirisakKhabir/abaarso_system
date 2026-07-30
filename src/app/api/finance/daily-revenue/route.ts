@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAuthUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { parseProgram } from "@/lib/program";
 
 export async function GET(req: NextRequest) {
   try {
@@ -10,6 +11,7 @@ export async function GET(req: NextRequest) {
     }
 
     const { searchParams } = new URL(req.url);
+    const program = parseProgram(searchParams.get("program")) as "Bachelor" | "Masters";
     const dateFrom = searchParams.get("dateFrom") || new Date().toISOString().slice(0, 10);
     const dateTo = searchParams.get("dateTo") || new Date().toISOString().slice(0, 10);
     const bankId = searchParams.get("bankId");
@@ -20,6 +22,7 @@ export async function GET(req: NextRequest) {
           gte: new Date(dateFrom + "T00:00:00.000Z"),
           lte: new Date(dateTo + "T23:59:59.999Z"),
         },
+        student: { program },
         ...(bankId ? { bankId: Number(bankId) } : {}),
       },
       include: {

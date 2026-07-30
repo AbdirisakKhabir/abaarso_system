@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAuthUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { parseProgram } from "@/lib/program";
 
 export async function GET(req: NextRequest) {
   try {
@@ -10,6 +11,7 @@ export async function GET(req: NextRequest) {
     }
 
     const { searchParams } = new URL(req.url);
+    const program = parseProgram(searchParams.get("program")) as "Bachelor" | "Masters";
     const departmentId = searchParams.get("departmentId");
     const classId = searchParams.get("classId");
     const courseId = searchParams.get("courseId");
@@ -25,6 +27,7 @@ export async function GET(req: NextRequest) {
       const matched = await prisma.student.findMany({
         where: {
           status: "Admitted",
+          program,
           OR: [
             { studentId: { contains: search } },
             { firstName: { contains: search } },
@@ -54,13 +57,15 @@ export async function GET(req: NextRequest) {
     const where: {
       classId?: number;
       courseId?: number;
-      class?: { departmentId?: number };
+      class?: { departmentId?: number; program?: "Bachelor" | "Masters" };
       date?: { gte?: Date; lte?: Date };
       records?: { some: { studentId: number | { in: number[] } } };
-    } = {};
+    } = {
+      class: { program },
+    };
 
     if (departmentId) {
-      where.class = { departmentId: Number(departmentId) };
+      where.class = { ...where.class, departmentId: Number(departmentId) };
     }
     if (classId) {
       where.classId = Number(classId);

@@ -6,10 +6,11 @@ import {
   computeAttendancePercent,
 } from "@/lib/attendance";
 import { getSemesterDateRange } from "@/lib/semester-dates";
+import { parseProgram } from "@/lib/program";
 
 /**
  * GET /api/reports/attendance-by-student
- * Supports filters: departmentId, classId, courseId, studentId, search, dateFrom, dateTo.
+ * Supports filters: departmentId, classId, courseId, studentId, search, dateFrom, dateTo, program.
  */
 export async function GET(req: NextRequest) {
   try {
@@ -19,6 +20,7 @@ export async function GET(req: NextRequest) {
     }
 
     const { searchParams } = new URL(req.url);
+    const program = parseProgram(searchParams.get("program")) as "Bachelor" | "Masters";
     const departmentId = searchParams.get("departmentId");
     const classId = searchParams.get("classId");
     const courseId = searchParams.get("courseId");
@@ -58,6 +60,12 @@ export async function GET(req: NextRequest) {
       if (!classRow) {
         return NextResponse.json({ error: "Class not found" }, { status: 404 });
       }
+      if (classRow.program !== program) {
+        return NextResponse.json(
+          { error: "Selected class does not belong to the chosen program" },
+          { status: 400 }
+        );
+      }
       cls = classRow;
     }
 
@@ -80,9 +88,10 @@ export async function GET(req: NextRequest) {
       where: {
         ...(parsedClassId ? { classId: parsedClassId } : {}),
         ...(parsedCourseId ? { courseId: parsedCourseId } : {}),
-        ...(parsedDepartmentId
-          ? { class: { departmentId: parsedDepartmentId } }
-          : {}),
+        class: {
+          program,
+          ...(parsedDepartmentId ? { departmentId: parsedDepartmentId } : {}),
+        },
         ...(Object.keys(sessionDateWhere).length > 0
           ? { date: sessionDateWhere }
           : {}),
@@ -120,6 +129,7 @@ export async function GET(req: NextRequest) {
     const students = await prisma.student.findMany({
       where: {
         status: "Admitted",
+        program,
         ...(parsedStudentId ? { id: parsedStudentId } : {}),
         ...(parsedClassId ? { classId: parsedClassId } : {}),
         ...(parsedDepartmentId ? { departmentId: parsedDepartmentId } : {}),

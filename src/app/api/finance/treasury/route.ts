@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAuthUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { parseProgram } from "@/lib/program";
 
 export async function GET(req: NextRequest) {
   try {
@@ -10,6 +11,7 @@ export async function GET(req: NextRequest) {
     }
 
     const { searchParams } = new URL(req.url);
+    const program = parseProgram(searchParams.get("program")) as "Bachelor" | "Masters";
     const year = searchParams.get("year") || String(new Date().getFullYear());
 
     const banks = await prisma.bank.findMany({
@@ -20,13 +22,16 @@ export async function GET(req: NextRequest) {
     const totalBankBalance = banks.reduce((sum, b) => sum + (b.balance ?? 0), 0);
 
     const students = await prisma.student.findMany({
-      where: { status: "Admitted" },
+      where: { status: "Admitted", program },
       select: { balance: true },
     });
     const totalReceivables = students.reduce((sum, s) => sum + (s.balance ?? 0), 0);
 
     const paymentsThisYear = await prisma.tuitionPayment.aggregate({
-      where: { year: Number(year) },
+      where: {
+        year: Number(year),
+        student: { program },
+      },
       _sum: { amount: true },
       _count: true,
     });

@@ -16,6 +16,8 @@ import {
 import { usePagination } from "@/hooks/usePagination";
 import { authFetch } from "@/lib/api";
 import { DownloadIcon } from "@/icons";
+import { ReportProgramFilter } from "@/components/reports/ReportProgramFilter";
+import { DEFAULT_PROGRAM, type Program } from "@/lib/program";
 import {
   FinanceReportBar,
   FinanceReportLine,
@@ -31,18 +33,19 @@ export default function DailyRevenueReportPage() {
     dailySummary: { date: string; total: number; count: number }[];
   } | null>(null);
   const [loading, setLoading] = useState(true);
+  const [program, setProgram] = useState<Program>(DEFAULT_PROGRAM);
   const [dateFrom, setDateFrom] = useState(new Date().toISOString().slice(0, 7) + "-01");
   const [dateTo, setDateTo] = useState(new Date().toISOString().slice(0, 10));
 
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
-      const params = new URLSearchParams({ dateFrom, dateTo });
+      const params = new URLSearchParams({ dateFrom, dateTo, program });
       const res = await authFetch(`/api/finance/daily-revenue?${params}`);
       if (res.ok) setData(await res.json());
     } catch { /* empty */ }
     setLoading(false);
-  }, [dateFrom, dateTo]);
+  }, [dateFrom, dateTo, program]);
 
   useEffect(() => {
     fetchData();
@@ -91,6 +94,11 @@ export default function DailyRevenueReportPage() {
       <div className="mb-6 flex flex-wrap items-center justify-between gap-4 no-print">
         <PageBreadCrumb pageTitle="Daily Revenue Report" />
         <div className="flex gap-2">
+          <ReportProgramFilter
+            value={program}
+            onChange={setProgram}
+            className="h-10 rounded-lg border border-gray-200 px-3 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-white"
+          />
           <div className="flex flex-wrap items-center gap-2">
             <DateInput
               id="daily-rev-from"

@@ -7,6 +7,7 @@ import {
   semesterAmountPaid,
   type StudentPaymentStatusFilter,
 } from "@/lib/tuition-amount";
+import { parseProgram } from "@/lib/program";
 
 export async function GET(req: NextRequest) {
   try {
@@ -16,6 +17,7 @@ export async function GET(req: NextRequest) {
     }
 
     const { searchParams } = new URL(req.url);
+    const program = parseProgram(searchParams.get("program")) as "Bachelor" | "Masters";
     const year = searchParams.get("year") || String(new Date().getFullYear());
     const departmentId = searchParams.get("departmentId");
     const semester = searchParams.get("semester");
@@ -25,8 +27,14 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: "Invalid year" }, { status: 400 });
     }
 
-    const where: { year: number; semester?: string; departmentId?: number } = {
+    const where: {
+      year: number;
+      program: "Bachelor" | "Masters";
+      semester?: string;
+      departmentId?: number;
+    } = {
       year: parsedYear,
+      program,
     };
     if (semester) where.semester = semester;
     if (departmentId) where.departmentId = Number(departmentId);
