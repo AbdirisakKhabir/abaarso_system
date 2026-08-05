@@ -4,6 +4,7 @@ import React, { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import PageBreadCrumb from "@/components/common/PageBreadCrumb";
 import Button from "@/components/ui/button/Button";
+import { DateInput } from "@/components/form/DateInput";
 import {
   Table,
   TableBody,
@@ -388,21 +389,31 @@ export default function FinancePaymentsPage() {
               </select>
             </div>
             <div>
-              <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400">From</label>
-              <input
-                type="date"
+              <DateInput
+                id="payments-date-from"
+                label="Start Date"
+                labelClassName="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400"
                 value={filterDateFrom}
-                onChange={(e) => setFilterDateFrom(e.target.value)}
-                className="h-10 rounded-lg border border-gray-200 bg-transparent px-3 text-sm dark:border-gray-700 dark:text-white"
+                onChange={(v) => {
+                  setFilterDateFrom(v);
+                  if (filterDateTo && v && v > filterDateTo) setFilterDateTo(v);
+                }}
+                max={filterDateTo || undefined}
+                inputClassName="h-10 w-full min-w-[150px] rounded-lg border border-gray-200 bg-transparent px-3 text-sm text-gray-800 outline-none focus:border-brand-300 dark:border-gray-700 dark:text-white [color-scheme:light] dark:[color-scheme:dark]"
               />
             </div>
             <div>
-              <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400">To</label>
-              <input
-                type="date"
+              <DateInput
+                id="payments-date-to"
+                label="End Date"
+                labelClassName="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400"
                 value={filterDateTo}
-                onChange={(e) => setFilterDateTo(e.target.value)}
-                className="h-10 rounded-lg border border-gray-200 bg-transparent px-3 text-sm dark:border-gray-700 dark:text-white"
+                onChange={(v) => {
+                  setFilterDateTo(v);
+                  if (filterDateFrom && v && v < filterDateFrom) setFilterDateFrom(v);
+                }}
+                min={filterDateFrom || undefined}
+                inputClassName="h-10 w-full min-w-[150px] rounded-lg border border-gray-200 bg-transparent px-3 text-sm text-gray-800 outline-none focus:border-brand-300 dark:border-gray-700 dark:text-white [color-scheme:light] dark:[color-scheme:dark]"
               />
             </div>
             <Button size="sm" onClick={handleApplyFilters}>

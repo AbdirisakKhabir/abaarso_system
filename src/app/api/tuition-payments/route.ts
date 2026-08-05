@@ -59,9 +59,35 @@ export async function GET(req: NextRequest) {
       where.paymentMethod = paymentMethod;
     }
     if (dateFrom || dateTo) {
-      where.paymentDate = {};
-      if (dateFrom) where.paymentDate.gte = new Date(`${dateFrom}T00:00:00.000Z`);
-      if (dateTo) where.paymentDate.lte = new Date(`${dateTo}T23:59:59.999Z`);
+      const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
+      if (dateFrom && !ISO_DATE.test(dateFrom)) {
+        return NextResponse.json(
+          { error: "dateFrom must be YYYY-MM-DD" },
+          { status: 400 }
+        );
+      }
+      if (dateTo && !ISO_DATE.test(dateTo)) {
+        return NextResponse.json(
+          { error: "dateTo must be YYYY-MM-DD" },
+          { status: 400 }
+        );
+      }
+      if (dateFrom && dateTo && dateFrom > dateTo) {
+        return NextResponse.json(
+          { error: "dateFrom must be on or before dateTo" },
+          { status: 400 }
+        );
+      }
+
+      // Inclusive calendar-day range on paymentDate (and paidAt as fallback for legacy rows).
+      const range: Prisma.DateTimeFilter = {};
+      if (dateFrom) range.gte = new Date(`${dateFrom}T00:00:00.000Z`);
+      if (dateTo) range.lte = new Date(`${dateTo}T23:59:59.999Z`);
+
+      where.OR = [
+        { paymentDate: range },
+        { paidAt: range },
+      ];
     }
 
     const include = {
