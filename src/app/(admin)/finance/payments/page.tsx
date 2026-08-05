@@ -4,7 +4,6 @@ import React, { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import PageBreadCrumb from "@/components/common/PageBreadCrumb";
 import Button from "@/components/ui/button/Button";
-import { DateInput } from "@/components/form/DateInput";
 import {
   Table,
   TableBody,
@@ -53,6 +52,27 @@ type SemesterOption = { id: number; name: string };
 
 const CURRENT_YEAR = new Date().getFullYear();
 
+const selectClassName =
+  "h-10 min-w-[140px] rounded-lg border border-gray-200 bg-transparent px-3 text-sm text-gray-800 outline-none focus:border-brand-300 dark:border-gray-700 dark:text-white";
+
+function asList<T>(data: unknown): T[] {
+  if (Array.isArray(data)) return data as T[];
+  if (data && typeof data === "object" && Array.isArray((data as { items?: unknown }).items)) {
+    return (data as { items: T[] }).items;
+  }
+  return [];
+}
+
+function formatDateLabel(iso: string) {
+  const d = new Date(`${iso}T12:00:00`);
+  if (Number.isNaN(d.getTime())) return iso;
+  return d.toLocaleDateString(undefined, {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+  });
+}
+
 function paymentMethodLabel(method: string) {
   switch (method) {
     case "electronic":
@@ -79,11 +99,14 @@ export default function FinancePaymentsPage() {
   const [financePageSize, setFinancePageSize] = useState(DEFAULT_PAGE_SIZE);
   const [financeLoading, setFinanceLoading] = useState(false);
   const [deletingPaymentId, setDeletingPaymentId] = useState<number | null>(null);
+  const [listError, setListError] = useState("");
 
   const [banks, setBanks] = useState<Bank[]>([]);
   const [departments, setDepartments] = useState<Department[]>([]);
   const [classes, setClasses] = useState<ClassOption[]>([]);
   const [semesters, setSemesters] = useState<SemesterOption[]>([]);
+  const [availableDates, setAvailableDates] = useState<string[]>([]);
+  const [loadingDates, setLoadingDates] = useState(false);
 
   const [search, setSearch] = useState("");
   const [filterSemester, setFilterSemester] = useState("");
@@ -99,67 +122,45 @@ export default function FinancePaymentsPage() {
 
   useEffect(() => {
     authFetch("/api/banks").then((r) => {
-      if (r.ok) r.json().then((d: Bank[]) => setBanks(Array.isArray(d) ? d : []));
+      if (r.ok) r.json().then((d) => setBanks(asList<Bank>(d)));
     });
     authFetch("/api/departments").then((r) => {
-      if (r.ok) r.json().then((d: Department[]) => setDepartments(Array.isArray(d) ? d : []));
+      if (r.ok) r.json().then((d) => setDepartments(asList<Department>(d)));
     });
     authFetch("/api/classes").then((r) => {
-      if (r.ok) r.json().then((d: ClassOption[]) => setClasses(Array.isArray(d) ? d : []));
+      if (r.ok) r.json().then((d) => setClasses(asList<ClassOption>(d)));
     });
     authFetch("/api/semesters?active=true").then((r) => {
-      if (r.ok) r.json().then((d: SemesterOption[]) => setSemesters(Array.isArray(d) ? d : []));
+      if (r.ok) r.json().then((d) => setSemesters(asList<SemesterOption>(d)));
     });
   }, []);
 
   const filteredClasses = useMemo(() => {
     return classes.filter((c) => {
-      if (filterDept && c.department.id !== Number(filterDept)) return false;
+      if (filterDept && c.department?.id !== Number(filterDept)) return false;
       if (filterSemester && c.semester !== filterSemester) return false;
       if (filterYear && c.year !== Number(filterYear)) return false;
       return true;
     });
   }, [classes, filterDept, filterSemester, filterYear]);
 
-  const fetchFinancePayments = useCallback(
-    async (opts?: { page?: number; pageSize?: number }) => {
-      const page = opts?.page ?? financePage;
-      const ps = opts?.pageSize ?? financePageSize;
-      setFinanceLoading(true);
-      try {
-        const params = new URLSearchParams({
-          page: String(page),
-          pageSize: String(ps),
-        });
-        if (search.trim()) params.set("search", search.trim());
-        if (filterSemester) params.set("semester", filterSemester);
-        if (filterYear) params.set("year", filterYear);
-        if (filterDept) params.set("departmentId", filterDept);
-        if (filterClass) params.set("classId", filterClass);
-        if (filterBank) params.set("bankId", filterBank);
-        if (filterMethod) params.set("paymentMethod", filterMethod);
+  const buildFilterParams = useCallback(
+    (opts?: { includeDates?: boolean }) => {
+      const params = new URLSearchParams();
+      if (search.trim()) params.set("search", search.trim());
+      if (filterSemester) params.set("semester", filterSemester);
+      if (filterYear) params.set("year", filterYear);
+      if (filterDept) params.set("departmentId", filterDept);
+      if (filterClass) params.set("classId", filterClass);
+      if (filterBank) params.set("bankId", filterBank);
+      if (filterMethod) params.set("paymentMethod", filterMethod);
+      if (opts?.includeDates !== false) {
         if (filterDateFrom) params.set("dateFrom", filterDateFrom);
         if (filterDateTo) params.set("dateTo", filterDateTo);
-
-        const res = await authFetch(`/api/tuition-payments?${params}`);
-        if (res.ok) {
-          const data = await res.json();
-          setFinancePayments(Array.isArray(data.items) ? data.items : []);
-          setFinanceTotal(typeof data.total === "number" ? data.total : 0);
-        } else {
-          setFinancePayments([]);
-          setFinanceTotal(0);
-        }
-      } catch {
-        setFinancePayments([]);
-        setFinanceTotal(0);
-      } finally {
-        setFinanceLoading(false);
       }
+      return params;
     },
     [
-      financePage,
-      financePageSize,
       search,
       filterSemester,
       filterYear,
@@ -172,13 +173,84 @@ export default function FinancePaymentsPage() {
     ]
   );
 
+  const fetchAvailableDates = useCallback(async () => {
+    setLoadingDates(true);
+    try {
+      // Dates list ignores current start/end so options stay available while choosing a range.
+      const params = buildFilterParams({ includeDates: false });
+      params.set("datesOnly", "true");
+      const res = await authFetch(`/api/tuition-payments?${params}`);
+      if (!res.ok) {
+        setAvailableDates([]);
+        return;
+      }
+      const data = await res.json();
+      const dates = Array.isArray(data.dates) ? (data.dates as string[]) : [];
+      setAvailableDates(dates);
+    } catch {
+      setAvailableDates([]);
+    } finally {
+      setLoadingDates(false);
+    }
+  }, [buildFilterParams]);
+
+  useEffect(() => {
+    void fetchAvailableDates();
+  }, [fetchAvailableDates]);
+
+  useEffect(() => {
+    if (filterDateFrom && availableDates.length > 0 && !availableDates.includes(filterDateFrom)) {
+      setFilterDateFrom("");
+    }
+    if (filterDateTo && availableDates.length > 0 && !availableDates.includes(filterDateTo)) {
+      setFilterDateTo("");
+    }
+  }, [availableDates, filterDateFrom, filterDateTo]);
+
+  useEffect(() => {
+    if (filterDateFrom && filterDateTo && filterDateFrom > filterDateTo) {
+      setFilterDateTo(filterDateFrom);
+    }
+  }, [filterDateFrom, filterDateTo]);
+
+  const fetchFinancePayments = useCallback(
+    async (opts?: { page?: number; pageSize?: number }) => {
+      const page = opts?.page ?? financePage;
+      const ps = opts?.pageSize ?? financePageSize;
+      setFinanceLoading(true);
+      setListError("");
+      try {
+        const params = buildFilterParams();
+        params.set("page", String(page));
+        params.set("pageSize", String(ps));
+
+        const res = await authFetch(`/api/tuition-payments?${params}`);
+        const data = await res.json();
+        if (!res.ok) {
+          setFinancePayments([]);
+          setFinanceTotal(0);
+          setListError(data.error || "Failed to load payments");
+          return;
+        }
+        setFinancePayments(Array.isArray(data.items) ? data.items : []);
+        setFinanceTotal(typeof data.total === "number" ? data.total : 0);
+      } catch {
+        setFinancePayments([]);
+        setFinanceTotal(0);
+        setListError("Network error while loading payments");
+      } finally {
+        setFinanceLoading(false);
+      }
+    },
+    [financePage, financePageSize, buildFilterParams]
+  );
+
   useEffect(() => {
     void fetchFinancePayments();
   }, [fetchFinancePayments]);
 
   const financeTotalPages = Math.max(1, Math.ceil(financeTotal / financePageSize) || 1);
-  const financeFrom =
-    financeTotal === 0 ? 0 : (financePage - 1) * financePageSize + 1;
+  const financeFrom = financeTotal === 0 ? 0 : (financePage - 1) * financePageSize + 1;
   const financeTo = Math.min(financePage * financePageSize, financeTotal);
 
   useEffect(() => {
@@ -227,7 +299,7 @@ export default function FinancePaymentsPage() {
         alert(data.error || "Could not delete payment");
         return;
       }
-      await fetchFinancePayments();
+      await Promise.all([fetchFinancePayments(), fetchAvailableDates()]);
     } catch {
       alert("Could not delete payment");
     } finally {
@@ -246,16 +318,21 @@ export default function FinancePaymentsPage() {
     );
   }
 
-  const hasActiveFilters =
+  const hasActiveFilters = Boolean(
     search.trim() ||
-    filterSemester ||
-    filterYear ||
-    filterDept ||
-    filterClass ||
-    filterBank ||
-    filterMethod ||
-    filterDateFrom ||
-    filterDateTo;
+      filterSemester ||
+      filterYear ||
+      filterDept ||
+      filterClass ||
+      filterBank ||
+      filterMethod ||
+      filterDateFrom ||
+      filterDateTo
+  );
+
+  const endDateOptions = filterDateFrom
+    ? availableDates.filter((d) => d >= filterDateFrom)
+    : availableDates;
 
   return (
     <div>
@@ -286,7 +363,8 @@ export default function FinancePaymentsPage() {
             Tuition payments
           </h1>
           <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-            Search and filter recorded tuition payments.
+            Search and filter recorded tuition payments. Date filters use payment dates from the
+            list (works after class upgrades when filtering by class).
           </p>
         </div>
 
@@ -306,81 +384,101 @@ export default function FinancePaymentsPage() {
           </div>
           <div className="flex flex-wrap items-end gap-3">
             <div>
-              <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400">Semester</label>
+              <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400">
+                Semester
+              </label>
               <select
                 value={filterSemester}
                 onChange={(e) => setFilterSemester(e.target.value)}
-                className="h-10 min-w-[120px] rounded-lg border border-gray-200 bg-transparent px-3 text-sm dark:border-gray-700 dark:text-white"
+                className={selectClassName}
               >
                 <option value="">All</option>
                 {semesters.map((s) => (
-                  <option key={s.id} value={s.name}>{s.name}</option>
+                  <option key={s.id} value={s.name}>
+                    {s.name}
+                  </option>
                 ))}
               </select>
             </div>
             <div>
-              <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400">Year</label>
+              <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400">
+                Year
+              </label>
               <select
                 value={filterYear}
                 onChange={(e) => setFilterYear(e.target.value)}
-                className="h-10 min-w-[100px] rounded-lg border border-gray-200 bg-transparent px-3 text-sm dark:border-gray-700 dark:text-white"
+                className={selectClassName}
               >
                 <option value="">All</option>
-                {[CURRENT_YEAR, CURRENT_YEAR - 1, CURRENT_YEAR - 2].map((y) => (
-                  <option key={y} value={y}>{y}</option>
+                {[CURRENT_YEAR + 1, CURRENT_YEAR, CURRENT_YEAR - 1, CURRENT_YEAR - 2].map((y) => (
+                  <option key={y} value={y}>
+                    {y}
+                  </option>
                 ))}
               </select>
             </div>
             <div>
-              <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400">Department</label>
+              <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400">
+                Department
+              </label>
               <select
                 value={filterDept}
                 onChange={(e) => {
                   setFilterDept(e.target.value);
                   setFilterClass("");
                 }}
-                className="h-10 min-w-[160px] rounded-lg border border-gray-200 bg-transparent px-3 text-sm dark:border-gray-700 dark:text-white"
+                className={`${selectClassName} min-w-[160px]`}
               >
                 <option value="">All</option>
                 {departments.map((d) => (
-                  <option key={d.id} value={d.id}>{d.code} — {d.name}</option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400">Class</label>
-              <select
-                value={filterClass}
-                onChange={(e) => setFilterClass(e.target.value)}
-                className="h-10 min-w-[180px] rounded-lg border border-gray-200 bg-transparent px-3 text-sm dark:border-gray-700 dark:text-white"
-              >
-                <option value="">All</option>
-                {filteredClasses.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.department.code} — {c.name}
+                  <option key={d.id} value={d.id}>
+                    {d.code} — {d.name}
                   </option>
                 ))}
               </select>
             </div>
             <div>
-              <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400">Bank</label>
+              <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400">
+                Class
+              </label>
               <select
-                value={filterBank}
-                onChange={(e) => setFilterBank(e.target.value)}
-                className="h-10 min-w-[160px] rounded-lg border border-gray-200 bg-transparent px-3 text-sm dark:border-gray-700 dark:text-white"
+                value={filterClass}
+                onChange={(e) => setFilterClass(e.target.value)}
+                className={`${selectClassName} min-w-[180px]`}
               >
                 <option value="">All</option>
-                {banks.map((b) => (
-                  <option key={b.id} value={b.id}>{b.code} — {b.name}</option>
+                {filteredClasses.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.department?.code ?? "—"} — {c.name}
+                  </option>
                 ))}
               </select>
             </div>
             <div>
-              <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400">Method</label>
+              <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400">
+                Bank
+              </label>
+              <select
+                value={filterBank}
+                onChange={(e) => setFilterBank(e.target.value)}
+                className={`${selectClassName} min-w-[160px]`}
+              >
+                <option value="">All</option>
+                {banks.map((b) => (
+                  <option key={b.id} value={b.id}>
+                    {b.code} — {b.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400">
+                Method
+              </label>
               <select
                 value={filterMethod}
                 onChange={(e) => setFilterMethod(e.target.value)}
-                className="h-10 min-w-[140px] rounded-lg border border-gray-200 bg-transparent px-3 text-sm dark:border-gray-700 dark:text-white"
+                className={selectClassName}
               >
                 <option value="">All</option>
                 <option value="bank_receipt">Bank receipt</option>
@@ -389,32 +487,40 @@ export default function FinancePaymentsPage() {
               </select>
             </div>
             <div>
-              <DateInput
-                id="payments-date-from"
-                label="Start Date"
-                labelClassName="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400"
+              <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400">
+                Start Date
+              </label>
+              <select
                 value={filterDateFrom}
-                onChange={(v) => {
-                  setFilterDateFrom(v);
-                  if (filterDateTo && v && v > filterDateTo) setFilterDateTo(v);
-                }}
-                max={filterDateTo || undefined}
-                inputClassName="h-10 w-full min-w-[150px] rounded-lg border border-gray-200 bg-transparent px-3 text-sm text-gray-800 outline-none focus:border-brand-300 dark:border-gray-700 dark:text-white [color-scheme:light] dark:[color-scheme:dark]"
-              />
+                onChange={(e) => setFilterDateFrom(e.target.value)}
+                disabled={loadingDates}
+                className={`${selectClassName} min-w-[160px] disabled:opacity-50`}
+              >
+                <option value="">Any date</option>
+                {availableDates.map((d) => (
+                  <option key={`from-${d}`} value={d}>
+                    {formatDateLabel(d)}
+                  </option>
+                ))}
+              </select>
             </div>
             <div>
-              <DateInput
-                id="payments-date-to"
-                label="End Date"
-                labelClassName="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400"
+              <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400">
+                End Date
+              </label>
+              <select
                 value={filterDateTo}
-                onChange={(v) => {
-                  setFilterDateTo(v);
-                  if (filterDateFrom && v && v < filterDateFrom) setFilterDateFrom(v);
-                }}
-                min={filterDateFrom || undefined}
-                inputClassName="h-10 w-full min-w-[150px] rounded-lg border border-gray-200 bg-transparent px-3 text-sm text-gray-800 outline-none focus:border-brand-300 dark:border-gray-700 dark:text-white [color-scheme:light] dark:[color-scheme:dark]"
-              />
+                onChange={(e) => setFilterDateTo(e.target.value)}
+                disabled={loadingDates}
+                className={`${selectClassName} min-w-[160px] disabled:opacity-50`}
+              >
+                <option value="">Any date</option>
+                {endDateOptions.map((d) => (
+                  <option key={`to-${d}`} value={d}>
+                    {formatDateLabel(d)}
+                  </option>
+                ))}
+              </select>
             </div>
             <Button size="sm" onClick={handleApplyFilters}>
               Apply
@@ -425,6 +531,21 @@ export default function FinancePaymentsPage() {
               </Button>
             )}
           </div>
+          {loadingDates ? (
+            <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">Loading payment dates…</p>
+          ) : availableDates.length === 0 ? (
+            <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
+              No payment dates available for the current filters.
+            </p>
+          ) : (
+            <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
+              {availableDates.length} payment date{availableDates.length === 1 ? "" : "s"} available
+              for selection.
+            </p>
+          )}
+          {listError && (
+            <p className="mt-2 text-xs text-error-500">{listError}</p>
+          )}
         </div>
 
         <div className="p-0">
@@ -458,12 +579,18 @@ export default function FinancePaymentsPage() {
                       <TableCell isHeader>Date</TableCell>
                       <TableCell isHeader>Student</TableCell>
                       <TableCell isHeader>Semester</TableCell>
-                      <TableCell isHeader className="text-right">Amount</TableCell>
+                      <TableCell isHeader className="text-right">
+                        Amount
+                      </TableCell>
                       <TableCell isHeader>Method</TableCell>
                       <TableCell isHeader>Bank</TableCell>
                       <TableCell isHeader>Reference</TableCell>
                       <TableCell isHeader>Recorded by</TableCell>
-                      {canDeletePayment && <TableCell isHeader className="text-right">Actions</TableCell>}
+                      {canDeletePayment && (
+                        <TableCell isHeader className="text-right">
+                          Actions
+                        </TableCell>
+                      )}
                     </TableRow>
                   </TableHeader>
                   <TableBody>

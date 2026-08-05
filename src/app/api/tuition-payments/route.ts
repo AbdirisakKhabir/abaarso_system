@@ -23,6 +23,7 @@ export async function GET(req: NextRequest) {
     const classId = searchParams.get("classId");
     const dateFrom = searchParams.get("dateFrom")?.trim();
     const dateTo = searchParams.get("dateTo")?.trim();
+    const datesOnly = searchParams.get("datesOnly") === "true";
     const pageParam = searchParams.get("page");
     const pageSizeParam = searchParams.get("pageSize");
     const paginate = pageParam != null || pageSizeParam != null;
@@ -31,6 +32,7 @@ export async function GET(req: NextRequest) {
 
     const where: Prisma.TuitionPaymentWhereInput = {};
     const studentWhere: Prisma.StudentWhereInput = {};
+    const andFilters: Prisma.TuitionPaymentWhereInput[] = [];
 
     if (studentId) {
       studentWhere.studentId = String(studentId);
@@ -43,21 +45,50 @@ export async function GET(req: NextRequest) {
         { phone: { contains: search } },
       ];
     }
-    if (departmentId) studentWhere.departmentId = Number(departmentId);
-    if (classId) studentWhere.classId = Number(classId);
+    if (departmentId) {
+      const did = Number(departmentId);
+      if (Number.isInteger(did) && did > 0) studentWhere.departmentId = did;
+    }
+
+    // Class filter: use the class's department + semester/year so payments still
+    // appear after students were upgraded out of that class.
+    if (classId) {
+      const cid = Number(classId);
+      if (Number.isInteger(cid) && cid > 0) {
+        const cls = await prisma.class.findUnique({
+          where: { id: cid },
+          select: { departmentId: true, semester: true, year: true },
+        });
+        if (cls) {
+          studentWhere.departmentId = cls.departmentId;
+          if (!semester) where.semester = cls.semester;
+          if (!year) where.year = cls.year;
+        } else {
+          studentWhere.classId = cid;
+        }
+      }
+    }
+
     if (Object.keys(studentWhere).length > 0) {
       where.student = studentWhere;
     }
 
     if (semester) where.semester = semester;
-    if (year) where.year = Number(year);
-    if (bankId) where.bankId = Number(bankId);
+    if (year) {
+      const y = Number(year);
+      if (Number.isInteger(y)) where.year = y;
+    }
+    if (bankId) {
+      const bid = Number(bankId);
+      if (Number.isInteger(bid) && bid > 0) where.bankId = bid;
+    }
     if (
       paymentMethod &&
       ["bank_receipt", "electronic", "cash_on_hand"].includes(paymentMethod)
     ) {
       where.paymentMethod = paymentMethod;
     }
+
     if (dateFrom || dateTo) {
       const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
       if (dateFrom && !ISO_DATE.test(dateFrom)) {
@@ -79,15 +110,34 @@ export async function GET(req: NextRequest) {
         );
       }
 
-      // Inclusive calendar-day range on paymentDate (and paidAt as fallback for legacy rows).
+      // Wide timezone-safe bounds so calendar-day picks match stored datetimes.
       const range: Prisma.DateTimeFilter = {};
-      if (dateFrom) range.gte = new Date(`${dateFrom}T00:00:00.000Z`);
-      if (dateTo) range.lte = new Date(`${dateTo}T23:59:59.999Z`);
+      if (dateFrom) range.gte = new Date(`${dateFrom}T00:00:00.000-14:00`);
+      if (dateTo) range.lte = new Date(`${dateTo}T23:59:59.999+14:00`);
 
-      where.OR = [
-        { paymentDate: range },
-        { paidAt: range },
-      ];
+      andFilters.push({
+        OR: [{ paymentDate: range }, { paidAt: range }],
+      });
+    }
+
+    if (andFilters.length > 0) {
+      where.AND = andFilters;
+    }
+
+    if (datesOnly) {
+      const rows = await prisma.tuitionPayment.findMany({
+        where,
+        select: { paymentDate: true, paidAt: true },
+        orderBy: [{ paymentDate: "desc" }],
+        take: 5000,
+      });
+      const set = new Set<string>();
+      for (const r of rows) {
+        const d = r.paymentDate || r.paidAt;
+        if (d) set.add(d.toISOString().slice(0, 10));
+      }
+      const dates = [...set].sort((a, b) => b.localeCompare(a));
+      return NextResponse.json({ dates });
     }
 
     const include = {
@@ -98,14 +148,26 @@ export async function GET(req: NextRequest) {
           firstName: true,
           lastName: true,
           department: { select: { id: true, name: true, code: true } },
-          class: { select: { id: true, name: true, semester: true, year: true, department: { select: { code: true } } } },
+          class: {
+            select: {
+              id: true,
+              name: true,
+              semester: true,
+              year: true,
+              department: { select: { code: true } },
+            },
+          },
         },
       },
       bank: { select: { id: true, name: true, code: true } },
       recordedBy: { select: { id: true, name: true, email: true } },
     } as const;
 
-    const orderBy = [{ year: "desc" as const }, { semester: "asc" as const }, { paidAt: "desc" as const }];
+    const orderBy = [
+      { paymentDate: "desc" as const },
+      { paidAt: "desc" as const },
+      { id: "desc" as const },
+    ];
 
     if (paginate) {
       const skip = (page - 1) * pageSize;
