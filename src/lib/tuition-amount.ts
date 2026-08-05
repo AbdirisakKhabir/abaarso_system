@@ -97,16 +97,43 @@ export function classifyStudentTermPayment(
   return isTermFullyPaid(expectedAmount, paidAmount) ? "paid" : "unpaid";
 }
 
-/** Match tuition payment rows for a report term (trim; case-insensitive). */
+/** Match tuition payment rows for a report term (trim; case-insensitive; Eight≈8). */
 export function filterTermPayments<T extends { semester: string; year: number; amount: number }>(
   payments: T[],
   semester: string,
   year: number
 ): T[] {
-  const sem = String(semester ?? "").trim().toLowerCase();
-  return payments.filter(
-    (p) => p.year === year && String(p.semester ?? "").trim().toLowerCase() === sem
-  );
+  const target = String(semester ?? "").trim().toLowerCase();
+  const targetKey = normalizeLooseSemester(semester);
+  return payments.filter((p) => {
+    if (p.year !== year) return false;
+    const raw = String(p.semester ?? "").trim().toLowerCase();
+    if (raw === target) return true;
+    return normalizeLooseSemester(p.semester) === targetKey;
+  });
+}
+
+function normalizeLooseSemester(semester: string): string {
+  const raw = String(semester ?? "").trim().toLowerCase().replace(/\s+/g, " ");
+  const words: Record<string, string> = {
+    one: "1",
+    two: "2",
+    three: "3",
+    four: "4",
+    five: "5",
+    six: "6",
+    seven: "7",
+    eight: "8",
+    nine: "9",
+    ten: "10",
+    eleven: "11",
+    twelve: "12",
+  };
+  let out = raw;
+  for (const [word, num] of Object.entries(words)) {
+    out = out.replace(new RegExp(`\\b${word}\\b`, "g"), num);
+  }
+  return out.replace(/[^a-z0-9]/g, "");
 }
 
 export const MAX_PAYMENTS_PER_SEMESTER = 5;

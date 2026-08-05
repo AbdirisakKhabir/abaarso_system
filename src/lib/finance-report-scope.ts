@@ -170,3 +170,131 @@ export function financeReportMeta(scope: FinanceReportScope) {
     })),
   };
 }
+
+const financeStudentInclude = {
+  department: { select: { id: true, name: true, code: true, tuitionFee: true } },
+  class: { select: { id: true, name: true, department: { select: { code: true } } } },
+  tuitionPayments: {
+    select: { id: true, amount: true, semester: true, year: true },
+  },
+} as const;
+
+/** Normalize semester labels so "Semester Eight" and "Semester 8" match. */
+export function normalizeSemesterKey(semester: string): string {
+  const raw = String(semester ?? "").trim().toLowerCase().replace(/\s+/g, " ");
+  const words: Record<string, string> = {
+    one: "1",
+    two: "2",
+    three: "3",
+    four: "4",
+    five: "5",
+    six: "6",
+    seven: "7",
+    eight: "8",
+    nine: "9",
+    ten: "10",
+    eleven: "11",
+    twelve: "12",
+  };
+  let out = raw;
+  for (const [word, num] of Object.entries(words)) {
+    out = out.replace(new RegExp(`\\b${word}\\b`, "g"), num);
+  }
+  return out.replace(/[^a-z0-9]/g, "");
+}
+
+export function semestersMatch(a: string, b: string): boolean {
+  const left = String(a ?? "").trim().toLowerCase();
+  const right = String(b ?? "").trim().toLowerCase();
+  if (left === right) return true;
+  return normalizeSemesterKey(a) === normalizeSemesterKey(b);
+}
+
+/**
+ * Load students for paid/unpaid term reports after class upgrades.
+ *
+ * Cohort is based on tuition payments for the selected semester/year in the
+ * department (students may already have moved to a newer class). Currently
+ * enrolled students in the selected class(es) are always included too.
+ */
+export async function findStudentsForFinanceTermReport(
+  resolved: { classIds: number[]; scope: FinanceReportScope; program: Program },
+  semester: string,
+  year: number
+): Promise<{
+  students: Array<{
+    id: number;
+    studentId: string;
+    firstName: string;
+    lastName: string;
+    email: string | null;
+    phone: string | null;
+    paymentStatus: string | null;
+    customSemesterFee: number | null;
+    department: { id: number; name: string; code: string; tuitionFee: number | null };
+    class: { id: number; name: string; department: { code: string } } | null;
+    tuitionPayments: { id: number; amount: number; semester: string; year: number }[];
+  }>;
+  source: "term_payments" | "class_enrollment" | "mixed" | "none";
+}> {
+  const departmentId =
+    resolved.scope.mode === "class"
+      ? resolved.scope.class.department.id
+      : resolved.scope.department.id;
+
+  const [yearPayments, enrolled] = await Promise.all([
+    prisma.tuitionPayment.findMany({
+      where: {
+        year,
+        student: {
+          departmentId,
+          status: { in: ["Admitted", "Graduated"] },
+        },
+      },
+      select: { studentId: true, semester: true },
+    }),
+    prisma.student.findMany({
+      where: {
+        classId: { in: resolved.classIds },
+        status: { in: ["Admitted", "Graduated"] },
+      },
+      select: { id: true },
+    }),
+  ]);
+
+  const paymentStudentIds = new Set<number>();
+  for (const p of yearPayments) {
+    if (semestersMatch(p.semester, semester)) {
+      paymentStudentIds.add(p.studentId);
+    }
+  }
+
+  const enrolledIds = new Set(enrolled.map((s) => s.id));
+  const allIds = [...new Set([...paymentStudentIds, ...enrolledIds])];
+
+  if (allIds.length === 0) {
+    return { students: [], source: "none" };
+  }
+
+  const students = await prisma.student.findMany({
+    where: { id: { in: allIds } },
+    include: {
+      ...financeStudentInclude,
+      tuitionPayments: {
+        where: { year },
+        select: financeStudentInclude.tuitionPayments.select,
+      },
+    },
+    orderBy: [{ studentId: "asc" }],
+  });
+
+  const source =
+    paymentStudentIds.size > 0 && enrolledIds.size > 0
+      ? ("mixed" as const)
+      : paymentStudentIds.size > 0
+        ? ("term_payments" as const)
+        : ("class_enrollment" as const);
+
+  return { students, source };
+}
+

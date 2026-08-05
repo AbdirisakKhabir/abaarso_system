@@ -1,7 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAuthUser } from "@/lib/auth";
-import { prisma } from "@/lib/prisma";
-import { financeReportMeta, resolveFinanceReportScope } from "@/lib/finance-report-scope";
+import {
+  financeReportMeta,
+  findStudentsForFinanceTermReport,
+  resolveFinanceReportScope,
+} from "@/lib/finance-report-scope";
 import {
   classifyStudentTermPayment,
   computeTermTuition,
@@ -68,23 +71,11 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: resolved.error }, { status: resolved.status });
     }
 
-    // Scope by class membership only. Class/department already validated for program —
-    // filtering students by student.program drops rows with null/mismatched program.
-    const studentsInScope = await prisma.student.findMany({
-      where: {
-        classId: { in: resolved.classIds },
-        status: "Admitted",
-      },
-      include: {
-        department: { select: { id: true, name: true, code: true, tuitionFee: true } },
-        class: { select: { id: true, name: true, department: { select: { code: true } } } },
-        tuitionPayments: {
-          where: { year: parsedYear },
-          select: { id: true, amount: true, semester: true, year: true },
-        },
-      },
-      orderBy: [{ studentId: "asc" }],
-    });
+    const { students: studentsInScope, source } = await findStudentsForFinanceTermReport(
+      resolved,
+      semester,
+      parsedYear
+    );
 
     let unpaidInFilter = 0;
     let excludedByType = 0;
@@ -92,6 +83,7 @@ export async function GET(req: NextRequest) {
     const paidStudents = studentsInScope
       .filter((s) => {
         const termPayments = filterTermPayments(s.tuitionPayments, semester, parsedYear);
+        // Enrolled-only students with no payments for this term are unpaid, not paid.
         const fallbackFee = fallbackTuitionFeeFromScope(resolved, s.department?.id);
         const classification = classifyStudentTermPayment(
           s,
@@ -148,6 +140,7 @@ export async function GET(req: NextRequest) {
         paid: paidStudents.length,
         unpaid: unpaidInFilter,
         excludedByStudentType: excludedByType,
+        source,
       },
     });
   } catch (e) {

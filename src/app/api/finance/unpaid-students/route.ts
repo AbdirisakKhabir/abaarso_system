@@ -1,7 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAuthUser } from "@/lib/auth";
-import { prisma } from "@/lib/prisma";
-import { financeReportMeta, resolveFinanceReportScope } from "@/lib/finance-report-scope";
+import {
+  financeReportMeta,
+  findStudentsForFinanceTermReport,
+  resolveFinanceReportScope,
+} from "@/lib/finance-report-scope";
 import {
   classifyStudentTermPayment,
   computeTermTuition,
@@ -68,21 +71,11 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: resolved.error }, { status: resolved.status });
     }
 
-    const studentsInScope = await prisma.student.findMany({
-      where: {
-        classId: { in: resolved.classIds },
-        status: "Admitted",
-      },
-      include: {
-        department: { select: { id: true, name: true, code: true, tuitionFee: true } },
-        class: { select: { id: true, name: true, department: { select: { code: true } } } },
-        tuitionPayments: {
-          where: { year: parsedYear },
-          select: { id: true, amount: true, semester: true, year: true },
-        },
-      },
-      orderBy: [{ studentId: "asc" }],
-    });
+    const { students: studentsInScope, source } = await findStudentsForFinanceTermReport(
+      resolved,
+      semester,
+      parsedYear
+    );
 
     const unpaidStudents = studentsInScope
       .filter((s) => {
@@ -132,6 +125,10 @@ export async function GET(req: NextRequest) {
       paymentStatusFilter,
       unpaidStudents,
       totalUnpaid: unpaidStudents.length,
+      summary: {
+        studentsInScope: studentsInScope.length,
+        source,
+      },
     });
   } catch (e) {
     console.error("Unpaid students error:", e);

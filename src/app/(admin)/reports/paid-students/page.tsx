@@ -74,6 +74,7 @@ export default function PaidStudentsReportPage() {
     paid: number;
     unpaid: number;
     excludedByStudentType: number;
+    source?: string;
   } | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -270,8 +271,9 @@ export default function PaidStudentsReportPage() {
           Paid Students by Semester &amp; Class
         </h3>
         <p className="mb-6 text-sm text-gray-500 dark:text-gray-400">
-          Select semester, year, department, and class. Filter by fully paid or half scholarship
-          students. Scholarship students are on a separate report.
+          Select semester, year, department, and class. Uses tuition payments for that term, so it
+          still works after the class was upgraded to a newer semester. Scholarship students are on
+          a separate report.
         </p>
         <div className="no-print mb-6 flex flex-wrap items-end gap-4">
           <div>
@@ -401,7 +403,7 @@ export default function PaidStudentsReportPage() {
                 </p>
                 {reportSummary && reportSummary.studentsInScope > 0 && (
                   <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
-                    {reportSummary.studentsInScope} admitted student(s) in scope
+                    {reportSummary.studentsInScope} student(s) in scope
                     {reportSummary.unpaid > 0
                       ? ` · ${reportSummary.unpaid} still owe for this term`
                       : ""}
@@ -409,6 +411,13 @@ export default function PaidStudentsReportPage() {
                       ? ` · ${reportSummary.excludedByStudentType} excluded by student type filter`
                       : ""}
                     . Check Unpaid Students, or set Student type to “Fully paid + half scholarship”.
+                  </p>
+                )}
+                {reportSummary && reportSummary.studentsInScope === 0 && (
+                  <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
+                    No tuition payments found for “{paidSemester}” {paidYear} in this department, and
+                    no students are still assigned to this class. Payments are matched by semester
+                    name and year (works after class upgrade).
                   </p>
                 )}
               </div>

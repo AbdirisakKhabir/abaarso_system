@@ -224,8 +224,9 @@ export default function UnpaidStudentsReportPage() {
           Unpaid Students by Semester & Class
         </h3>
         <p className="mb-6 text-sm text-gray-500 dark:text-gray-400">
-          Select semester, year, department, and class. Filter by fully paid or half scholarship
-          students. Scholarship students are on a separate report.
+          Select semester, year, department, and class. Uses tuition payments for that term, so it
+          still works after the class was upgraded to a newer semester. Scholarship students are on
+          a separate report.
         </p>
         <div className="no-print mb-6 flex flex-wrap items-end gap-4">
           <div>
