@@ -223,6 +223,8 @@ export default function FinancePage() {
       ...prev,
       selectedStudentId: s.studentId,
       searchQuery: `${s.firstName} ${s.lastName} (${s.studentId})`,
+      ...(s.class?.semester ? { paySemester: s.class.semester } : {}),
+      ...(s.class?.year != null ? { payYear: String(s.class.year) } : {}),
     }));
   };
 

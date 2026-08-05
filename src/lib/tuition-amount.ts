@@ -56,11 +56,14 @@ type TuitionStudent = {
 
 export function computeTermTuition(
   student: TuitionStudent,
-  termPayments: { amount: number }[]
+  termPayments: { amount: number }[],
+  /** Fallback when student.department.tuitionFee is null (e.g. class department fee). */
+  fallbackTuitionFee?: number | null
 ) {
   const paymentStatus = normalizePaymentStatus(student.paymentStatus);
+  const deptFee = student.department.tuitionFee ?? fallbackTuitionFee ?? 0;
   const expectedAmount = perSemesterTuition(
-    student.department.tuitionFee ?? 0,
+    deptFee,
     paymentStatus,
     student.customSemesterFee
   );
@@ -79,21 +82,38 @@ export function isTermUnpaid(expectedAmount: number, paidAmount: number): boolea
 export function classifyStudentTermPayment(
   student: TuitionStudent,
   termPayments: { amount: number }[],
-  filter: StudentPaymentStatusFilter
+  filter: StudentPaymentStatusFilter,
+  fallbackTuitionFee?: number | null
 ): "paid" | "unpaid" | "excluded" {
   if (!matchesStudentPaymentStatusFilter(student.paymentStatus, filter)) {
     return "excluded";
   }
-  const { expectedAmount, paidAmount } = computeTermTuition(student, termPayments);
+  const { expectedAmount, paidAmount } = computeTermTuition(
+    student,
+    termPayments,
+    fallbackTuitionFee
+  );
   if (expectedAmount <= 0) return "excluded";
   return isTermFullyPaid(expectedAmount, paidAmount) ? "paid" : "unpaid";
+}
+
+/** Match tuition payment rows for a report term (trim; case-insensitive). */
+export function filterTermPayments<T extends { semester: string; year: number; amount: number }>(
+  payments: T[],
+  semester: string,
+  year: number
+): T[] {
+  const sem = String(semester ?? "").trim().toLowerCase();
+  return payments.filter(
+    (p) => p.year === year && String(p.semester ?? "").trim().toLowerCase() === sem
+  );
 }
 
 export const MAX_PAYMENTS_PER_SEMESTER = 5;
 
 /** Sum of amounts already recorded for one student/term. */
 export function semesterAmountPaid(payments: { amount: number }[]): number {
-  return payments.reduce((sum, p) => sum + p.amount, 0);
+  return payments.reduce((sum, p) => sum + Number(p.amount || 0), 0);
 }
 
 /** Whether another deposit can be posted for this term (up to 5 payments, not over expected fee). */

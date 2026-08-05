@@ -386,8 +386,8 @@ const AppSidebar: React.FC = () => {
                     <ChevronDownIcon
                       className={`ml-auto w-5 h-5 transition-transform duration-200 ${
                         openSubmenu?.type === menuType && openSubmenu?.index === index
-                          ? "rotate-180 text-brand-500"
-                          : ""
+                          ? "rotate-180 text-white"
+                          : "text-white/70"
                       }`}
                     />
                   </>
@@ -452,7 +452,7 @@ const AppSidebar: React.FC = () => {
 
   return (
     <aside
-      className={`no-print fixed left-0 top-0 z-50 flex h-screen min-h-0 flex-col border-r border-gray-200 bg-white text-gray-900 transition-all duration-300 ease-in-out dark:border-gray-800 dark:bg-gray-900 
+      className={`app-sidebar no-print fixed left-0 top-0 z-50 flex h-screen min-h-0 flex-col border-r border-brand-800 bg-brand-700 text-white transition-all duration-300 ease-in-out dark:border-brand-900 dark:bg-brand-800
         ${isExpanded || isMobileOpen || isHovered ? "w-[290px]" : "w-[90px]"}
         ${isMobileOpen ? "translate-x-0" : "-translate-x-full"}
         mt-16 lg:mt-0 lg:translate-x-0`}
@@ -472,7 +472,7 @@ const AppSidebar: React.FC = () => {
             className="object-contain h-12 w-12 shrink-0"
           />
           {(isExpanded || isHovered || isMobileOpen) && (
-            <span className="text-sm font-semibold text-gray-800 dark:text-white/90 whitespace-nowrap">
+            <span className="text-sm font-semibold text-white whitespace-nowrap">
               ABAARSO TECH UNIVERSITY
             </span>
           )}
@@ -485,7 +485,7 @@ const AppSidebar: React.FC = () => {
             {/* Academics Section (top) */}
             {academicsNav.length > 0 && (
               <div>
-                <h2 className={`mb-4 text-xs uppercase flex text-gray-400 ${!isExpanded && !isHovered ? "lg:justify-center" : "justify-start"}`}>
+                <h2 className={`mb-4 text-xs uppercase flex text-white/60 ${!isExpanded && !isHovered ? "lg:justify-center" : "justify-start"}`}>
                   {isExpanded || isHovered || isMobileOpen ? "Academics" : <HorizontaLDots />}
                 </h2>
                 {renderMenuItems(academicsNav, "academics")}
@@ -495,7 +495,7 @@ const AppSidebar: React.FC = () => {
             {/* HR Section */}
             {hrNav.length > 0 && (
               <div>
-                <h2 className={`mb-4 text-xs uppercase flex text-gray-400 ${!isExpanded && !isHovered ? "lg:justify-center" : "justify-start"}`}>
+                <h2 className={`mb-4 text-xs uppercase flex text-white/60 ${!isExpanded && !isHovered ? "lg:justify-center" : "justify-start"}`}>
                   {isExpanded || isHovered || isMobileOpen ? "Human Resources" : <HorizontaLDots />}
                 </h2>
                 {renderMenuItems(hrNav, "hr")}
@@ -505,7 +505,7 @@ const AppSidebar: React.FC = () => {
             {/* Reports Section */}
             {reportsNav.length > 0 && (
               <div>
-                <h2 className={`mb-4 text-xs uppercase flex text-gray-400 ${!isExpanded && !isHovered ? "lg:justify-center" : "justify-start"}`}>
+                <h2 className={`mb-4 text-xs uppercase flex text-white/60 ${!isExpanded && !isHovered ? "lg:justify-center" : "justify-start"}`}>
                   {isExpanded || isHovered || isMobileOpen ? "Reports" : <HorizontaLDots />}
                 </h2>
                 {renderMenuItems(reportsNav, "reports")}
@@ -515,7 +515,7 @@ const AppSidebar: React.FC = () => {
             {/* Activities Section (bottom): Users, Roles, Permissions */}
             {activitiesNav.length > 0 && (
               <div>
-                <h2 className={`mb-4 text-xs uppercase flex text-gray-400 ${!isExpanded && !isHovered ? "lg:justify-center" : "justify-start"}`}>
+                <h2 className={`mb-4 text-xs uppercase flex text-white/60 ${!isExpanded && !isHovered ? "lg:justify-center" : "justify-start"}`}>
                   {isExpanded || isHovered || isMobileOpen ? "Activities" : <HorizontaLDots />}
                 </h2>
                 {renderMenuItems(activitiesNav, "activities")}
@@ -524,7 +524,7 @@ const AppSidebar: React.FC = () => {
 
             {settingsNav.length > 0 && (
               <div>
-                <h2 className={`mb-4 text-xs uppercase flex text-gray-400 ${!isExpanded && !isHovered ? "lg:justify-center" : "justify-start"}`}>
+                <h2 className={`mb-4 text-xs uppercase flex text-white/60 ${!isExpanded && !isHovered ? "lg:justify-center" : "justify-start"}`}>
                   {isExpanded || isHovered || isMobileOpen ? "Settings" : <HorizontaLDots />}
                 </h2>
                 {renderMenuItems(settingsNav, "settings")}

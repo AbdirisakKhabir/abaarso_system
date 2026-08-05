@@ -59,7 +59,7 @@ export default function PaidStudentsReportPage() {
   const [paidYear, setPaidYear] = useState(String(CURRENT_YEAR));
   const [filterDeptId, setFilterDeptId] = useState<string>("all");
   const [paidClassId, setPaidClassId] = useState("");
-  const [paymentStatusFilter, setPaymentStatusFilter] = useState<string>("Fully Paid");
+  const [paymentStatusFilter, setPaymentStatusFilter] = useState<string>("all");
   const [paidStudents, setPaidStudents] = useState<PaidStudentRow[]>([]);
   const [reportScope, setReportScope] = useState<"class" | "department">("class");
   const [paidClassInfo, setPaidClassInfo] = useState<{
@@ -69,6 +69,12 @@ export default function PaidStudentsReportPage() {
     department: { code: string; name: string };
   } | null>(null);
   const [paidDeptInfo, setPaidDeptInfo] = useState<{ code: string; name: string } | null>(null);
+  const [reportSummary, setReportSummary] = useState<{
+    studentsInScope: number;
+    paid: number;
+    unpaid: number;
+    excludedByStudentType: number;
+  } | null>(null);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
@@ -120,6 +126,7 @@ export default function PaidStudentsReportPage() {
     setPaidClassInfo(null);
     setPaidDeptInfo(null);
     setPaidStudents([]);
+    setReportSummary(null);
     try {
       const params = new URLSearchParams({
         semester: paidSemester,
@@ -144,6 +151,7 @@ export default function PaidStudentsReportPage() {
         setPaidDeptInfo(null);
       }
       setPaidStudents(data.paidStudents || []);
+      setReportSummary(data.summary ?? null);
     } catch {
       alert("Network error");
     } finally {
@@ -344,9 +352,9 @@ export default function PaidStudentsReportPage() {
               onChange={(e) => setPaymentStatusFilter(e.target.value)}
               className="h-10 w-full min-w-0 sm:w-auto sm:min-w-[180px] rounded-lg border border-gray-200 bg-transparent px-3 text-sm text-gray-800 outline-none focus:border-brand-300 dark:border-gray-700 dark:text-white dark:focus:border-brand-500/40"
             >
+              <option value="all">Fully paid + half scholarship</option>
               <option value="Fully Paid">Fully paid students</option>
               <option value="Half Scholar">Half scholarship students</option>
-              <option value="all">Fully paid + half scholarship</option>
             </select>
           </div>
           <div>
@@ -391,6 +399,18 @@ export default function PaidStudentsReportPage() {
                     ? `No students in this class are recorded as paid up for ${paidClassInfo.semester} ${paidClassInfo.year} (or the class has no admitted students).`
                     : `No students in this department are recorded as paid up for ${paidSemester} ${paidYear}.`}
                 </p>
+                {reportSummary && reportSummary.studentsInScope > 0 && (
+                  <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
+                    {reportSummary.studentsInScope} admitted student(s) in scope
+                    {reportSummary.unpaid > 0
+                      ? ` · ${reportSummary.unpaid} still owe for this term`
+                      : ""}
+                    {reportSummary.excludedByStudentType > 0
+                      ? ` · ${reportSummary.excludedByStudentType} excluded by student type filter`
+                      : ""}
+                    . Check Unpaid Students, or set Student type to “Fully paid + half scholarship”.
+                  </p>
+                )}
               </div>
             ) : (
               <>

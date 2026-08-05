@@ -53,7 +53,7 @@ export default function UnpaidStudentsReportPage() {
   const [unpaidYear, setUnpaidYear] = useState(String(CURRENT_YEAR));
   const [filterDeptId, setFilterDeptId] = useState<string>("all");
   const [unpaidClassId, setUnpaidClassId] = useState("");
-  const [paymentStatusFilter, setPaymentStatusFilter] = useState<string>("Fully Paid");
+  const [paymentStatusFilter, setPaymentStatusFilter] = useState<string>("all");
   const [unpaidStudents, setUnpaidStudents] = useState<UnpaidStudent[]>([]);
   const [reportScope, setReportScope] = useState<"class" | "department">("class");
   const [unpaidClassInfo, setUnpaidClassInfo] = useState<{ name: string; semester: string; year: number; department: { code: string; name: string } } | null>(null);
@@ -296,9 +296,9 @@ export default function UnpaidStudentsReportPage() {
               onChange={(e) => setPaymentStatusFilter(e.target.value)}
               className="h-10 w-full min-w-0 sm:w-auto sm:min-w-[180px] rounded-lg border border-gray-200 bg-transparent px-3 text-sm text-gray-800 outline-none focus:border-brand-300 dark:border-gray-700 dark:text-white dark:focus:border-brand-500/40"
             >
+              <option value="all">Fully paid + half scholarship</option>
               <option value="Fully Paid">Fully paid students</option>
               <option value="Half Scholar">Half scholarship students</option>
-              <option value="all">Fully paid + half scholarship</option>
             </select>
           </div>
           <div>

@@ -5,8 +5,21 @@ import { financeReportMeta, resolveFinanceReportScope } from "@/lib/finance-repo
 import {
   classifyStudentTermPayment,
   computeTermTuition,
+  filterTermPayments,
   parseStudentPaymentStatusFilter,
 } from "@/lib/tuition-amount";
+
+function fallbackTuitionFeeFromScope(
+  scope: Awaited<ReturnType<typeof resolveFinanceReportScope>>,
+  studentDepartmentId: number | null | undefined
+): number | null {
+  if (!scope.ok) return null;
+  if (scope.scope.mode === "class") {
+    return scope.scope.class.department.tuitionFee;
+  }
+  const match = scope.scope.classes.find((c) => c.department.id === studentDepartmentId);
+  return match?.department.tuitionFee ?? scope.scope.classes[0]?.department.tuitionFee ?? null;
+}
 
 export async function GET(req: NextRequest) {
   try {
@@ -59,14 +72,13 @@ export async function GET(req: NextRequest) {
       where: {
         classId: { in: resolved.classIds },
         status: "Admitted",
-        program: resolved.program,
       },
       include: {
-        department: { select: { name: true, code: true, tuitionFee: true } },
+        department: { select: { id: true, name: true, code: true, tuitionFee: true } },
         class: { select: { id: true, name: true, department: { select: { code: true } } } },
         tuitionPayments: {
-          where: { semester, year: parsedYear },
-          select: { id: true, amount: true },
+          where: { year: parsedYear },
+          select: { id: true, amount: true, semester: true, year: true },
         },
       },
       orderBy: [{ studentId: "asc" }],
@@ -74,17 +86,23 @@ export async function GET(req: NextRequest) {
 
     const unpaidStudents = studentsInScope
       .filter((s) => {
+        const termPayments = filterTermPayments(s.tuitionPayments, semester, parsedYear);
+        const fallbackFee = fallbackTuitionFeeFromScope(resolved, s.department?.id);
         const classification = classifyStudentTermPayment(
           s,
-          s.tuitionPayments,
-          paymentStatusFilter
+          termPayments,
+          paymentStatusFilter,
+          fallbackFee
         );
         return classification === "unpaid";
       })
       .map((s) => {
+        const termPayments = filterTermPayments(s.tuitionPayments, semester, parsedYear);
+        const fallbackFee = fallbackTuitionFeeFromScope(resolved, s.department?.id);
         const { paymentStatus, expectedAmount, paidAmount } = computeTermTuition(
           s,
-          s.tuitionPayments
+          termPayments,
+          fallbackFee
         );
         const amountDue = expectedAmount - paidAmount;
         return {
@@ -94,7 +112,11 @@ export async function GET(req: NextRequest) {
           lastName: s.lastName,
           email: s.email,
           phone: s.phone,
-          department: s.department,
+          department: {
+            name: s.department.name,
+            code: s.department.code,
+            tuitionFee: s.department.tuitionFee,
+          },
           className: s.class?.name ?? null,
           tuitionFee: amountDue,
           paymentStatus,
