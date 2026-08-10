@@ -1,4 +1,4 @@
-import * as XLSX from "xlsx";
+import ExcelJS from "exceljs";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 
@@ -35,30 +35,29 @@ function downloadBlob(blob: Blob, filename: string) {
 }
 
 /** Download an Excel (.xlsx) workbook with one sheet of tabular report data. */
-export function exportReportExcel(options: ReportExportOptions): void {
+export async function exportReportExcel(options: ReportExportOptions): Promise<void> {
   const { title, filename, headers, rows, subtitle, footerRows = [] } = options;
-  const aoa: ReportExportCell[][] = [];
-  aoa.push([title]);
-  if (subtitle) aoa.push([subtitle]);
-  aoa.push([]);
-  aoa.push(headers);
-  for (const row of rows) aoa.push(row.map((c) => (c == null ? "" : c)));
-  for (const row of footerRows) aoa.push(row.map((c) => (c == null ? "" : c)));
+  const wb = new ExcelJS.Workbook();
+  const ws = wb.addWorksheet("Report");
 
-  const ws = XLSX.utils.aoa_to_sheet(aoa);
-  ws["!cols"] = headers.map((h, i) => {
+  ws.addRow([title]);
+  if (subtitle) ws.addRow([subtitle]);
+  ws.addRow([]);
+  ws.addRow(headers);
+  for (const row of rows) ws.addRow(row.map((c) => (c == null ? "" : c)));
+  for (const row of footerRows) ws.addRow(row.map((c) => (c == null ? "" : c)));
+
+  ws.columns = headers.map((h, i) => {
     const maxLen = Math.max(
       h.length,
       ...rows.map((r) => cellToString(r[i]).length),
       ...footerRows.map((r) => cellToString(r[i]).length),
       8
     );
-    return { wch: Math.min(Math.max(maxLen + 2, 10), 40) };
+    return { width: Math.min(Math.max(maxLen + 2, 10), 40) };
   });
 
-  const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, "Report");
-  const buf = XLSX.write(wb, { bookType: "xlsx", type: "array" });
+  const buf = await wb.xlsx.writeBuffer();
   downloadBlob(
     new Blob([buf], {
       type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",

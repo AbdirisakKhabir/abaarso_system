@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAuthUser } from "@/lib/auth";
-import * as XLSX from "xlsx";
+import { workbookBufferFromAoa } from "@/lib/excel";
 
 export async function GET(req: NextRequest) {
   try {
@@ -23,17 +23,14 @@ export async function GET(req: NextRequest) {
       "Basic programming concepts",
     ];
 
-    const wsData = [headers, sampleRow];
-    const ws = XLSX.utils.aoa_to_sheet(wsData);
-    ws["!cols"] = [{ wch: 28 }, { wch: 10 }, { wch: 12 }, { wch: 35 }];
-
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Courses");
-
-    const buf = XLSX.write(wb, { type: "buffer", bookType: "xlsx" });
+    const buf = await workbookBufferFromAoa({
+      sheetName: "Courses",
+      rows: [headers, sampleRow],
+      columnWidths: [28, 10, 12, 35],
+    });
     const filename = "Course_Import_Template.xlsx";
 
-    return new NextResponse(buf, {
+    return new NextResponse(Buffer.from(buf), {
       status: 200,
       headers: {
         "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",

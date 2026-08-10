@@ -4,6 +4,7 @@
 
 @theme {
   --font-*: initial;
+  --font-roboto: "Roboto", ui-sans-serif, system-ui, sans-serif;
   --font-sans: var(--font-roboto), ui-sans-serif, system-ui, sans-serif;
 
   --breakpoint-*: initial;

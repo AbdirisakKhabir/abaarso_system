@@ -42,7 +42,7 @@ export function ReportExportButtons({
         size="sm"
         startIcon={<DownloadIcon />}
         disabled={!canExport}
-        onClick={() => exportReportExcel(payload)}
+        onClick={() => void exportReportExcel(payload)}
       >
         Export Excel
       </Button>

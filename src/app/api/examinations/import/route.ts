@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAuthUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import * as XLSX from "xlsx";
+import { readWorkbookAoa } from "@/lib/excel";
 import { calculateTotal, getGradeInfo, getGradePointsFromGrade } from "@/lib/grades";
 
 /** Find column index by flexible header matching */
@@ -52,10 +52,7 @@ export async function POST(req: NextRequest) {
     }
 
     const buf = Buffer.from(await file.arrayBuffer());
-    const wb = XLSX.read(buf, { type: "buffer" });
-    const sheetName = wb.SheetNames[0];
-    const ws = wb.Sheets[sheetName];
-    const data = XLSX.utils.sheet_to_json<string[]>(ws, { header: 1 }) as (string | number)[][];
+    const data = await readWorkbookAoa(buf);
 
     if (!data || data.length < 2) {
       return NextResponse.json(
@@ -69,7 +66,7 @@ export async function POST(req: NextRequest) {
     let dataStartRow = 1;
     const studentIdPatterns = [/^id\s*card$/i, /^student\s*id$/i, /^studentid$/i];
     for (let r = 0; r < Math.min(15, data.length); r++) {
-      const row = (data[r] as string[]).map((h) => String(h ?? "").trim());
+      const row = (data[r] ?? []).map((h) => String(h ?? "").trim());
       if (findCol(row, studentIdPatterns) >= 0) {
         headerRow = row;
         dataStartRow = r + 1;

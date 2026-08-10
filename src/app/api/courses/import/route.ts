@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAuthUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import * as XLSX from "xlsx";
+import { readWorkbookAoa } from "@/lib/excel";
 
 function findCol(headerRow: string[], patterns: RegExp[]): number {
   for (const p of patterns) {
@@ -48,10 +48,7 @@ export async function POST(req: NextRequest) {
     }
 
     const buf = Buffer.from(await file.arrayBuffer());
-    const wb = XLSX.read(buf, { type: "buffer" });
-    const sheetName = wb.SheetNames[0];
-    const ws = wb.Sheets[sheetName];
-    const data = XLSX.utils.sheet_to_json<string[]>(ws, { header: 1 }) as (string | number)[][];
+    const data = await readWorkbookAoa(buf);
 
     if (!data || data.length < 2) {
       return NextResponse.json(
@@ -60,7 +57,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const headerRow = (data[0] as string[]).map((h) => String(h ?? "").trim());
+    const headerRow = (data[0] ?? []).map((h) => String(h ?? "").trim());
 
     const nameIdx = findCol(headerRow, [/^course\s*name$/i, /^name$/i, /^course$/i]);
     const codeIdx = findCol(headerRow, [/^code$/i]);

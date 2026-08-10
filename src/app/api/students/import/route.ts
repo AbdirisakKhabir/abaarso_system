@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAuthUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import * as XLSX from "xlsx";
+import { readWorkbookAoa } from "@/lib/excel";
 import { DEFAULT_PROGRAM, parseProgram } from "@/lib/program";
 
 function findCol(headerRow: string[], patterns: RegExp[]): number {
@@ -119,10 +119,7 @@ export async function POST(req: NextRequest) {
     }
 
     const buf = Buffer.from(await file.arrayBuffer());
-    const wb = XLSX.read(buf, { type: "buffer" });
-    const sheetName = wb.SheetNames[0];
-    const ws = wb.Sheets[sheetName];
-    const data = XLSX.utils.sheet_to_json<string[]>(ws, { header: 1 }) as (string | number)[][];
+    const data = await readWorkbookAoa(buf);
 
     if (!data || data.length < 2) {
       return NextResponse.json(
@@ -132,13 +129,13 @@ export async function POST(req: NextRequest) {
     }
 
     // Try row 0 as headers; if no name column found, try row 1 (some files have a title row)
-    let headerRow = (data[0] as string[]).map((h) => String(h ?? "").trim());
+    let headerRow = (data[0] ?? []).map((h) => String(h ?? "").trim());
     let dataStartRow = 1;
     const hasNameCol = (row: string[]) =>
       findCol(row, [/^full\s*name$/i, /^fullname$/i, /^name$/i, /^student\s*name$/i]) >= 0 ||
       (findCol(row, [/^first\s*name$/i]) >= 0 && findCol(row, [/^last\s*name$/i]) >= 0);
     if (!hasNameCol(headerRow) && data.length > 2) {
-      const row1 = (data[1] as string[]).map((h) => String(h ?? "").trim());
+      const row1 = (data[1] ?? []).map((h) => String(h ?? "").trim());
       if (hasNameCol(row1)) {
         headerRow = row1;
         dataStartRow = 2;

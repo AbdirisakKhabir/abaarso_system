@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAuthUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import * as XLSX from "xlsx";
+import { workbookBufferFromAoa } from "@/lib/excel";
 
 export async function GET(req: NextRequest) {
   try {
@@ -51,23 +51,21 @@ export async function GET(req: NextRequest) {
       "Fully Paid",
     ];
 
-    const wsData = [headers, sampleRow];
-    const ws = XLSX.utils.aoa_to_sheet(wsData);
-
-    ws["!cols"] = headers.map((_, i) => {
-      if (i === 9) return { wch: 18 }; // Department Code
-      if (i === 10) return { wch: 22 }; // Admission Academic Year
-      if (i === 11) return { wch: 20 }; // Class
-      return { wch: 14 };
+    const columnWidths = headers.map((_, i) => {
+      if (i === 9) return 18;
+      if (i === 10) return 22;
+      if (i === 11) return 20;
+      return 14;
     });
 
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Students");
-
-    const buf = XLSX.write(wb, { type: "buffer", bookType: "xlsx" });
+    const buf = await workbookBufferFromAoa({
+      sheetName: "Students",
+      rows: [headers, sampleRow],
+      columnWidths,
+    });
     const filename = "Student_Import_Template.xlsx";
 
-    return new NextResponse(buf, {
+    return new NextResponse(Buffer.from(buf), {
       status: 200,
       headers: {
         "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
