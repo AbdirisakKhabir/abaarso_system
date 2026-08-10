@@ -16,7 +16,7 @@ import { usePagination } from "@/hooks/usePagination";
 import Badge from "@/components/ui/badge/Badge";
 import { authFetch } from "@/lib/api";
 import { DateInput } from "@/components/form/DateInput";
-import { DownloadIcon } from "@/icons";
+import { ReportExportButtons } from "@/components/reports/ReportExportButtons";
 import {
   FinanceReportBar,
   FinanceReportDonut,
@@ -109,26 +109,17 @@ export default function TransactionHistoryReportPage() {
   }, [transactions]);
 
   const handlePrint = () => window.print();
-  const handleExportCSV = () => {
-    const headers = ["Date", "Type", "Bank", "Amount", "Description", "Student", "Recorded By"];
-    const rows = transactions.map((t) => [
-      new Date(t.createdAt).toLocaleString(),
-      t.type,
-      t.bank?.code || "",
-      t.amount.toFixed(2),
-      t.description || "",
-      t.student ? `${t.student.firstName} ${t.student.lastName} (${t.student.studentId})` : "",
-      t.createdBy?.name || t.createdBy?.email || "",
-    ]);
-    const csv = [headers.join(","), ...rows.map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(","))].join("\n");
-    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `Transaction_History_${dateFrom}_to_${dateTo}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
-  };
+
+  const exportHeaders = ["Date", "Type", "Bank", "Amount", "Description", "Student", "Recorded By"];
+  const exportRows = transactions.map((t) => [
+    new Date(t.createdAt).toLocaleString(),
+    t.type,
+    t.bank?.code || "",
+    t.amount.toFixed(2),
+    t.description || "",
+    t.student ? `${t.student.firstName} ${t.student.lastName} (${t.student.studentId})` : "",
+    t.createdBy?.name || t.createdBy?.email || "",
+  ]);
 
   const typeBadge = (t: string) => {
     const colors: Record<string, "success" | "error" | "info" | "primary"> = {
@@ -154,10 +145,14 @@ export default function TransactionHistoryReportPage() {
           <Link href="/reports/payment">
             <Button variant="outline" size="sm">← All Reports</Button>
           </Link>
-          <Button variant="outline" size="sm" startIcon={<DownloadIcon />} onClick={handleExportCSV}>
-            Export CSV
-          </Button>
-          <Button size="sm" onClick={handlePrint}>Print</Button>
+          <ReportExportButtons
+            title="Transaction History Report"
+            filename={`Transaction_History_${dateFrom}_to_${dateTo}`}
+            subtitle={`${dateFrom} to ${dateTo}`}
+            headers={exportHeaders}
+            rows={exportRows}
+            onPrint={handlePrint}
+          />
         </div>
       </div>
 

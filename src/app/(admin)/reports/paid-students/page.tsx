@@ -14,7 +14,7 @@ import {
 } from "@/components/ui/table";
 import { usePagination } from "@/hooks/usePagination";
 import { authFetch } from "@/lib/api";
-import { DownloadIcon } from "@/icons";
+import { ReportExportButtons } from "@/components/reports/ReportExportButtons";
 import { ReportProgramFilter } from "@/components/reports/ReportProgramFilter";
 import { DEFAULT_PROGRAM, type Program } from "@/lib/program";
 import {
@@ -200,69 +200,52 @@ export default function PaidStudentsReportPage() {
 
   const totalCollected = paidStudents.reduce((s, t) => s + (t.amountPaid ?? 0), 0);
 
-  const handleExportCSV = () => {
-    if (paidStudents.length === 0) return;
-    const headers = [
-      "Student ID",
-      "First Name",
-      "Last Name",
-      "Email",
-      "Phone",
-      "Department",
-      "Payment Status",
-      "Expected",
-      "Paid",
-    ];
-    const rows = paidStudents.map((s) => [
-      s.studentId,
-      s.firstName,
-      s.lastName,
-      s.email || "",
-      s.phone || "",
-      `${s.department.code} - ${s.department.name}`,
-      s.paymentStatus || "Fully Paid",
-      s.amountExpected != null ? String(s.amountExpected) : "",
-      s.amountPaid != null ? String(s.amountPaid) : "",
-    ]);
-    const totalExpected = paidStudents.reduce((s, t) => s + (t.amountExpected ?? 0), 0);
-    const totalRow = [
-      "",
-      "",
-      "",
-      "",
-      "",
-      "",
-      "TOTAL",
-      totalExpected.toFixed(2),
-      totalCollected.toFixed(2),
-    ];
-    const csv = [
-      headers.join(","),
-      ...rows.map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(",")),
-      totalRow.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(","),
-    ].join("\n");
-    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `Paid_Students_${paidClassInfo?.department?.code || "class"}_${paidSemester}_${paidYear}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
-  };
+  const exportHeaders = [
+    "Student ID",
+    "First Name",
+    "Last Name",
+    "Email",
+    "Phone",
+    "Department",
+    "Payment Status",
+    "Expected",
+    "Paid",
+  ];
+  const exportRows = paidStudents.map((s) => [
+    s.studentId,
+    s.firstName,
+    s.lastName,
+    s.email || "",
+    s.phone || "",
+    `${s.department.code} - ${s.department.name}`,
+    s.paymentStatus || "Fully Paid",
+    s.amountExpected != null ? String(s.amountExpected) : "",
+    s.amountPaid != null ? String(s.amountPaid) : "",
+  ]);
+  const totalExpected = paidStudents.reduce((s, t) => s + (t.amountExpected ?? 0), 0);
+  const exportFooterRows = [
+    ["", "", "", "", "", "", "TOTAL", totalExpected.toFixed(2), totalCollected.toFixed(2)],
+  ];
 
   return (
     <div>
       <div className="mb-6 flex flex-wrap items-center justify-between gap-4 no-print">
         <PageBreadCrumb pageTitle="Paid Students Report" />
-        {(paidClassInfo || paidDeptInfo) && paidStudents.length > 0 && (
-          <div className="flex gap-2">
-            <Button variant="outline" size="sm" startIcon={<DownloadIcon />} onClick={handleExportCSV}>
-              Export CSV
-            </Button>
-            <Button size="sm" onClick={handlePrint}>
-              Print
-            </Button>
-          </div>
+        {(paidClassInfo || paidDeptInfo) && (
+          <ReportExportButtons
+            title="Paid Students Report"
+            filename={`Paid_Students_${paidClassInfo?.department?.code || paidDeptInfo?.code || "class"}_${paidSemester}_${paidYear}`}
+            subtitle={
+              paidClassInfo
+                ? `${paidClassInfo.department.code} - ${paidClassInfo.name} (${paidClassInfo.semester} ${paidClassInfo.year})`
+                : `${paidDeptInfo?.code} - ${paidDeptInfo?.name} · All classes (${paidSemester} ${paidYear})`
+            }
+            headers={exportHeaders}
+            rows={exportRows}
+            footerRows={exportFooterRows}
+            disabled={!paidStudents.length}
+            onPrint={handlePrint}
+          />
         )}
       </div>
 

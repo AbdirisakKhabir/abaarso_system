@@ -15,7 +15,7 @@ import {
 import { usePagination } from "@/hooks/usePagination";
 import { authFetch } from "@/lib/api";
 import { DateInput } from "@/components/form/DateInput";
-import { DownloadIcon } from "@/icons";
+import { ReportExportButtons } from "@/components/reports/ReportExportButtons";
 import { ReportProgramFilter } from "@/components/reports/ReportProgramFilter";
 import { DEFAULT_PROGRAM, type Program } from "@/lib/program";
 import {
@@ -79,36 +79,24 @@ export default function IncomeStatementReportPage() {
   } = usePagination(expenseCategoryRows, [dateFrom, dateTo, data]);
 
   const handlePrint = () => window.print();
-  const handleExportCSV = () => {
-    if (!data) return;
-    const lines = [
-      ["Income Statement", ""],
-      ["Period from", data.dateFrom],
-      ["Period to", data.dateTo],
-      ["Generated", data.generatedAt],
-      ["", ""],
-      ["REVENUE", ""],
-      ["Tuition Revenue", `$${data.revenue.tuition.toLocaleString()}`],
-      ["Payment Count", data.revenue.paymentCount],
-      ["", ""],
-      ["EXPENSES", ""],
-      ["Approved Expenses", `$${data.expenses.approvedExpenses.toLocaleString()}`],
-      ["Bank Withdrawals", `$${data.expenses.withdrawals.toLocaleString()}`],
-      ["Total Expenses", `$${data.expenses.total.toLocaleString()}`],
-      ["", ""],
-      ["NET INCOME", `$${data.netIncome.toLocaleString()}`],
-    ];
-    const csv = lines
-      .map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(","))
-      .join("\n");
-    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `Income_Statement_${data.dateFrom}_to_${data.dateTo}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
-  };
+
+  const exportHeaders = ["Item", "Value"];
+  const exportRows = data
+    ? [
+        ["Income Statement", ""],
+        ["Period from", data.dateFrom],
+        ["Period to", data.dateTo],
+        ["Generated", data.generatedAt],
+        ["REVENUE", ""],
+        ["Tuition Revenue", `$${data.revenue.tuition.toLocaleString()}`],
+        ["Payment Count", data.revenue.paymentCount],
+        ["EXPENSES", ""],
+        ["Approved Expenses", `$${data.expenses.approvedExpenses.toLocaleString()}`],
+        ["Bank Withdrawals", `$${data.expenses.withdrawals.toLocaleString()}`],
+        ["Total Expenses", `$${data.expenses.total.toLocaleString()}`],
+        ["NET INCOME", `$${data.netIncome.toLocaleString()}`],
+      ]
+    : [];
 
   const catLabels = expenseCategoryRows.map((c) => c.category);
   const catAmounts = expenseCategoryRows.map((c) => c.amount);
@@ -164,17 +152,15 @@ export default function IncomeStatementReportPage() {
               ← All Reports
             </Button>
           </Link>
-          <Button
-            variant="outline"
-            size="sm"
-            startIcon={<DownloadIcon />}
-            onClick={handleExportCSV}
-          >
-            Export CSV
-          </Button>
-          <Button size="sm" onClick={handlePrint}>
-            Print
-          </Button>
+          <ReportExportButtons
+            title="Income Statement"
+            filename={`Income_Statement_${dateFrom}_to_${dateTo}`}
+            subtitle={`${dateFrom} – ${dateTo}`}
+            headers={exportHeaders}
+            rows={exportRows}
+            disabled={!data}
+            onPrint={handlePrint}
+          />
         </div>
       </div>
 

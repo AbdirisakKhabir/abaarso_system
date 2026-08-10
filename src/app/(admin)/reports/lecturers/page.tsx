@@ -16,6 +16,7 @@ import {
 import { usePagination } from "@/hooks/usePagination";
 import Badge from "@/components/ui/badge/Badge";
 import { authFetch } from "@/lib/api";
+import { ReportExportButtons } from "@/components/reports/ReportExportButtons";
 import { ReportProgramFilter } from "@/components/reports/ReportProgramFilter";
 import { DEFAULT_PROGRAM, type Program } from "@/lib/program";
 
@@ -77,26 +78,16 @@ export default function LecturersReportPage() {
 
   const handlePrint = () => window.print();
 
-  const handleExportCSV = () => {
-    const headers = ["Name", "Email", "Phone", "Degree", "Departments", "Courses", "Status"];
-    const rows = filteredLecturers.map((l) => [
-      l.name,
-      l.email,
-      l.phone ?? "",
-      l.degree ?? "",
-      (l.departments ?? []).map((d) => d.code).join("; "),
-      (l.courses ?? []).map((c) => c.code).join("; "),
-      l.isActive ? "Active" : "Inactive",
-    ]);
-    const csv = [headers.join(","), ...rows.map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(","))].join("\n");
-    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `Lecturers_Report_${new Date().toISOString().slice(0, 10)}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
-  };
+  const exportHeaders = ["Name", "Email", "Phone", "Degree", "Departments", "Courses", "Status"];
+  const exportRows = filteredLecturers.map((l) => [
+    l.name,
+    l.email,
+    l.phone ?? "",
+    l.degree ?? "",
+    (l.departments ?? []).map((d) => d.code).join("; "),
+    (l.courses ?? []).map((c) => c.code).join("; "),
+    l.isActive ? "Active" : "Inactive",
+  ]);
 
   if (!hasPermission("lecturers.view")) {
     return (
@@ -116,14 +107,13 @@ export default function LecturersReportPage() {
     <div className="report-print-area">
       <div className="mb-6 flex flex-wrap items-center justify-between gap-4 no-print">
         <PageBreadCrumb pageTitle="Lecturer Report" />
-        <div className="flex gap-2">
-          <Button variant="outline" size="sm" onClick={handleExportCSV}>
-            Export CSV
-          </Button>
-          <Button size="sm" onClick={handlePrint}>
-            Print
-          </Button>
-        </div>
+        <ReportExportButtons
+          title="Lecturer Report"
+          filename={`Lecturers_Report_${new Date().toISOString().slice(0, 10)}`}
+          headers={exportHeaders}
+          rows={exportRows}
+          onPrint={handlePrint}
+        />
       </div>
 
       <div className="mb-4 print:block hidden print:mb-2">

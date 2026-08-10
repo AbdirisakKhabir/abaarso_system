@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/table";
 import { usePagination } from "@/hooks/usePagination";
 import Badge from "@/components/ui/badge/Badge";
+import { ReportExportButtons } from "@/components/reports/ReportExportButtons";
 import { authFetch } from "@/lib/api";
 
 type Position = { id: number; name: string; description?: string };
@@ -74,26 +75,16 @@ export default function HRReportPage() {
 
   const handlePrint = () => window.print();
 
-  const handleExportCSV = () => {
-    const headers = ["Name", "Email", "Phone", "Position", "Department", "Hire Date", "Status"];
-    const rows = filteredEmployees.map((e) => [
-      e.name,
-      e.email,
-      e.phone ?? "",
-      e.position?.name ?? "",
-      e.department ?? "",
-      e.hireDate ? new Date(e.hireDate).toLocaleDateString() : "",
-      e.isActive ? "Active" : "Inactive",
-    ]);
-    const csv = [headers.join(","), ...rows.map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(","))].join("\n");
-    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `HR_Report_${new Date().toISOString().slice(0, 10)}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
-  };
+  const exportHeaders = ["Name", "Email", "Phone", "Position", "Department", "Hire Date", "Status"];
+  const exportRows = filteredEmployees.map((e) => [
+    e.name,
+    e.email,
+    e.phone ?? "",
+    e.position?.name ?? "",
+    e.department ?? "",
+    e.hireDate ? new Date(e.hireDate).toLocaleDateString() : "",
+    e.isActive ? "Active" : "Inactive",
+  ]);
 
   if (!hasPermission("hr.view")) {
     return (
@@ -113,14 +104,13 @@ export default function HRReportPage() {
     <div className="report-print-area">
       <div className="mb-6 flex flex-wrap items-center justify-between gap-4 no-print">
         <PageBreadCrumb pageTitle="HR Report" />
-        <div className="flex gap-2">
-          <Button variant="outline" size="sm" onClick={handleExportCSV}>
-            Export CSV
-          </Button>
-          <Button size="sm" onClick={handlePrint}>
-            Print
-          </Button>
-        </div>
+        <ReportExportButtons
+          title="HR Report"
+          filename={`HR_Report_${new Date().toISOString().slice(0, 10)}`}
+          headers={exportHeaders}
+          rows={exportRows}
+          onPrint={handlePrint}
+        />
       </div>
 
       <div className="mb-4 print:block hidden print:mb-2">

@@ -15,7 +15,7 @@ import {
 } from "@/components/ui/table";
 import { usePagination } from "@/hooks/usePagination";
 import { authFetch } from "@/lib/api";
-import { DownloadIcon } from "@/icons";
+import { ReportExportButtons } from "@/components/reports/ReportExportButtons";
 import {
   FinanceReportBar,
   FinanceReportDonut,
@@ -80,28 +80,18 @@ export default function ExpenseReportPage() {
   } = usePagination(expensesList, [year, statusFilter]);
 
   const handlePrint = () => window.print();
-  const handleExportCSV = () => {
-    if (!data?.expenses.length) return;
-    const headers = ["Date", "Description", "Category", "Bank", "Amount", "Status", "Requested By", "Approved By"];
-    const rows = data.expenses.map((e) => [
-      new Date(e.createdAt).toLocaleDateString(),
-      e.description,
-      e.category || "",
-      e.bank ? `${e.bank.code} - ${e.bank.name}` : "",
-      e.amount.toFixed(2),
-      e.status,
-      e.requestedBy?.name || e.requestedBy?.email || "",
-      e.approvedBy?.name || e.approvedBy?.email || "",
-    ]);
-    const csv = [headers.join(","), ...rows.map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(","))].join("\n");
-    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `Expense_Report_${data.year}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
-  };
+
+  const exportHeaders = ["Date", "Description", "Category", "Bank", "Amount", "Status", "Requested By", "Approved By"];
+  const exportRows = (data?.expenses ?? []).map((e) => [
+    new Date(e.createdAt).toLocaleDateString(),
+    e.description,
+    e.category || "",
+    e.bank ? `${e.bank.code} - ${e.bank.name}` : "",
+    e.amount.toFixed(2),
+    e.status,
+    e.requestedBy?.name || e.requestedBy?.email || "",
+    e.approvedBy?.name || e.approvedBy?.email || "",
+  ]);
 
   return (
     <div className="report-print-area">
@@ -130,10 +120,15 @@ export default function ExpenseReportPage() {
           <Link href="/reports/payment">
             <Button variant="outline" size="sm">← All Reports</Button>
           </Link>
-          <Button variant="outline" size="sm" startIcon={<DownloadIcon />} onClick={handleExportCSV}>
-            Export CSV
-          </Button>
-          <Button size="sm" onClick={handlePrint}>Print</Button>
+          <ReportExportButtons
+            title="Expense Report"
+            filename={`Expense_Report_${year}`}
+            subtitle={`Year: ${year}`}
+            headers={exportHeaders}
+            rows={exportRows}
+            disabled={!data?.expenses.length}
+            onPrint={handlePrint}
+          />
         </div>
       </div>
 

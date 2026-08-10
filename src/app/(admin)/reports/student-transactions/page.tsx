@@ -16,7 +16,7 @@ import { usePagination } from "@/hooks/usePagination";
 import Badge from "@/components/ui/badge/Badge";
 import { authFetch } from "@/lib/api";
 import { DateInput } from "@/components/form/DateInput";
-import { DownloadIcon } from "@/icons";
+import { ReportExportButtons } from "@/components/reports/ReportExportButtons";
 import { ReportProgramFilter } from "@/components/reports/ReportProgramFilter";
 import { DEFAULT_PROGRAM, type Program } from "@/lib/program";
 import {
@@ -197,41 +197,33 @@ export default function StudentTransactionsReportPage() {
 
   const handlePrint = () => window.print();
 
-  const handleExportCSV = () => {
-    const headers = ["Student ID", "Name", "Department", "Class", "Paid", "Unpaid", "Total Paid"];
-    const rows = transactions.map((t) => [
-      t.studentId,
-      `${t.firstName} ${t.lastName}`,
-      `${t.department?.code} - ${t.department?.name}`,
-      t.class ? `${t.class.department?.code} ${t.class.name}` : "—",
-      t.paidCount,
-      t.unpaidCount,
-      t.totalPaid,
-    ]);
-    const totalPaid = transactions.reduce((s, t) => s + t.totalPaid, 0);
-    const totalRow = ["", "TOTAL", "", "", "", "", totalPaid];
-    const csv = [headers.join(","), ...rows.map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(",")), totalRow.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(",")].join("\n");
-    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `Student_Transactions_${filterYear}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
-  };
+  const exportHeaders = ["Student ID", "Name", "Department", "Class", "Paid", "Unpaid", "Total Paid"];
+  const exportRows = transactions.map((t) => [
+    t.studentId,
+    `${t.firstName} ${t.lastName}`,
+    `${t.department?.code} - ${t.department?.name}`,
+    t.class ? `${t.class.department?.code} ${t.class.name}` : "—",
+    t.paidCount,
+    t.unpaidCount,
+    t.totalPaid,
+  ]);
+  const exportFooterRows = [
+    ["", "TOTAL", "", "", "", "", transactions.reduce((s, t) => s + t.totalPaid, 0)],
+  ];
 
   return (
     <div className="report-print-area">
       <div className="mb-6 flex flex-wrap items-center justify-between gap-4 no-print">
         <PageBreadCrumb pageTitle="Student Transactions Report" />
-        <div className="flex gap-2">
-          <Button variant="outline" size="sm" startIcon={<DownloadIcon />} onClick={handleExportCSV}>
-            Export CSV
-          </Button>
-          <Button size="sm" onClick={handlePrint}>
-            Print
-          </Button>
-        </div>
+        <ReportExportButtons
+          title="Student Transactions Report"
+          filename={`Student_Transactions_${filterYear}`}
+          subtitle={`Year: ${filterYear}`}
+          headers={exportHeaders}
+          rows={exportRows}
+          footerRows={exportFooterRows}
+          onPrint={handlePrint}
+        />
       </div>
 
       <div className="mb-4 print:block hidden print:mb-2">

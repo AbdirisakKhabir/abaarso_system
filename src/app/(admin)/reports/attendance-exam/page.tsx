@@ -1,8 +1,8 @@
 "use client";
 
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import PageBreadCrumb from "@/components/common/PageBreadCrumb";
-import Button from "@/components/ui/button/Button";
+import { ReportExportButtons } from "@/components/reports/ReportExportButtons";
 import {
   Table,
   TableBody,
@@ -129,6 +129,41 @@ export default function AttendanceExamReportPage() {
     ? courses.filter((c) => String(c.id) === filterCourse)
     : courses;
 
+  const { exportHeaders, exportRows } = useMemo(() => {
+    const headers = [
+      "Student ID",
+      "Student Name",
+      "Present",
+      "Absent",
+      "Excused",
+      "Attend %",
+      "Marks (0-10)",
+      ...displayCourses.map((c) => `${c.code} Total`),
+      ...displayCourses.map((c) => `${c.code} Grade`),
+    ];
+    const exportData = rows.map((r) => {
+      const examMap = new Map(r.examRecords.map((e) => [e.courseId, e]));
+      return [
+        r.student.studentId,
+        `${r.student.firstName} ${r.student.lastName}`,
+        r.attendance.present,
+        r.attendance.absent,
+        r.attendance.excused,
+        `${r.attendance.attendancePercent}%`,
+        r.attendance.attendanceMarks.toFixed(2),
+        ...displayCourses.map((c) => {
+          const exam = examMap.get(c.id);
+          return exam ? exam.totalMarks.toFixed(1) : "—";
+        }),
+        ...displayCourses.map((c) => {
+          const exam = examMap.get(c.id);
+          return exam?.grade || "—";
+        }),
+      ];
+    });
+    return { exportHeaders: headers, exportRows: exportData };
+  }, [rows, displayCourses]);
+
   const {
     paginatedItems,
     page,
@@ -145,9 +180,15 @@ export default function AttendanceExamReportPage() {
     <div>
       <div className="mb-6 flex flex-wrap items-center justify-between gap-4 no-print">
         <PageBreadCrumb pageTitle="Attendance & Exam Report" />
-        <Button size="sm" onClick={handlePrint}>
-          Print
-        </Button>
+        <ReportExportButtons
+          title="Attendance & Exam Report"
+          filename={`Attendance_Exam_${classInfo?.name || "class"}_${new Date().toISOString().slice(0, 10)}`}
+          subtitle={classInfo ? `${classInfo.name} (${classInfo.semester} ${classInfo.year})` : undefined}
+          headers={exportHeaders}
+          rows={exportRows}
+          disabled={!filterClass || loading || !rows.length}
+          onPrint={handlePrint}
+        />
       </div>
 
       <div className="mb-4 print:block hidden print:mb-2">

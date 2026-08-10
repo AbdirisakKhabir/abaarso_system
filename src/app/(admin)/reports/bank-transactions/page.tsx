@@ -15,6 +15,7 @@ import {
 import { usePagination } from "@/hooks/usePagination";
 import { authFetch } from "@/lib/api";
 import { DateInput } from "@/components/form/DateInput";
+import { ReportExportButtons } from "@/components/reports/ReportExportButtons";
 import {
   FinanceReportBar,
   FinanceReportDonut,
@@ -112,13 +113,54 @@ export default function BankTransactionsReportPage() {
 
   const handlePrint = () => window.print();
 
+  const exportHeaders = ["Type", "Date", "Party 1", "Party 2", "Details", "Amount"];
+  const exportRows = useMemo(() => {
+    if (!data) return [];
+    const depositRows = data.deposits.map((d) => [
+      "Deposit",
+      new Date(d.paidAt).toLocaleString(),
+      `${d.student.firstName} ${d.student.lastName}`,
+      `${d.bank.code} - ${d.bank.name}`,
+      d.student.studentId,
+      d.amount,
+    ]);
+    const withdrawalRows = data.withdrawals.map((w) => [
+      "Withdrawal",
+      new Date(w.withdrawnAt).toLocaleString(),
+      `${w.bank.code} - ${w.bank.name}`,
+      "",
+      w.reason || "",
+      w.amount,
+    ]);
+    const transferRows = transfersSorted.map((t) => [
+      "Transfer",
+      new Date(t.transferredAt).toLocaleString(),
+      `${t.fromBank.code} - ${t.fromBank.name}`,
+      `${t.toBank.code} - ${t.toBank.name}`,
+      "",
+      t.amount,
+    ]);
+    return [...depositRows, ...withdrawalRows, ...transferRows];
+  }, [data, transfersSorted]);
+
   return (
     <div className="report-print-area">
       <div className="mb-6 flex flex-wrap items-center justify-between gap-4 no-print">
         <PageBreadCrumb pageTitle="Bank Transactions Report" />
-        <Link href="/reports/payment">
-          <Button variant="outline" size="sm">← All Reports</Button>
-        </Link>
+        <div className="flex flex-wrap gap-2">
+          <Link href="/reports/payment">
+            <Button variant="outline" size="sm">← All Reports</Button>
+          </Link>
+          <ReportExportButtons
+            title="Bank Transactions Report"
+            filename={`Bank_Transactions_${dateFrom}_to_${dateTo}`}
+            subtitle={`${dateFrom} to ${dateTo}`}
+            headers={exportHeaders}
+            rows={exportRows}
+            disabled={loading || !data}
+            onPrint={handlePrint}
+          />
+        </div>
       </div>
 
       <div className="mb-6 rounded-2xl border border-gray-200 bg-white p-4 dark:border-gray-800 dark:bg-white/5 no-print">

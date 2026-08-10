@@ -14,7 +14,7 @@ import {
 } from "@/components/ui/table";
 import { usePagination } from "@/hooks/usePagination";
 import { authFetch } from "@/lib/api";
-import { DownloadIcon } from "@/icons";
+import { ReportExportButtons } from "@/components/reports/ReportExportButtons";
 import { ReportProgramFilter } from "@/components/reports/ReportProgramFilter";
 import { DEFAULT_PROGRAM, type Program } from "@/lib/program";
 import {
@@ -178,44 +178,40 @@ export default function UnpaidStudentsReportPage() {
     return { labels: entries.map(([k]) => k), series: entries.map(([, v]) => v) };
   }, [unpaidStudents]);
 
-  const handleExportCSV = () => {
-    if (unpaidStudents.length === 0) return;
-    const headers = ["Student ID", "First Name", "Last Name", "Email", "Phone", "Department", "Payment Status", "Amount Due"];
-    const rows = unpaidStudents.map((s) => [
-      s.studentId,
-      s.firstName,
-      s.lastName,
-      s.email || "",
-      s.phone || "",
-      `${s.department.code} - ${s.department.name}`,
-      s.paymentStatus || "Fully Paid",
-      s.tuitionFee != null ? String(s.tuitionFee) : "",
-    ]);
-    const totalDue = unpaidStudents.reduce((s, t) => s + (t.tuitionFee ?? 0), 0);
-    const totalRow = ["", "TOTAL", "", "", "", "", "", totalDue.toFixed(2)];
-    const csv = [headers.join(","), ...rows.map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(",")), totalRow.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(",")].join("\n");
-    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `Unpaid_Students_${unpaidClassInfo?.department?.code || "class"}_${unpaidSemester}_${unpaidYear}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
-  };
+  const totalDue = unpaidStudents.reduce((s, t) => s + (t.tuitionFee ?? 0), 0);
+
+  const exportHeaders = ["Student ID", "First Name", "Last Name", "Email", "Phone", "Department", "Payment Status", "Amount Due"];
+  const exportRows = unpaidStudents.map((s) => [
+    s.studentId,
+    s.firstName,
+    s.lastName,
+    s.email || "",
+    s.phone || "",
+    `${s.department.code} - ${s.department.name}`,
+    s.paymentStatus || "Fully Paid",
+    s.tuitionFee != null ? String(s.tuitionFee) : "",
+  ]);
+  const exportFooterRows = [["", "TOTAL", "", "", "", "", "", totalDue.toFixed(2)]];
 
   return (
     <div>
       <div className="mb-6 flex flex-wrap items-center justify-between gap-4 no-print">
         <PageBreadCrumb pageTitle="Unpaid Students Report" />
-        {(unpaidClassInfo || unpaidDeptInfo) && unpaidStudents.length > 0 && (
-          <div className="flex gap-2">
-            <Button variant="outline" size="sm" startIcon={<DownloadIcon />} onClick={handleExportCSV}>
-              Export CSV
-            </Button>
-            <Button size="sm" onClick={handlePrint}>
-              Print
-            </Button>
-          </div>
+        {(unpaidClassInfo || unpaidDeptInfo) && (
+          <ReportExportButtons
+            title="Unpaid Students Report"
+            filename={`Unpaid_Students_${unpaidClassInfo?.department?.code || unpaidDeptInfo?.code || "class"}_${unpaidSemester}_${unpaidYear}`}
+            subtitle={
+              unpaidClassInfo
+                ? `${unpaidClassInfo.department.code} - ${unpaidClassInfo.name} (${unpaidClassInfo.semester} ${unpaidClassInfo.year})`
+                : `${unpaidDeptInfo?.code} - ${unpaidDeptInfo?.name} · All classes (${unpaidSemester} ${unpaidYear})`
+            }
+            headers={exportHeaders}
+            rows={exportRows}
+            footerRows={exportFooterRows}
+            disabled={!unpaidStudents.length}
+            onPrint={handlePrint}
+          />
         )}
       </div>
 

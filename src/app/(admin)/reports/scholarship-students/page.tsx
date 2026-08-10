@@ -14,7 +14,7 @@ import {
 } from "@/components/ui/table";
 import { usePagination } from "@/hooks/usePagination";
 import { authFetch } from "@/lib/api";
-import { DownloadIcon } from "@/icons";
+import { ReportExportButtons } from "@/components/reports/ReportExportButtons";
 import { ReportProgramFilter } from "@/components/reports/ReportProgramFilter";
 import { DEFAULT_PROGRAM, type Program } from "@/lib/program";
 import {
@@ -185,74 +185,51 @@ export default function ScholarshipStudentsReportPage() {
   const totalDue = scholarshipStudents.reduce((s, t) => s + (t.amountDue ?? 0), 0);
   const totalPaid = scholarshipStudents.reduce((s, t) => s + (t.amountPaid ?? 0), 0);
 
-  const handleExportCSV = () => {
-    if (scholarshipStudents.length === 0) return;
-    const headers = [
-      "Student ID",
-      "First Name",
-      "Last Name",
-      "Email",
-      "Phone",
-      "Department",
-      "Scholarship Type",
-      "Status",
-      "Expected",
-      "Paid",
-      "Due",
-    ];
-    const rows = scholarshipStudents.map((s) => [
-      s.studentId,
-      s.firstName,
-      s.lastName,
-      s.email || "",
-      s.phone || "",
-      `${s.department.code} - ${s.department.name}`,
-      s.paymentStatus,
-      s.tuitionStatus,
-      s.amountExpected != null ? String(s.amountExpected) : "",
-      s.amountPaid != null ? String(s.amountPaid) : "",
-      s.amountDue != null ? String(s.amountDue) : "",
-    ]);
-    const totalRow = [
-      "",
-      "",
-      "",
-      "",
-      "",
-      "",
-      "TOTAL",
-      "",
-      "",
-      totalPaid.toFixed(2),
-      totalDue.toFixed(2),
-    ];
-    const csv = [
-      headers.join(","),
-      ...rows.map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(",")),
-      totalRow.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(","),
-    ].join("\n");
-    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `Scholarship_Students_${classInfo?.department?.code || "class"}_${scholarshipSemester}_${scholarshipYear}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
-  };
+  const exportHeaders = [
+    "Student ID",
+    "First Name",
+    "Last Name",
+    "Email",
+    "Phone",
+    "Department",
+    "Scholarship Type",
+    "Status",
+    "Expected",
+    "Paid",
+    "Due",
+  ];
+  const exportRows = scholarshipStudents.map((s) => [
+    s.studentId,
+    s.firstName,
+    s.lastName,
+    s.email || "",
+    s.phone || "",
+    `${s.department.code} - ${s.department.name}`,
+    s.paymentStatus,
+    s.tuitionStatus,
+    s.amountExpected != null ? String(s.amountExpected) : "",
+    s.amountPaid != null ? String(s.amountPaid) : "",
+    s.amountDue != null ? String(s.amountDue) : "",
+  ]);
+  const exportFooterRows = [
+    ["", "", "", "", "", "", "TOTAL", "", "", totalPaid.toFixed(2), totalDue.toFixed(2)],
+  ];
 
   return (
     <div>
       <div className="mb-6 flex flex-wrap items-center justify-between gap-4 no-print">
         <PageBreadCrumb pageTitle="Scholarship Students Report" />
-        {classInfo && scholarshipStudents.length > 0 && (
-          <div className="flex gap-2">
-            <Button variant="outline" size="sm" startIcon={<DownloadIcon />} onClick={handleExportCSV}>
-              Export CSV
-            </Button>
-            <Button size="sm" onClick={handlePrint}>
-              Print
-            </Button>
-          </div>
+        {classInfo && (
+          <ReportExportButtons
+            title="Scholarship Students Report"
+            filename={`Scholarship_Students_${classInfo.department?.code || "class"}_${scholarshipSemester}_${scholarshipYear}`}
+            subtitle={`${classInfo.department.code} - ${classInfo.name} (${classInfo.semester} ${classInfo.year})`}
+            headers={exportHeaders}
+            rows={exportRows}
+            footerRows={exportFooterRows}
+            disabled={!scholarshipStudents.length}
+            onPrint={handlePrint}
+          />
         )}
       </div>
 

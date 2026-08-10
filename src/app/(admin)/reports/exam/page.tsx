@@ -2,7 +2,8 @@
 
 import React, { useCallback, useEffect, useState } from "react";
 import PageBreadCrumb from "@/components/common/PageBreadCrumb";
-import Button from "@/components/ui/button/Button";
+import { ReportExportButtons } from "@/components/reports/ReportExportButtons";
+import { ReportProgramFilter } from "@/components/reports/ReportProgramFilter";
 import {
   Table,
   TableBody,
@@ -14,7 +15,6 @@ import {
 import { usePagination } from "@/hooks/usePagination";
 import Badge from "@/components/ui/badge/Badge";
 import { authFetch } from "@/lib/api";
-import { ReportProgramFilter } from "@/components/reports/ReportProgramFilter";
 import { DEFAULT_PROGRAM, type Program } from "@/lib/program";
 
 type Department = { id: number; name: string; code: string };
@@ -108,11 +108,45 @@ export default function ExamReportPage() {
 
   const handlePrint = () => window.print();
 
+  const exportHeaders = [
+    "Student ID",
+    "Student Name",
+    "Course Code",
+    "Course Name",
+    "Semester",
+    "Year",
+    "Mid",
+    "Final",
+    "Total",
+    "Grade",
+    "GP",
+  ];
+  const exportRows = records.map((r) => [
+    r.student.studentId,
+    `${r.student.firstName} ${r.student.lastName}`,
+    r.course.code,
+    r.course.name,
+    r.semester,
+    r.year,
+    r.midExam ?? 0,
+    r.finalExam ?? 0,
+    r.totalMarks,
+    r.grade || "N/A",
+    r.gradePoints?.toFixed(1) ?? "0.0",
+  ]);
+
   return (
     <div>
       <div className="mb-6 flex flex-wrap items-center justify-between gap-4 no-print">
         <PageBreadCrumb pageTitle="Exam Report" />
-        <Button size="sm" onClick={handlePrint}>Print</Button>
+        <ReportExportButtons
+          title="Exam Report"
+          filename={`Exam_Report_${filterYear || "All"}_${filterSemester !== "all" ? filterSemester : "All"}`}
+          headers={exportHeaders}
+          rows={exportRows}
+          disabled={loading}
+          onPrint={handlePrint}
+        />
       </div>
 
       <div className="mb-4 print:block hidden print:mb-2">

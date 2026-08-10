@@ -16,7 +16,8 @@ import { usePagination } from "@/hooks/usePagination";
 import { DateInput } from "@/components/form/DateInput";
 import { authFetch } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
-import { BoltIcon, DownloadIcon } from "@/icons";
+import { BoltIcon } from "@/icons";
+import { ReportExportButtons } from "@/components/reports/ReportExportButtons";
 import {
   FinanceReportBar,
   FinanceReportDonut,
@@ -92,39 +93,24 @@ export default function ActivityLogReportPage() {
 
   const handlePrint = () => window.print();
 
-  const handleExportCSV = () => {
-    const headers = [
-      "Time",
-      "User email",
-      "User name",
-      "Action",
-      "Module",
-      "Summary",
-      "IP",
-    ];
-    const lines = rows.map((r) => [
-      new Date(r.createdAt).toLocaleString(),
-      r.user?.email ?? "",
-      r.user?.name ?? "",
-      r.action,
-      r.module ?? "",
-      r.summary.replace(/"/g, '""'),
-      r.ipAddress ?? "",
-    ]);
-    const csv = [
-      headers.join(","),
-      ...lines.map((cells) =>
-        cells.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(",")
-      ),
-    ].join("\n");
-    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `Activity_Log_${dateFrom}_to_${dateTo}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
-  };
+  const exportHeaders = [
+    "Time",
+    "User email",
+    "User name",
+    "Action",
+    "Module",
+    "Summary",
+    "IP",
+  ];
+  const exportRows = rows.map((r) => [
+    new Date(r.createdAt).toLocaleString(),
+    r.user?.email ?? "",
+    r.user?.name ?? "",
+    r.action,
+    r.module ?? "",
+    r.summary,
+    r.ipAddress ?? "",
+  ]);
 
   if (!canView) {
     return (
@@ -182,12 +168,14 @@ export default function ActivityLogReportPage() {
               Live activity log
             </Button>
           </Link>
-          <Button variant="outline" size="sm" startIcon={<DownloadIcon />} onClick={handleExportCSV}>
-            Export CSV
-          </Button>
-          <Button size="sm" onClick={handlePrint}>
-            Print
-          </Button>
+          <ReportExportButtons
+            title="Activity Log Report"
+            filename={`Activity_Log_${dateFrom}_to_${dateTo}`}
+            subtitle={`${dateFrom} to ${dateTo}`}
+            headers={exportHeaders}
+            rows={exportRows}
+            onPrint={handlePrint}
+          />
         </div>
       </div>
 

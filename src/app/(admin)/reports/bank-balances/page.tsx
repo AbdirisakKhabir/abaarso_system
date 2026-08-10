@@ -14,7 +14,7 @@ import {
 } from "@/components/ui/table";
 import { usePagination } from "@/hooks/usePagination";
 import { authFetch } from "@/lib/api";
-import { DownloadIcon } from "@/icons";
+import { ReportExportButtons } from "@/components/reports/ReportExportButtons";
 import {
   FinanceReportBar,
   FinanceReportDonut,
@@ -63,19 +63,14 @@ export default function BankBalancesReportPage() {
   }, [data]);
 
   const handlePrint = () => window.print();
-  const handleExportCSV = () => {
-    if (!data?.banks.length) return;
-    const headers = ["Code", "Name", "Account Number", "Balance"];
-    const rows = data.banks.map((b) => [b.code, b.name, b.accountNumber || "", (b.balance ?? 0).toFixed(2)]);
-    const csv = [headers.join(","), ...rows.map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(","))].join("\n");
-    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `Bank_Balances_${new Date().toISOString().slice(0, 10)}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
-  };
+
+  const exportHeaders = ["Code", "Name", "Account Number", "Balance"];
+  const exportRows = (data?.banks ?? []).map((b) => [
+    b.code,
+    b.name,
+    b.accountNumber || "",
+    (b.balance ?? 0).toFixed(2),
+  ]);
 
   return (
     <div className="report-print-area">
@@ -85,10 +80,14 @@ export default function BankBalancesReportPage() {
           <Link href="/reports/payment">
             <Button variant="outline" size="sm">← All Reports</Button>
           </Link>
-          <Button variant="outline" size="sm" startIcon={<DownloadIcon />} onClick={handleExportCSV}>
-            Export CSV
-          </Button>
-          <Button size="sm" onClick={handlePrint}>Print</Button>
+          <ReportExportButtons
+            title="Bank Balances Report"
+            filename={`Bank_Balances_${new Date().toISOString().slice(0, 10)}`}
+            headers={exportHeaders}
+            rows={exportRows}
+            disabled={!data?.banks.length}
+            onPrint={handlePrint}
+          />
         </div>
       </div>
 

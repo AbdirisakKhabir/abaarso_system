@@ -2,7 +2,7 @@
 
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import PageBreadCrumb from "@/components/common/PageBreadCrumb";
-import Button from "@/components/ui/button/Button";
+import { ReportExportButtons } from "@/components/reports/ReportExportButtons";
 import {
   Table,
   TableBody,
@@ -14,7 +14,6 @@ import {
 import { usePagination } from "@/hooks/usePagination";
 import Badge from "@/components/ui/badge/Badge";
 import { authFetch } from "@/lib/api";
-import { DownloadIcon } from "@/icons";
 import { ReportProgramFilter } from "@/components/reports/ReportProgramFilter";
 import { DEFAULT_PROGRAM, type Program } from "@/lib/program";
 import {
@@ -107,39 +106,29 @@ export default function ClassRevenueReportPage() {
 
   const handlePrint = () => window.print();
 
-  const handleExportCSV = () => {
-    const headers = ["Class", "Department", "Semester", "Students", "Paid", "Unpaid", "Revenue"];
-    const rows = revenue.map((r) => [
-      r.name,
-      r.department ? `${r.department.code} - ${r.department.name}` : "—",
-      `${r.semester} ${r.year}`,
-      r.studentCount,
-      r.paidCount,
-      r.unpaidCount,
-      r.revenue,
-    ]);
-    const csv = [headers.join(","), ...rows.map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(","))].join("\n");
-    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `Class_Revenue_${filterYear}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
-  };
+  const exportHeaders = ["Class", "Department", "Semester", "Students", "Paid", "Unpaid", "Revenue"];
+  const exportRows = revenue.map((r) => [
+    r.name,
+    r.department ? `${r.department.code} - ${r.department.name}` : "—",
+    `${r.semester} ${r.year}`,
+    r.studentCount,
+    r.paidCount,
+    r.unpaidCount,
+    r.revenue,
+  ]);
 
   return (
     <div className="report-print-area">
       <div className="mb-6 flex flex-wrap items-center justify-between gap-4 no-print">
         <PageBreadCrumb pageTitle="Class Revenue Report" />
-        <div className="flex gap-2">
-          <Button variant="outline" size="sm" startIcon={<DownloadIcon />} onClick={handleExportCSV}>
-            Export CSV
-          </Button>
-          <Button size="sm" onClick={handlePrint}>
-            Print
-          </Button>
-        </div>
+        <ReportExportButtons
+          title="Class Revenue Report"
+          filename={`Class_Revenue_${filterYear}`}
+          subtitle={`Year: ${filterYear}`}
+          headers={exportHeaders}
+          rows={exportRows}
+          onPrint={handlePrint}
+        />
       </div>
 
       <div className="mb-4 print:block hidden print:mb-2">

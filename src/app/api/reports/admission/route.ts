@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import type { Prisma } from "@prisma/client";
 import { getAuthUser } from "@/lib/auth";
 import { genderFilterValues, normalizeGender } from "@/lib/gender";
 import { prisma } from "@/lib/prisma";
@@ -35,14 +36,15 @@ export async function GET(req: NextRequest) {
     const classId = searchParams.get("classId");
     const status = searchParams.get("status");
     const gender = searchParams.get("gender");
+    const semester = searchParams.get("semester")?.trim() || "";
+    const yearRaw = searchParams.get("year")?.trim() || "";
+    const year = yearRaw ? Number(yearRaw) : null;
 
-    const where: {
-      program?: "Bachelor" | "Masters";
-      departmentId?: number;
-      classId?: number;
-      status?: string;
-      gender?: { in: string[] };
-    } = { program };
+    if (yearRaw && (!Number.isInteger(year) || (year as number) < 2000)) {
+      return NextResponse.json({ error: "Invalid year" }, { status: 400 });
+    }
+
+    const where: Prisma.StudentWhereInput = { program };
 
     if (departmentId) {
       where.departmentId = Number(departmentId);
@@ -50,6 +52,13 @@ export async function GET(req: NextRequest) {
 
     if (classId) {
       where.classId = Number(classId);
+    } else if (semester || year != null) {
+      // University-wide (or department) students whose current class matches term
+      const classFilter: Prisma.ClassWhereInput = { program };
+      if (semester) classFilter.semester = semester;
+      if (year != null) classFilter.year = year;
+      if (departmentId) classFilter.departmentId = Number(departmentId);
+      where.class = { is: classFilter };
     }
 
     if (status && status !== "all") {
@@ -59,6 +68,47 @@ export async function GET(req: NextRequest) {
     if (gender && gender !== "all") {
       if (gender === "Male" || gender === "Female") {
         where.gender = { in: genderFilterValues(gender) };
+      }
+    }
+
+    // If classId + semester/year are both set, ensure the class matches the term
+    if (classId && (semester || year != null)) {
+      const cls = await prisma.class.findUnique({
+        where: { id: Number(classId) },
+        select: { semester: true, year: true, program: true },
+      });
+      if (!cls || cls.program !== program) {
+        return NextResponse.json({
+          students: [],
+          summary: {
+            total: 0,
+            byStatus: {},
+            byGender: { Male: 0, Female: 0, Unspecified: 0, total: 0 },
+          },
+          genderBreakdown: null,
+        });
+      }
+      if (semester && cls.semester !== semester) {
+        return NextResponse.json({
+          students: [],
+          summary: {
+            total: 0,
+            byStatus: {},
+            byGender: { Male: 0, Female: 0, Unspecified: 0, total: 0 },
+          },
+          genderBreakdown: null,
+        });
+      }
+      if (year != null && cls.year !== year) {
+        return NextResponse.json({
+          students: [],
+          summary: {
+            total: 0,
+            byStatus: {},
+            byGender: { Male: 0, Female: 0, Unspecified: 0, total: 0 },
+          },
+          genderBreakdown: null,
+        });
       }
     }
 
@@ -82,7 +132,7 @@ export async function GET(req: NextRequest) {
     const byGender = countByGender(students);
 
     let genderBreakdown: {
-      scope: "class" | "department";
+      scope: "class" | "department" | "semester";
       byClass: Array<{
         classId: number;
         className: string;
@@ -96,17 +146,19 @@ export async function GET(req: NextRequest) {
       department?: { id: number; name: string; code: string };
     } | null = null;
 
-    if (departmentId || classId) {
-      if (classId) {
-        const cls = students[0]?.class ?? (await prisma.class.findUnique({
+    if (classId) {
+      const cls =
+        students[0]?.class ??
+        (await prisma.class.findUnique({
           where: { id: Number(classId) },
           select: { id: true, name: true, semester: true, year: true },
         }));
-        const counts = countByGender(students);
-        genderBreakdown = {
-          scope: "class",
-          byClass: cls
-            ? [{
+      const counts = countByGender(students);
+      genderBreakdown = {
+        scope: "class",
+        byClass: cls
+          ? [
+              {
                 classId: cls.id,
                 className: cls.name,
                 semester: cls.semester,
@@ -115,64 +167,64 @@ export async function GET(req: NextRequest) {
                 Female: counts.Female,
                 Unspecified: counts.Unspecified,
                 total: counts.total,
-              }]
-            : [],
-        };
-      } else if (departmentId) {
-        const dept = students[0]?.department ?? (await prisma.department.findUnique({
-          where: { id: Number(departmentId) },
-          select: { id: true, name: true, code: true },
-        }));
+              },
+            ]
+          : [],
+      };
+    } else if (departmentId || semester || year != null) {
+      const classWhere: Prisma.ClassWhereInput = { program };
+      if (departmentId) classWhere.departmentId = Number(departmentId);
+      if (semester) classWhere.semester = semester;
+      if (year != null) classWhere.year = year;
 
-        const classesInDept = await prisma.class.findMany({
-          where: { departmentId: Number(departmentId), program },
-          select: { id: true, name: true, semester: true, year: true },
-          orderBy: [{ year: "desc" }, { name: "asc" }],
-        });
+      const classesInScope = await prisma.class.findMany({
+        where: classWhere,
+        select: { id: true, name: true, semester: true, year: true },
+        orderBy: [{ year: "desc" }, { name: "asc" }],
+      });
 
-        const studentsForBreakdown = await prisma.student.findMany({
-          where: {
-            program,
-            departmentId: Number(departmentId),
-            ...(status && status !== "all" ? { status } : {}),
-            ...(gender && gender !== "all" && (gender === "Male" || gender === "Female")
-              ? { gender: { in: genderFilterValues(gender) } }
-              : {}),
-          },
-          select: { classId: true, gender: true },
-        });
-
-        const byClassId = new Map<number, { gender: string | null }[]>();
-        for (const s of studentsForBreakdown) {
-          if (s.classId == null) continue;
-          const list = byClassId.get(s.classId) ?? [];
-          list.push({ gender: s.gender });
-          byClassId.set(s.classId, list);
-        }
-
-        const byClass = classesInDept
-          .map((cls) => {
-            const classStudents = byClassId.get(cls.id) ?? [];
-            const counts = countByGender(classStudents);
-            return {
-              classId: cls.id,
-              className: cls.name,
-              semester: cls.semester,
-              year: cls.year,
-              Male: counts.Male,
-              Female: counts.Female,
-              Unspecified: counts.Unspecified,
-              total: counts.total,
-            };
-          })
-          .filter((row) => row.total > 0);
-
-        genderBreakdown = {
-          scope: "department",
-          department: dept ?? undefined,
-          byClass,
-        };
+      const byClassId = new Map<number, { gender: string | null }[]>();
+      for (const s of students) {
+        if (s.classId == null) continue;
+        const list = byClassId.get(s.classId) ?? [];
+        list.push({ gender: s.gender });
+        byClassId.set(s.classId, list);
       }
+
+      const byClass = classesInScope
+        .map((cls) => {
+          const classStudents = byClassId.get(cls.id) ?? [];
+          const counts = countByGender(classStudents);
+          return {
+            classId: cls.id,
+            className: cls.name,
+            semester: cls.semester,
+            year: cls.year,
+            Male: counts.Male,
+            Female: counts.Female,
+            Unspecified: counts.Unspecified,
+            total: counts.total,
+          };
+        })
+        .filter((row) => row.total > 0);
+
+      let department:
+        | { id: number; name: string; code: string }
+        | undefined;
+      if (departmentId) {
+        department =
+          students[0]?.department ??
+          ((await prisma.department.findUnique({
+            where: { id: Number(departmentId) },
+            select: { id: true, name: true, code: true },
+          })) ?? undefined);
+      }
+
+      genderBreakdown = {
+        scope: departmentId ? "department" : "semester",
+        department,
+        byClass,
+      };
     }
 
     return NextResponse.json({
@@ -183,6 +235,11 @@ export async function GET(req: NextRequest) {
         byGender,
       },
       genderBreakdown,
+      filters: {
+        program,
+        semester: semester || null,
+        year: year,
+      },
     });
   } catch (e) {
     console.error("Admission report error:", e);

@@ -14,7 +14,7 @@ import {
 } from "@/components/ui/table";
 import { usePagination } from "@/hooks/usePagination";
 import { authFetch } from "@/lib/api";
-import { DownloadIcon } from "@/icons";
+import { ReportExportButtons } from "@/components/reports/ReportExportButtons";
 import { ReportProgramFilter } from "@/components/reports/ReportProgramFilter";
 import { DEFAULT_PROGRAM, type Program } from "@/lib/program";
 import {
@@ -75,29 +75,21 @@ export default function TreasuryReportPage() {
   }, [data]);
 
   const handlePrint = () => window.print();
-  const handleExportCSV = () => {
-    if (!data) return;
-    const lines = [
-      ["Treasury Summary Report", ""],
-      ["Year", data.year],
-      ["Generated", data.generatedAt],
-      ["", ""],
-      ["Total Bank Balance", `$${data.totalBankBalance.toLocaleString()}`],
-      ["Total Receivables (Student Balance)", `$${data.totalReceivables.toLocaleString()}`],
-      ["Revenue (Payments This Year)", `$${data.revenue.totalPayments.toLocaleString()}`],
-      ["Payment Count", data.revenue.paymentCount],
-      ["Withdrawals This Year", `$${data.withdrawals.total.toLocaleString()}`],
-      ["Withdrawal Count", data.withdrawals.count],
-    ];
-    const csv = lines.map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(",")).join("\n");
-    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `Treasury_Summary_${data.year}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
-  };
+
+  const exportHeaders = ["Item", "Value"];
+  const exportRows = data
+    ? [
+        ["Treasury Summary Report", ""],
+        ["Year", data.year],
+        ["Generated", data.generatedAt],
+        ["Total Bank Balance", `$${data.totalBankBalance.toLocaleString()}`],
+        ["Total Receivables (Student Balance)", `$${data.totalReceivables.toLocaleString()}`],
+        ["Revenue (Payments This Year)", `$${data.revenue.totalPayments.toLocaleString()}`],
+        ["Payment Count", data.revenue.paymentCount],
+        ["Withdrawals This Year", `$${data.withdrawals.total.toLocaleString()}`],
+        ["Withdrawal Count", data.withdrawals.count],
+      ]
+    : [];
 
   return (
     <div className="report-print-area">
@@ -121,10 +113,15 @@ export default function TreasuryReportPage() {
           <Link href="/reports/payment">
             <Button variant="outline" size="sm">← All Reports</Button>
           </Link>
-          <Button variant="outline" size="sm" startIcon={<DownloadIcon />} onClick={handleExportCSV}>
-            Export CSV
-          </Button>
-          <Button size="sm" onClick={handlePrint}>Print</Button>
+          <ReportExportButtons
+            title="Treasury Summary Report"
+            filename={`Treasury_Summary_${year}`}
+            subtitle={`Year: ${year}`}
+            headers={exportHeaders}
+            rows={exportRows}
+            disabled={!data}
+            onPrint={handlePrint}
+          />
         </div>
       </div>
 

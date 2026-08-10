@@ -15,7 +15,7 @@ import {
 } from "@/components/ui/table";
 import { usePagination } from "@/hooks/usePagination";
 import { authFetch } from "@/lib/api";
-import { DownloadIcon } from "@/icons";
+import { ReportExportButtons } from "@/components/reports/ReportExportButtons";
 import { ReportProgramFilter } from "@/components/reports/ReportProgramFilter";
 import { DEFAULT_PROGRAM, type Program } from "@/lib/program";
 import {
@@ -75,19 +75,9 @@ export default function DailyRevenueReportPage() {
   }, [data]);
 
   const handlePrint = () => window.print();
-  const handleExportCSV = () => {
-    if (!data?.dailySummary.length) return;
-    const headers = ["Date", "Revenue", "Payment Count"];
-    const rows = data.dailySummary.map((d) => [d.date, d.total.toFixed(2), d.count]);
-    const csv = [headers.join(","), ...rows.map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(","))].join("\n");
-    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `Daily_Revenue_${dateFrom}_to_${dateTo}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
-  };
+
+  const exportHeaders = ["Date", "Revenue", "Payment Count"];
+  const exportRows = (data?.dailySummary ?? []).map((d) => [d.date, d.total.toFixed(2), d.count]);
 
   return (
     <div className="report-print-area">
@@ -119,10 +109,14 @@ export default function DailyRevenueReportPage() {
           <Link href="/reports/payment">
             <Button variant="outline" size="sm">← All Reports</Button>
           </Link>
-          <Button variant="outline" size="sm" startIcon={<DownloadIcon />} onClick={handleExportCSV}>
-            Export CSV
-          </Button>
-          <Button size="sm" onClick={handlePrint}>Print</Button>
+          <ReportExportButtons
+            title="Daily Revenue Report"
+            filename={`Daily_Revenue_${dateFrom}_to_${dateTo}`}
+            subtitle={`${dateFrom} to ${dateTo}`}
+            headers={exportHeaders}
+            rows={exportRows}
+            onPrint={handlePrint}
+          />
         </div>
       </div>
 

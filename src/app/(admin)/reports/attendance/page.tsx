@@ -3,10 +3,10 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import Image from "next/image";
 import PageBreadCrumb from "@/components/common/PageBreadCrumb";
-import Button from "@/components/ui/button/Button";
 import Badge from "@/components/ui/badge/Badge";
 import { authFetch } from "@/lib/api";
 import { TRANSCRIPT_BRAND } from "@/lib/transcript-brand";
+import { ReportExportButtons } from "@/components/reports/ReportExportButtons";
 import { ReportProgramFilter } from "@/components/reports/ReportProgramFilter";
 import { DEFAULT_PROGRAM, type Program } from "@/lib/program";
 
@@ -385,6 +385,66 @@ export default function AttendanceReportPage() {
 
   const handlePrint = () => window.print();
 
+  const { exportHeaders, exportRows, exportTitle, exportFilename } = useMemo(() => {
+    if (viewMode === "students") {
+      const showLate = studentAttendances.some((s) => s.late > 0);
+      const showExcused = studentAttendances.some((s) => s.excused > 0);
+      const headers = ["Student ID", "Full Name", "Present", "Absent"];
+      if (showLate) headers.push("Late");
+      if (showExcused) headers.push("Excused");
+      headers.push("Sessions", "Attendance %", "Marks");
+      const exportData = studentAttendances.map((s) => {
+        const row: (string | number)[] = [
+          s.studentIdStr,
+          `${s.firstName} ${s.lastName}`,
+          s.present,
+          s.absent,
+        ];
+        if (showLate) row.push(s.late);
+        if (showExcused) row.push(s.excused);
+        row.push(
+          s.totalSessions,
+          `${safeNumber(s.attendancePercent).toFixed(1)}%`,
+          safeNumber(s.attendanceMarks).toFixed(2)
+        );
+        return row;
+      });
+      return {
+        exportHeaders: headers,
+        exportRows: exportData,
+        exportTitle: "Student Attendance Report",
+        exportFilename: `Attendance_Students_${selectedClassInfo?.name || "class"}_${new Date().toISOString().slice(0, 10)}`,
+      };
+    }
+
+    const showLate = sessions.some((s) => s.late > 0);
+    const showExcused = sessions.some((s) => s.excused > 0);
+    const headers = ["Course Code", "Course Name", "Date", "Shift", "Present", "Absent"];
+    if (showLate) headers.push("Late");
+    if (showExcused) headers.push("Excused");
+    headers.push("Total", "Taken By");
+    const exportData = sessions.map((s) => {
+      const row: (string | number)[] = [
+        s.course?.code ?? "",
+        s.course?.name ?? "",
+        formatDateShort(s.date),
+        s.shift,
+        s.present,
+        s.absent,
+      ];
+      if (showLate) row.push(s.late);
+      if (showExcused) row.push(s.excused);
+      row.push(s.total, s.takenBy?.name ?? "—");
+      return row;
+    });
+    return {
+      exportHeaders: headers,
+      exportRows: exportData,
+      exportTitle: "Attendance Sessions Report",
+      exportFilename: `Attendance_Sessions_${selectedClassInfo?.name || "class"}_${new Date().toISOString().slice(0, 10)}`,
+    };
+  }, [viewMode, studentAttendances, sessions, selectedClassInfo?.name]);
+
   // ── Print header (shown only on print) ─────────────────────────────────────
   const PrintHeader = () => (
     <div className="hidden print:block mb-4">
@@ -455,9 +515,14 @@ export default function AttendanceReportPage() {
       {/* ── Toolbar (hidden on print) ── */}
       <div className="mb-6 flex flex-wrap items-center justify-between gap-4 no-print">
         <PageBreadCrumb pageTitle="Attendance Report" />
-        <Button size="sm" onClick={handlePrint}>
-          Print / Save PDF
-        </Button>
+        <ReportExportButtons
+          title={exportTitle}
+          filename={exportFilename}
+          subtitle={dateRangeText}
+          headers={exportHeaders}
+          rows={exportRows}
+          onPrint={handlePrint}
+        />
       </div>
 
       <div className="min-w-0 overflow-hidden rounded-2xl border border-gray-200 bg-white dark:border-gray-800 dark:bg-white/5">
