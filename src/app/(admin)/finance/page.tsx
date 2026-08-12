@@ -7,18 +7,19 @@ import Button from "@/components/ui/button/Button";
 import { DateInput } from "@/components/form/DateInput";
 import { authFetch } from "@/lib/api";
 import { perSemesterTuition, semesterAmountPaid } from "@/lib/tuition-amount";
-import { FINANCE_HEADS, emptyHeadAmounts, paymentIncludesSemesterFee, type FinanceHead } from "@/lib/finance-head";
+import { FINANCE_HEADS, financeHeadLabel, paymentIncludesSemesterFee, type FinanceHead } from "@/lib/finance-head";
 import { useAuth } from "@/context/AuthContext";
 import { useFormDraft } from "@/hooks/useFormDraft";
 import {
   AlertCircle,
   Banknote,
-  Calendar,
   CheckCircle2,
   CreditCard,
   FileText,
   Info,
   Search,
+  Plus,
+  Trash2,
   User,
   Wallet,
   X,
@@ -49,15 +50,12 @@ type SearchStudent = {
 
 const CURRENT_YEAR = new Date().getFullYear();
 
-const headCheckedInitial = Object.fromEntries(
-  FINANCE_HEADS.map((h) => [h.value, false])
-) as Record<FinanceHead, boolean>;
+type HeadRow = { id: string; financeHead: FinanceHead | ""; amount: string };
 
 type TuitionDraft = {
   searchQuery: string;
   selectedStudentId: string;
-  payHeadChecked: Record<FinanceHead, boolean>;
-  payHeadAmounts: Record<FinanceHead, string>;
+  payHeadRows: HeadRow[];
   payMethodId: string;
   payBankId: string;
   paySemester: string;
@@ -70,8 +68,7 @@ type TuitionDraft = {
 const tuitionDraftInitial: TuitionDraft = {
   searchQuery: "",
   selectedStudentId: "",
-  payHeadChecked: headCheckedInitial,
-  payHeadAmounts: emptyHeadAmounts(),
+  payHeadRows: [],
   payMethodId: "",
   payBankId: "",
   paySemester: "",
@@ -80,6 +77,10 @@ const tuitionDraftInitial: TuitionDraft = {
   paymentDate: new Date().toISOString().slice(0, 10),
   payNote: "",
 };
+
+function newHeadRow(): HeadRow {
+  return { id: `row-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, financeHead: "", amount: "" };
+}
 
 export default function FinancePage() {
   const { hasPermission } = useAuth();
@@ -94,7 +95,7 @@ export default function FinancePage() {
     clearDraft,
     discardDraft,
     hasDraft,
-  } = useFormDraft<TuitionDraft>("tuition-payment-v2", tuitionDraftInitial);
+  } = useFormDraft<TuitionDraft>("tuition-payment-v3", tuitionDraftInitial);
 
   const [searchResults, setSearchResults] = useState<SearchStudent[]>([]);
   const [searchLoading, setSearchLoading] = useState(false);
@@ -106,8 +107,7 @@ export default function FinancePage() {
   const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const searchQuery = draft.searchQuery;
-  const payHeadChecked = draft.payHeadChecked ?? headCheckedInitial;
-  const payHeadAmounts = draft.payHeadAmounts ?? emptyHeadAmounts();
+  const payHeadRows = draft.payHeadRows ?? [];
   const payMethodId = draft.payMethodId;
   const payBankId = draft.payBankId;
   const paySemester = draft.paySemester;
@@ -125,24 +125,24 @@ export default function FinancePage() {
   const setPaymentDate = (v: string) => setDraftField("paymentDate", v);
   const setPayNote = (v: string) => setDraftField("payNote", v);
 
-  const toggleHead = (head: FinanceHead, checked: boolean) => {
+  const addHeadRow = () => {
     setDraftAll((prev) => ({
       ...prev,
-      payHeadChecked: { ...prev.payHeadChecked, [head]: checked },
-      payHeadAmounts: checked
-        ? prev.payHeadAmounts
-        : { ...prev.payHeadAmounts, [head]: "" },
+      payHeadRows: [...(prev.payHeadRows ?? []), newHeadRow()],
     }));
   };
 
-  const setHeadAmount = (head: FinanceHead, amount: string) => {
+  const removeHeadRow = (id: string) => {
     setDraftAll((prev) => ({
       ...prev,
-      payHeadAmounts: { ...prev.payHeadAmounts, [head]: amount },
-      payHeadChecked: {
-        ...prev.payHeadChecked,
-        [head]: amount.trim() !== "" ? true : prev.payHeadChecked[head],
-      },
+      payHeadRows: (prev.payHeadRows ?? []).filter((r) => r.id !== id),
+    }));
+  };
+
+  const updateHeadRow = (id: string, patch: Partial<Pick<HeadRow, "financeHead" | "amount">>) => {
+    setDraftAll((prev) => ({
+      ...prev,
+      payHeadRows: (prev.payHeadRows ?? []).map((r) => (r.id === id ? { ...r, ...patch } : r)),
     }));
   };
 
@@ -241,31 +241,29 @@ export default function FinancePage() {
   const semesterPaid = semesterAmountPaid(semesterPayments);
   const remainingForSemester = Math.max(0, expectedFull - semesterPaid);
 
-  const allHeadLines = FINANCE_HEADS.map((h) => ({
-    financeHead: h.value,
-    label: h.label,
-    amount: Number(payHeadAmounts[h.value]) || 0,
-  }));
-  const activeLines = allHeadLines.filter((l) => l.amount > 0);
+  const usedHeads = new Set(
+    payHeadRows.map((r) => r.financeHead).filter((h): h is FinanceHead => Boolean(h))
+  );
+
+  const activeLines = payHeadRows
+    .filter((r) => r.financeHead && Number(r.amount) > 0)
+    .map((r) => ({
+      financeHead: r.financeHead as FinanceHead,
+      label: financeHeadLabel(r.financeHead),
+      amount: Number(r.amount),
+    }));
   const totalAmount = activeLines.reduce((sum, l) => sum + l.amount, 0);
   const includesSemesterFee = paymentIncludesSemesterFee(activeLines);
 
-  const applySemesterQuickAmount = (mode: "full" | "half") => {
+  const applySemesterQuickAmount = (rowId: string, mode: "full" | "half") => {
     const base = remainingForSemester > 0 ? remainingForSemester : expectedFull;
     const amt = mode === "half" ? base * 0.5 : base;
-    setDraftAll((prev) => ({
-      ...prev,
-      payHeadChecked: { ...prev.payHeadChecked, semester_fee: true },
-      payHeadAmounts: {
-        ...prev.payHeadAmounts,
-        semester_fee: String(amt),
-      },
-    }));
+    updateHeadRow(rowId, { financeHead: "semester_fee", amount: String(amt) });
   };
 
   useEffect(() => {
     setPayError("");
-  }, [selectedStudent, paySemester, payYear, payHeadChecked, payHeadAmounts]);
+  }, [selectedStudent, paySemester, payYear, payHeadRows]);
 
   const handleSelectStudent = (s: SearchStudent) => {
     setSelectedStudent(s);
@@ -301,13 +299,15 @@ export default function FinancePage() {
       return;
     }
     if (activeLines.length === 0) {
-      const checkedEmpty = FINANCE_HEADS.find(
-        (h) => payHeadChecked[h.value] && !(Number(payHeadAmounts[h.value]) > 0)
-      );
+      const incomplete = payHeadRows.find((r) => (r.financeHead && !(Number(r.amount) > 0)) || (!r.financeHead && r.amount.trim()));
       setPayError(
-        checkedEmpty
-          ? `Enter an amount for ${checkedEmpty.label}, or uncheck it`
-          : "Select at least one finance head and enter an amount"
+        incomplete
+          ? incomplete.financeHead
+            ? `Enter an amount for ${financeHeadLabel(incomplete.financeHead)}`
+            : "Select a finance head for each amount entered"
+          : payHeadRows.length === 0
+            ? "Add at least one finance head and amount"
+            : "Enter an amount for each finance head"
       );
       return;
     }
@@ -381,18 +381,15 @@ export default function FinancePage() {
   }
 
   const inputClass =
-    "h-11 w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm text-gray-800 shadow-sm outline-none transition-all placeholder:text-gray-400 focus:border-brand-400 focus:ring-2 focus:ring-brand-500/15 dark:border-gray-600 dark:bg-gray-900/80 dark:text-white dark:placeholder:text-gray-500 dark:focus:border-brand-500 dark:focus:ring-brand-500/20";
+    "h-9 w-full rounded-lg border border-gray-200 bg-white px-3 text-sm text-gray-800 outline-none transition-all placeholder:text-gray-400 focus:border-brand-400 focus:ring-2 focus:ring-brand-500/15 dark:border-gray-600 dark:bg-gray-900/80 dark:text-white dark:placeholder:text-gray-500 dark:focus:border-brand-500 dark:focus:ring-brand-500/20";
   const selectClass =
-    "h-11 w-full appearance-none rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm text-gray-800 shadow-sm outline-none transition-all focus:border-brand-400 focus:ring-2 focus:ring-brand-500/15 dark:border-gray-600 dark:bg-gray-900/80 dark:text-white dark:focus:border-brand-500 dark:focus:ring-brand-500/20";
+    "h-9 w-full appearance-none rounded-lg border border-gray-200 bg-white px-3 text-sm text-gray-800 outline-none transition-all focus:border-brand-400 focus:ring-2 focus:ring-brand-500/15 dark:border-gray-600 dark:bg-gray-900/80 dark:text-white dark:focus:border-brand-500 dark:focus:ring-brand-500/20";
+  const tableInputClass =
+    "h-8 w-full min-w-0 rounded-md border border-gray-200 bg-white px-2 text-sm tabular-nums text-gray-800 outline-none focus:border-brand-400 dark:border-gray-700 dark:bg-gray-900 dark:text-white";
 
   const studentInitials = selectedStudent
     ? `${selectedStudent.firstName?.[0] ?? ""}${selectedStudent.lastName?.[0] ?? ""}`.toUpperCase() || "?"
     : "";
-
-  const selectedMethod = methods.find((m) => String(m.id) === payMethodId) ?? null;
-  const selectedMethodBank = selectedMethod?.bank
-    ? banks.find((b) => b.id === selectedMethod.bank!.id) ?? null
-    : null;
 
   return (
     <div>
@@ -446,7 +443,7 @@ export default function FinancePage() {
         </nav>
       </div>
 
-      <div className="mx-auto min-w-0 max-w-3xl">
+      <div className="mx-auto min-w-0 max-w-lg">
         {hasDraft && !paySuccess && (
           <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950 dark:border-amber-900/40 dark:bg-amber-950/25 dark:text-amber-100">
             <span className="flex items-center gap-2">
@@ -465,7 +462,7 @@ export default function FinancePage() {
 
         <div className="overflow-hidden rounded-xl border border-gray-200/90 bg-white shadow-sm dark:border-gray-800 dark:bg-gray-950">
           <form onSubmit={handleRecordPayment} className="divide-y divide-gray-100 dark:divide-gray-800">
-            <div className="p-5 sm:p-6">
+            <div className="p-4">
               {payError && (
                 <div
                   role="alert"
@@ -570,103 +567,7 @@ export default function FinancePage() {
               )}
             </div>
 
-            <div className="p-5 sm:p-6">
-              <div className="flex flex-col gap-1 sm:flex-row sm:items-baseline sm:justify-between">
-                <h2 className="flex items-center gap-2 text-sm font-semibold text-gray-900 dark:text-white">
-                  <Banknote className="h-4 w-4 text-gray-500" strokeWidth={2} />
-                  Finance heads &amp; amounts
-                </h2>
-                <p className="text-2xl font-semibold tabular-nums text-gray-900 dark:text-white">
-                  ${totalAmount.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 })}
-                </p>
-              </div>
-              <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                Semester Fee is optional. Check only the fees being paid now — e.g. graduation or
-                re-exam only, without semester tuition. Only Semester Fee reduces the
-                student&apos;s tuition balance.
-              </p>
-
-              {selectedStudent && payHeadChecked.semester_fee && semesterPaid > 0 && remainingForSemester > 0 && (
-                <div className="mt-3 flex gap-2 rounded-lg border border-blue-200/90 bg-blue-50 px-3 py-2 text-xs text-blue-950 dark:border-blue-900/40 dark:bg-blue-950/25 dark:text-blue-100">
-                  <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-                  <span>
-                    ${semesterPaid.toLocaleString()} semester fee already paid for {paySemester}{" "}
-                    {payYear}. Remaining tuition: ${remainingForSemester.toLocaleString()}.
-                  </span>
-                </div>
-              )}
-
-              <div className="mt-4 space-y-2">
-                {FINANCE_HEADS.map((h) => (
-                  <div
-                    key={h.value}
-                    className={`flex flex-wrap items-center gap-3 rounded-lg border px-3 py-2.5 transition-colors ${
-                      payHeadChecked[h.value]
-                        ? "border-brand-300 bg-brand-50/40 dark:border-brand-800 dark:bg-brand-950/20"
-                        : "border-gray-200 dark:border-gray-800"
-                    }`}
-                  >
-                    <label className="flex min-w-[180px] flex-1 cursor-pointer items-center gap-2.5 text-sm text-gray-800 dark:text-gray-200">
-                      <input
-                        type="checkbox"
-                        checked={payHeadChecked[h.value]}
-                        onChange={(e) => toggleHead(h.value, e.target.checked)}
-                        className="h-4 w-4 rounded border-gray-300 text-brand-600 focus:ring-brand-500"
-                      />
-                      <span className="font-medium">{h.label}</span>
-                    </label>
-                    <div className="flex flex-wrap items-center gap-2">
-                      {h.value === "semester_fee" && payHeadChecked.semester_fee && selectedStudent && (
-                        <>
-                          <button
-                            type="button"
-                            onClick={() => applySemesterQuickAmount("full")}
-                            className="rounded-md border border-gray-200 px-2 py-1 text-xs font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-white/5"
-                          >
-                            {remainingForSemester > 0 && semesterPaid > 0 ? "Remaining" : "Full"}
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => applySemesterQuickAmount("half")}
-                            className="rounded-md border border-gray-200 px-2 py-1 text-xs font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-white/5"
-                          >
-                            Half
-                          </button>
-                        </>
-                      )}
-                      <input
-                        type="number"
-                        min="0"
-                        step="0.01"
-                        disabled={!payHeadChecked[h.value]}
-                        value={payHeadAmounts[h.value]}
-                        onChange={(e) => setHeadAmount(h.value, e.target.value)}
-                        placeholder="0.00"
-                        className="h-9 w-28 rounded-lg border border-gray-200 bg-white px-2.5 text-sm tabular-nums text-gray-800 outline-none focus:border-brand-400 disabled:cursor-not-allowed disabled:opacity-40 dark:border-gray-700 dark:bg-gray-900 dark:text-white"
-                      />
-                    </div>
-                  </div>
-                ))}
-              </div>
-
-              {activeLines.length > 0 && (
-                <div className="mt-4 rounded-lg border border-gray-200 bg-gray-50/80 px-3 py-2.5 text-sm dark:border-gray-800 dark:bg-white/3">
-                  <p className="text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400">
-                    Summary
-                  </p>
-                  <ul className="mt-1 space-y-0.5">
-                    {activeLines.map((l) => (
-                      <li key={l.financeHead} className="flex justify-between tabular-nums text-gray-700 dark:text-gray-300">
-                        <span>{l.label}</span>
-                        <span>${l.amount.toLocaleString()}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-            </div>
-
-            <div className="p-5 sm:p-6">
+            <div className="p-4">
               <h2 className="flex items-center gap-2 text-sm font-semibold text-gray-900 dark:text-white">
                 <Wallet className="h-4 w-4 text-gray-500" strokeWidth={2} />
                 Term
@@ -674,14 +575,9 @@ export default function FinancePage() {
                   <span className="text-xs font-normal text-gray-500 dark:text-gray-400">(optional)</span>
                 )}
               </h2>
-              <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                {includesSemesterFee
-                  ? "Required for Semester Fee — links the tuition payment to an academic term."
-                  : "Optional for other fees. Leave as-is to use the student's current class term, or pick a term for reporting."}
-              </p>
-              <div className="mt-4 grid gap-4 sm:grid-cols-3">
+              <div className="mt-3 grid gap-3 sm:grid-cols-3">
                 <div>
-                  <label className="mb-1.5 block text-sm text-gray-700 dark:text-gray-300">
+                  <label className="mb-1 block text-xs text-gray-600 dark:text-gray-400">
                     Semester{includesSemesterFee ? " *" : ""}
                   </label>
                   <select value={paySemester} onChange={(e) => setPaySemester(e.target.value)} className={selectClass}>
@@ -694,7 +590,7 @@ export default function FinancePage() {
                   </select>
                 </div>
                 <div>
-                  <label className="mb-1.5 block text-sm text-gray-700 dark:text-gray-300">
+                  <label className="mb-1 block text-xs text-gray-600 dark:text-gray-400">
                     Year{includesSemesterFee ? " *" : ""}
                   </label>
                   <input
@@ -707,8 +603,8 @@ export default function FinancePage() {
                 </div>
                 <DateInput
                   id="finance-payment-date"
-                  label={<span className="text-sm text-gray-700 dark:text-gray-300">Payment date</span>}
-                  labelClassName="mb-1.5 block"
+                  label={<span className="text-xs text-gray-600 dark:text-gray-400">Payment date</span>}
+                  labelClassName="mb-1 block"
                   value={paymentDate}
                   onChange={setPaymentDate}
                   inputClassName={inputClass}
@@ -716,119 +612,198 @@ export default function FinancePage() {
               </div>
             </div>
 
-            <div className="p-5 sm:p-6">
+            <div className="p-4">
               <h2 className="flex items-center gap-2 text-sm font-semibold text-gray-900 dark:text-white">
                 <CreditCard className="h-4 w-4 text-gray-500" strokeWidth={2} />
                 Payment method
               </h2>
-
-                {methods.length > 0 ? (
-                  <>
-                    <p className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
-                      Choose how the payment was received. The deposit is credited to the method&apos;s
-                      linked bank.
-                    </p>
-                    <div className="mt-3">
-                      <select
-                        value={payMethodId}
-                        onChange={(e) => {
-                          setPayMethodId(e.target.value);
-                          const m = methods.find((x) => String(x.id) === e.target.value);
-                          if (m?.bank) setPayBankId(String(m.bank.id));
-                        }}
-                        className={selectClass}
-                      >
-                        {methods.map((m) => (
-                          <option key={m.id} value={m.id}>
-                            {m.name}
-                            {m.bank ? ` — ${m.bank.code}` : ""}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                    {selectedMethod?.bank && (
-                      <div className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-gray-200 bg-gray-50/80 px-3 py-2.5 text-sm dark:border-gray-800 dark:bg-white/3">
-                        <span className="text-gray-600 dark:text-gray-300">
-                          Deposits to{" "}
-                          <span className="font-medium text-gray-900 dark:text-white">
-                            {selectedMethod.bank.code} — {selectedMethod.bank.name}
-                          </span>
-                        </span>
-                        {selectedMethodBank && (
-                          <span className="tabular-nums text-xs text-gray-500 dark:text-gray-400">
-                            Balance ${selectedMethodBank.balance.toLocaleString()}
-                          </span>
-                        )}
-                      </div>
-                    )}
-                  </>
-                ) : (
-                  <>
-                    <p className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
-                      No payment methods configured yet — select the bank account directly, or{" "}
-                      <Link
-                        href="/finance/payment-methods"
-                        className="font-medium text-brand-600 hover:underline dark:text-brand-400"
-                      >
-                        add payment methods
-                      </Link>
-                      .
-                    </p>
-                    <div className="mt-3 grid gap-2 sm:grid-cols-2">
-                      {banks.map((b) => (
-                        <label
-                          key={b.id}
-                          className={`cursor-pointer rounded-lg border px-3 py-3 text-sm transition-colors ${
-                            payBankId === String(b.id)
-                              ? "border-gray-900 bg-gray-900 text-white dark:border-white dark:bg-white dark:text-gray-900"
-                              : "border-gray-200 text-gray-800 hover:border-gray-300 dark:border-gray-700 dark:text-gray-200 dark:hover:border-gray-600"
-                          }`}
-                        >
-                          <input
-                            type="radio"
-                            name="payBankId"
-                            checked={payBankId === String(b.id)}
-                            onChange={() => setPayBankId(String(b.id))}
-                            className="sr-only"
-                          />
-                          <span className="block font-medium">{b.code} — {b.name}</span>
-                          <span className={`mt-0.5 block text-xs tabular-nums ${payBankId === String(b.id) ? "opacity-80" : "text-gray-500 dark:text-gray-400"}`}>
-                            Balance ${b.balance.toLocaleString()}
-                          </span>
-                        </label>
-                      ))}
-                    </div>
-                  </>
-                )}
-
-              <div className="mt-5">
-                <label className="mb-1.5 block text-sm text-gray-700 dark:text-gray-300">
+              {methods.length > 0 ? (
+                <div className="mt-3">
+                  <select
+                    value={payMethodId}
+                    onChange={(e) => {
+                      setPayMethodId(e.target.value);
+                      const m = methods.find((x) => String(x.id) === e.target.value);
+                      if (m?.bank) setPayBankId(String(m.bank.id));
+                    }}
+                    className={selectClass}
+                  >
+                    {methods.map((m) => (
+                      <option key={m.id} value={m.id}>
+                        {m.name}
+                        {m.bank ? ` — ${m.bank.code}` : ""}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              ) : (
+                <>
+                  <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
+                    <Link href="/finance/payment-methods" className="text-brand-600 hover:underline dark:text-brand-400">
+                      Add payment methods
+                    </Link>{" "}
+                    or select a bank:
+                  </p>
+                  <select
+                    value={payBankId}
+                    onChange={(e) => setPayBankId(e.target.value)}
+                    className={`${selectClass} mt-2`}
+                  >
+                    {banks.map((b) => (
+                      <option key={b.id} value={b.id}>
+                        {b.code} — {b.name}
+                      </option>
+                    ))}
+                  </select>
+                </>
+              )}
+              <div className="mt-3">
+                <label className="mb-1 block text-xs text-gray-600 dark:text-gray-400">
                   Receipt / reference # <span className="text-red-600 dark:text-red-400">*</span>
                 </label>
                 <input
                   type="text"
                   value={receiptNumber}
                   onChange={(e) => setReceiptNumber(e.target.value)}
-                  placeholder="Bank slip number, transfer reference, or mobile money ID"
+                  placeholder="Slip or transfer reference"
+                  className={inputClass}
+                />
+              </div>
+              <div className="mt-3">
+                <label className="mb-1 block text-xs text-gray-600 dark:text-gray-400">Staff note</label>
+                <input
+                  type="text"
+                  value={payNote}
+                  onChange={(e) => setPayNote(e.target.value)}
+                  placeholder="Optional"
                   className={inputClass}
                 />
               </div>
             </div>
 
-            <div className="p-5 sm:p-6">
-              <label className="flex items-center gap-2 text-sm font-medium text-gray-900 dark:text-white">
-                <FileText className="h-4 w-4 text-gray-500" strokeWidth={2} />
-                Staff note
-              </label>
-              <p className="text-xs text-gray-500 dark:text-gray-500">Optional. Not shown to students.</p>
-              <input
-                type="text"
-                value={payNote}
-                onChange={(e) => setPayNote(e.target.value)}
-                placeholder="e.g. Paid by guardian"
-                className={`${inputClass} mt-2`}
-              />
-              <div className="mt-6 flex flex-col-reverse items-stretch gap-3 sm:flex-row sm:items-center sm:justify-end">
+            <div className="p-4">
+              <div className="mb-3 flex items-center justify-between gap-2">
+                <h2 className="flex items-center gap-2 text-sm font-semibold text-gray-900 dark:text-white">
+                  <Banknote className="h-4 w-4 text-gray-500" strokeWidth={2} />
+                  Finance heads &amp; amounts
+                </h2>
+                <span className="text-sm font-semibold tabular-nums text-gray-900 dark:text-white">
+                  ${totalAmount.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 })}
+                </span>
+              </div>
+
+              {selectedStudent &&
+                payHeadRows.some((r) => r.financeHead === "semester_fee") &&
+                semesterPaid > 0 &&
+                remainingForSemester > 0 && (
+                  <div className="mb-3 flex gap-2 rounded-md border border-blue-200/90 bg-blue-50 px-2.5 py-2 text-xs text-blue-950 dark:border-blue-900/40 dark:bg-blue-950/25 dark:text-blue-100">
+                    <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                    <span>
+                      Remaining tuition for {paySemester} {payYear}: ${remainingForSemester.toLocaleString()}
+                    </span>
+                  </div>
+                )}
+
+              <div className="overflow-hidden rounded-lg border border-gray-200 dark:border-gray-800">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-gray-200 bg-gray-50 text-left text-xs font-medium text-gray-500 dark:border-gray-800 dark:bg-white/5 dark:text-gray-400">
+                      <th className="px-2 py-2">Finance head</th>
+                      <th className="px-2 py-2 w-28">Amount</th>
+                      <th className="w-8 px-1 py-2" aria-hidden />
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {payHeadRows.length === 0 ? (
+                      <tr>
+                        <td colSpan={3} className="px-2 py-4 text-center text-xs text-gray-500 dark:text-gray-400">
+                          No lines yet. Click Add new to record a fee.
+                        </td>
+                      </tr>
+                    ) : (
+                      payHeadRows.map((row) => (
+                        <tr key={row.id} className="border-b border-gray-100 last:border-0 dark:border-gray-800">
+                          <td className="px-2 py-1.5">
+                            <select
+                              value={row.financeHead}
+                              onChange={(e) =>
+                                updateHeadRow(row.id, {
+                                  financeHead: e.target.value as FinanceHead | "",
+                                })
+                              }
+                              className={tableInputClass}
+                            >
+                              <option value="">Select head</option>
+                              {FINANCE_HEADS.map((h) => (
+                                <option
+                                  key={h.value}
+                                  value={h.value}
+                                  disabled={usedHeads.has(h.value) && row.financeHead !== h.value}
+                                >
+                                  {h.label}
+                                </option>
+                              ))}
+                            </select>
+                            {row.financeHead === "semester_fee" && selectedStudent && (
+                              <div className="mt-1 flex gap-1">
+                                <button
+                                  type="button"
+                                  onClick={() => applySemesterQuickAmount(row.id, "full")}
+                                  className="rounded border border-gray-200 px-1.5 py-0.5 text-[10px] font-medium text-gray-600 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-400"
+                                >
+                                  {remainingForSemester > 0 && semesterPaid > 0 ? "Rem." : "Full"}
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => applySemesterQuickAmount(row.id, "half")}
+                                  className="rounded border border-gray-200 px-1.5 py-0.5 text-[10px] font-medium text-gray-600 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-400"
+                                >
+                                  Half
+                                </button>
+                              </div>
+                            )}
+                          </td>
+                          <td className="px-2 py-1.5">
+                            <input
+                              type="number"
+                              min="0"
+                              step="0.01"
+                              value={row.amount}
+                              onChange={(e) => updateHeadRow(row.id, { amount: e.target.value })}
+                              placeholder="0.00"
+                              className={tableInputClass}
+                            />
+                          </td>
+                          <td className="px-1 py-1.5 text-center">
+                            <button
+                              type="button"
+                              onClick={() => removeHeadRow(row.id)}
+                              className="inline-flex h-7 w-7 items-center justify-center rounded text-gray-400 hover:bg-red-50 hover:text-red-500 dark:hover:bg-red-950/30"
+                              aria-label="Remove row"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </button>
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="mt-3"
+                startIcon={<Plus className="h-3.5 w-3.5" />}
+                onClick={addHeadRow}
+                disabled={payHeadRows.length >= FINANCE_HEADS.length}
+              >
+                Add new
+              </Button>
+
+              <div className="mt-4 flex flex-col-reverse items-stretch gap-3 sm:flex-row sm:items-center sm:justify-end">
                 {!canRecordPayment ? (
                   <p className="text-center text-xs text-gray-500 sm:mr-auto sm:text-left dark:text-gray-400">
                     Needs <code className="rounded bg-gray-100 px-1 dark:bg-gray-800">finance.create</code> to submit.
@@ -843,7 +818,7 @@ export default function FinancePage() {
                     paySubmitting ||
                     !canRecordPayment
                   }
-                  className="rounded-lg px-8 py-2.5 text-sm font-semibold sm:min-w-44"
+                  className="rounded-lg px-6 py-2 text-sm font-semibold sm:min-w-36"
                 >
                   {paySubmitting ? "Saving…" : "Record payment"}
                 </Button>

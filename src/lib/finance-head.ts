@@ -15,6 +15,9 @@ export const FINANCE_HEADS = [
 
 export type FinanceHead = (typeof FINANCE_HEADS)[number]["value"];
 
+/** Finance heads shown on the Finance Head report (excludes Semester Fee / tuition). */
+export const FEE_FINANCE_HEADS = FINANCE_HEADS.filter((h) => h.value !== "semester_fee");
+
 export const DEFAULT_FINANCE_HEAD: FinanceHead = "semester_fee";
 
 const FINANCE_HEAD_VALUES = FINANCE_HEADS.map((h) => h.value) as readonly string[];
@@ -43,6 +46,11 @@ export function financeHeadLabel(value: string | null | undefined): string {
 /** Semester Fee is the only head that follows tuition rules and affects balance. */
 export function isTuitionHead(value: string | null | undefined): boolean {
   return parseFinanceHead(value) === "semester_fee";
+}
+
+/** True for heads included on the Finance Head report (non-tuition fees only). */
+export function isFeeFinanceHead(value: string | null | undefined): value is FinanceHead {
+  return isFinanceHead(value) && value !== "semester_fee";
 }
 
 /** True when an active payment line includes semester tuition. */

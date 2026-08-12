@@ -11,7 +11,7 @@ export const metadata: Metadata = {
 
 const paymentReportLinks = [
   { name: "Student Transactions", path: "/reports/student-transactions", icon: ListIcon, description: "Student payment status by department and class" },
-  { name: "Finance Head Report", path: "/reports/finance-heads", icon: DollarLineIcon, description: "Full breakdown of payments by finance head with filters and export" },
+  { name: "Finance Head Report", path: "/reports/finance-heads", icon: DollarLineIcon, description: "Re-exam, graduation, registration, and other non-tuition fees (excludes Semester Fee)" },
   { name: "Class Revenue", path: "/reports/class-revenue", icon: DollarLineIcon, description: "Class revenue with paid and unpaid counts" },
   { name: "Unpaid Students", path: "/reports/unpaid-students", icon: DollarLineIcon, description: "Tuition-paying students not fully paid for a semester and class" },
   { name: "Paid Students", path: "/reports/paid-students", icon: DollarLineIcon, description: "Tuition-paying students fully paid for a semester and class" },

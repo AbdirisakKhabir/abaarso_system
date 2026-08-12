@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import type { Prisma } from "@prisma/client";
 import { getAuthUser } from "@/lib/auth";
-import { FINANCE_HEADS, financeHeadLabel, isFinanceHead } from "@/lib/finance-head";
+import { FEE_FINANCE_HEADS, financeHeadLabel, isFeeFinanceHead, isFinanceHead } from "@/lib/finance-head";
 import { prisma } from "@/lib/prisma";
 import { parseProgram } from "@/lib/program";
 
@@ -70,7 +70,15 @@ export async function GET(req: NextRequest) {
       if (Number.isInteger(bid) && bid > 0) where.bankId = bid;
     }
     if (financeHead && isFinanceHead(financeHead)) {
+      if (financeHead === "semester_fee") {
+        return NextResponse.json(
+          { error: "Semester Fee is not included in the Finance Head report. Use tuition payment reports instead." },
+          { status: 400 }
+        );
+      }
       where.financeHead = financeHead;
+    } else {
+      where.financeHead = { not: "semester_fee" };
     }
 
     if (dateFrom || dateTo) {
@@ -122,18 +130,19 @@ export async function GET(req: NextRequest) {
     });
 
     const byHeadMap = new Map<string, { total: number; count: number }>();
-    for (const h of FINANCE_HEADS) {
+    for (const h of FEE_FINANCE_HEADS) {
       byHeadMap.set(h.value, { total: 0, count: 0 });
     }
     for (const p of payments) {
-      const key = isFinanceHead(p.financeHead) ? p.financeHead : "semester_fee";
+      if (!isFeeFinanceHead(p.financeHead)) continue;
+      const key = p.financeHead;
       const row = byHeadMap.get(key) ?? { total: 0, count: 0 };
       row.total += p.amount ?? 0;
       row.count += 1;
       byHeadMap.set(key, row);
     }
 
-    const byHead = FINANCE_HEADS.map((h) => ({
+    const byHead = FEE_FINANCE_HEADS.map((h) => ({
       financeHead: h.value,
       label: h.label,
       total: byHeadMap.get(h.value)?.total ?? 0,

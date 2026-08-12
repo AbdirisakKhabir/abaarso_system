@@ -15,7 +15,7 @@ import {
 } from "@/components/ui/table";
 import { usePagination } from "@/hooks/usePagination";
 import { authFetch } from "@/lib/api";
-import { FINANCE_HEADS, financeHeadLabel } from "@/lib/finance-head";
+import { FEE_FINANCE_HEADS, financeHeadLabel } from "@/lib/finance-head";
 import { DEFAULT_PROGRAM, type Program } from "@/lib/program";
 import { ReportExportButtons } from "@/components/reports/ReportExportButtons";
 import { ReportProgramFilter } from "@/components/reports/ReportProgramFilter";
@@ -265,7 +265,13 @@ export default function FinanceHeadReportPage() {
       <div className="mb-4 print:block hidden">
         <h1 className="text-xl font-bold text-gray-900">Finance Head Report</h1>
         <p className="text-sm text-gray-600">{filterSubtitle}</p>
+        <p className="text-xs text-gray-500">Excludes Semester Fee (tuition). Use Student Transactions or Class Revenue for tuition.</p>
       </div>
+
+      <p className="no-print mb-4 text-sm text-gray-600 dark:text-gray-400">
+        Fee collections by finance head — re-exam, graduation, registration, and other non-tuition fees.
+        Semester Fee (tuition) is tracked separately.
+      </p>
 
       <div className="no-print mb-6 rounded-2xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-white/5">
         <div className="mb-3">
@@ -286,7 +292,7 @@ export default function FinanceHeadReportPage() {
             <label className="mb-1 block text-xs font-medium text-gray-500">Finance head</label>
             <select value={filterHead} onChange={(e) => setFilterHead(e.target.value)} className={selectClassName}>
               <option value="">All heads</option>
-              {FINANCE_HEADS.map((h) => (
+              {FEE_FINANCE_HEADS.map((h) => (
                 <option key={h.value} value={h.value}>
                   {h.label}
                 </option>
@@ -389,7 +395,7 @@ export default function FinanceHeadReportPage() {
           <>
             <div className="grid gap-4 border-b border-gray-200 p-6 sm:grid-cols-3 dark:border-gray-800">
               <div className="rounded-xl border border-gray-100 bg-gray-50/80 p-4 dark:border-gray-800 dark:bg-white/3">
-                <p className="text-xs font-medium uppercase tracking-wide text-gray-500">Total collected</p>
+                <p className="text-xs font-medium uppercase tracking-wide text-gray-500">Total fees collected</p>
                 <p className="mt-1 text-2xl font-bold text-green-600 dark:text-green-400">
                   ${summary.totalAmount.toLocaleString()}
                 </p>
@@ -408,12 +414,12 @@ export default function FinanceHeadReportPage() {
               <div className="border-b border-gray-200 px-6 py-6 dark:border-gray-800">
                 <FinanceReportChartGrid>
                   <FinanceReportDonut
-                    title="Revenue by finance head"
+                    title="Revenue by fee type"
                     labels={chartData.categories}
                     series={chartData.values}
                   />
                   <FinanceReportBar
-                    title="Amount by finance head"
+                    title="Amount by fee type"
                     categories={chartData.categories}
                     data={chartData.values}
                     color="#2563eb"
@@ -465,7 +471,7 @@ export default function FinanceHeadReportPage() {
             <div className="border-b border-gray-200 px-6 py-4 dark:border-gray-800">
               <h3 className="text-sm font-semibold text-gray-900 dark:text-white">Payment details</h3>
               <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                All recorded payments for the selected filters (up to 5,000 rows).
+                Non-tuition fee payments for the selected filters (up to 5,000 rows). Semester Fee is excluded.
               </p>
             </div>
             <div className="overflow-x-auto">
