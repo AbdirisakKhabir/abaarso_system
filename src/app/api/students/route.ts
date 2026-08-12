@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { parsePaginationParams } from "@/lib/pagination";
 import { perSemesterTuition } from "@/lib/tuition-amount";
 import { DEFAULT_PROGRAM, parseProgram } from "@/lib/program";
+import { recordEnrollmentForClass } from "@/lib/enrollment";
 
 // Generate a unique student ID like STD-2026-0001
 async function generateStudentId(): Promise<string> {
@@ -309,6 +310,8 @@ export async function POST(req: NextRequest) {
         },
       },
     });
+
+    await recordEnrollmentForClass(prisma, student.id, student.classId);
 
     return NextResponse.json(student);
   } catch (e: unknown) {

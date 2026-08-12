@@ -43,9 +43,13 @@ type PaidStudentRow = {
   department: { name: string; code: string; tuitionFee: number | null };
   className?: string | null;
   paymentStatus?: string;
+  completion?: "paid" | "partial" | "nonpaid" | "na";
   amountPaid?: number;
   amountExpected?: number;
+  amountDue?: number;
 };
+
+type CompletionFilter = "paid" | "partial";
 
 const CURRENT_YEAR = new Date().getFullYear();
 const YEAR_OPTIONS = Array.from({ length: 14 }, (_, i) => CURRENT_YEAR + 1 - i);
@@ -60,6 +64,7 @@ export default function PaidStudentsReportPage() {
   const [filterDeptId, setFilterDeptId] = useState<string>("all");
   const [paidClassId, setPaidClassId] = useState("");
   const [paymentStatusFilter, setPaymentStatusFilter] = useState<string>("all");
+  const [completion, setCompletion] = useState<CompletionFilter>("paid");
   const [paidStudents, setPaidStudents] = useState<PaidStudentRow[]>([]);
   const [reportScope, setReportScope] = useState<"class" | "department">("class");
   const [paidClassInfo, setPaidClassInfo] = useState<{
@@ -72,11 +77,17 @@ export default function PaidStudentsReportPage() {
   const [reportSummary, setReportSummary] = useState<{
     studentsInScope: number;
     paid: number;
-    unpaid: number;
+    partial: number;
+    nonpaid: number;
     excludedByStudentType: number;
     source?: string;
   } | null>(null);
   const [loading, setLoading] = useState(false);
+
+  const isPartial = completion === "partial";
+  const reportTitle = isPartial
+    ? "Partially Paid Students Report"
+    : "Paid Students Report";
 
   useEffect(() => {
     authFetch(`/api/semesters?active=true&program=${encodeURIComponent(program)}`).then((r) => {
@@ -137,6 +148,7 @@ export default function PaidStudentsReportPage() {
       });
       if (filterDeptId !== "all") params.set("departmentId", filterDeptId);
       params.set("paymentStatusFilter", paymentStatusFilter);
+      params.set("completion", completion);
       const res = await authFetch(`/api/finance/paid-students?${params}`);
       const data = await res.json();
       if (!res.ok) {
@@ -172,7 +184,7 @@ export default function PaidStudentsReportPage() {
     total: paidStudentsTotal,
     from,
     to,
-  } = usePagination(paidStudents, [paidSemester, paidYear, paidClassId, filterDeptId, paidStudents]);
+  } = usePagination(paidStudents, [paidSemester, paidYear, paidClassId, filterDeptId, completion, paidStudents]);
 
   const showClassColumn = reportScope === "department";
 
@@ -200,6 +212,8 @@ export default function PaidStudentsReportPage() {
 
   const totalCollected = paidStudents.reduce((s, t) => s + (t.amountPaid ?? 0), 0);
 
+  const totalBalance = paidStudents.reduce((s, t) => s + (t.amountDue ?? 0), 0);
+
   const exportHeaders = [
     "Student ID",
     "First Name",
@@ -210,6 +224,7 @@ export default function PaidStudentsReportPage() {
     "Payment Status",
     "Expected",
     "Paid",
+    "Balance",
   ];
   const exportRows = paidStudents.map((s) => [
     s.studentId,
@@ -221,20 +236,32 @@ export default function PaidStudentsReportPage() {
     s.paymentStatus || "Fully Paid",
     s.amountExpected != null ? String(s.amountExpected) : "",
     s.amountPaid != null ? String(s.amountPaid) : "",
+    s.amountDue != null ? String(s.amountDue) : "",
   ]);
   const totalExpected = paidStudents.reduce((s, t) => s + (t.amountExpected ?? 0), 0);
   const exportFooterRows = [
-    ["", "", "", "", "", "", "TOTAL", totalExpected.toFixed(2), totalCollected.toFixed(2)],
+    [
+      "",
+      "",
+      "",
+      "",
+      "",
+      "",
+      "TOTAL",
+      totalExpected.toFixed(2),
+      totalCollected.toFixed(2),
+      totalBalance.toFixed(2),
+    ],
   ];
 
   return (
     <div>
       <div className="mb-6 flex flex-wrap items-center justify-between gap-4 no-print">
-        <PageBreadCrumb pageTitle="Paid Students Report" />
+        <PageBreadCrumb pageTitle={reportTitle} />
         {(paidClassInfo || paidDeptInfo) && (
           <ReportExportButtons
-            title="Paid Students Report"
-            filename={`Paid_Students_${paidClassInfo?.department?.code || paidDeptInfo?.code || "class"}_${paidSemester}_${paidYear}`}
+            title={reportTitle}
+            filename={`${isPartial ? "Partially_Paid" : "Paid"}_Students_${paidClassInfo?.department?.code || paidDeptInfo?.code || "class"}_${paidSemester}_${paidYear}`}
             subtitle={
               paidClassInfo
                 ? `${paidClassInfo.department.code} - ${paidClassInfo.name} (${paidClassInfo.semester} ${paidClassInfo.year})`
@@ -251,12 +278,12 @@ export default function PaidStudentsReportPage() {
 
       <div className="min-w-0 overflow-hidden rounded-2xl border border-gray-200 bg-white p-6 dark:border-gray-800 dark:bg-white/5">
         <h3 className="mb-4 text-lg font-semibold text-gray-800 dark:text-white/90">
-          Paid Students by Semester &amp; Class
+          {isPartial ? "Partially Paid" : "Paid"} Students by Semester &amp; Class
         </h3>
         <p className="mb-6 text-sm text-gray-500 dark:text-gray-400">
-          Select semester, year, department, and class. Uses tuition payments for that term, so it
-          still works after the class was upgraded to a newer semester. Scholarship students are on
-          a separate report.
+          Select semester, year, department, and class. &ldquo;Completed payment&rdquo; lists
+          students who paid the full term fee; &ldquo;Partially paid&rdquo; lists students who paid
+          some but not all. Students who paid nothing are on the Non Paid Students report.
         </p>
         <div className="no-print mb-6 flex flex-wrap items-end gap-4">
           <div>
@@ -330,6 +357,19 @@ export default function PaidStudentsReportPage() {
           </div>
           <div>
             <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">
+              Payment
+            </label>
+            <select
+              value={completion}
+              onChange={(e) => setCompletion(e.target.value as CompletionFilter)}
+              className="h-10 w-full min-w-0 sm:w-auto sm:min-w-[170px] rounded-lg border border-gray-200 bg-transparent px-3 text-sm text-gray-800 outline-none focus:border-brand-300 dark:border-gray-700 dark:text-white dark:focus:border-brand-500/40"
+            >
+              <option value="paid">Completed payment</option>
+              <option value="partial">Partially paid</option>
+            </select>
+          </div>
+          <div>
+            <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">
               Student type
             </label>
             <select
@@ -368,7 +408,7 @@ export default function PaidStudentsReportPage() {
         {(paidClassInfo || paidDeptInfo) && (
           <>
             <div className="mb-4 hidden print:mb-2 print:block">
-              <h1 className="text-xl font-bold text-gray-900">Paid Students Report</h1>
+              <h1 className="text-xl font-bold text-gray-900">{reportTitle}</h1>
               <p className="text-sm text-gray-600">
                 {paidClassInfo
                   ? `${paidClassInfo.department.code} - ${paidClassInfo.name} (${paidClassInfo.semester} ${paidClassInfo.year})`
@@ -380,20 +420,24 @@ export default function PaidStudentsReportPage() {
             {paidStudents.length === 0 ? (
               <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-8 text-center dark:border-gray-700 dark:bg-white/5">
                 <p className="text-sm font-medium text-gray-600 dark:text-gray-400">
-                  {paidClassInfo
-                    ? `No students in this class are recorded as paid up for ${paidClassInfo.semester} ${paidClassInfo.year} (or the class has no admitted students).`
-                    : `No students in this department are recorded as paid up for ${paidSemester} ${paidYear}.`}
+                  {isPartial
+                    ? paidClassInfo
+                      ? `No partially paid students in this class for ${paidClassInfo.semester} ${paidClassInfo.year}.`
+                      : `No partially paid students in this department for ${paidSemester} ${paidYear}.`
+                    : paidClassInfo
+                      ? `No students in this class completed payment for ${paidClassInfo.semester} ${paidClassInfo.year} (or the class has no admitted students).`
+                      : `No students in this department completed payment for ${paidSemester} ${paidYear}.`}
                 </p>
                 {reportSummary && reportSummary.studentsInScope > 0 && (
                   <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
                     {reportSummary.studentsInScope} student(s) in scope
-                    {reportSummary.unpaid > 0
-                      ? ` · ${reportSummary.unpaid} still owe for this term`
-                      : ""}
+                    {` · ${reportSummary.paid} completed`}
+                    {` · ${reportSummary.partial} partially paid`}
+                    {` · ${reportSummary.nonpaid} non paid`}
                     {reportSummary.excludedByStudentType > 0
                       ? ` · ${reportSummary.excludedByStudentType} excluded by student type filter`
                       : ""}
-                    . Check Unpaid Students, or set Student type to “Fully paid + half scholarship”.
+                    . Non-paid students are on the Non Paid Students report.
                   </p>
                 )}
                 {reportSummary && reportSummary.studentsInScope === 0 && (
@@ -407,10 +451,18 @@ export default function PaidStudentsReportPage() {
             ) : (
               <>
                 <p className="mb-4 text-sm text-gray-600 dark:text-gray-400">
-                  {paidStudents.length} students · Total collected{" "}
+                  {paidStudents.length} {isPartial ? "partially paid " : ""}students · Total collected{" "}
                   <span className="font-semibold tabular-nums text-gray-900 dark:text-white">
                     ${totalCollected.toLocaleString()}
                   </span>
+                  {isPartial && (
+                    <>
+                      {" "}· Outstanding balance{" "}
+                      <span className="font-semibold tabular-nums text-amber-600 dark:text-amber-400">
+                        ${totalBalance.toLocaleString()}
+                      </span>
+                    </>
+                  )}
                 </p>
                 {paidByDept.categories.length > 0 && (
                   <FinanceReportChartGrid>
@@ -443,6 +495,7 @@ export default function PaidStudentsReportPage() {
                         <TableCell isHeader>Payment</TableCell>
                         <TableCell isHeader className="text-right">Expected</TableCell>
                         <TableCell isHeader className="text-right">Paid</TableCell>
+                        <TableCell isHeader className="text-right">Balance</TableCell>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -477,14 +530,20 @@ export default function PaidStudentsReportPage() {
                           <TableCell className="text-right font-medium tabular-nums text-green-600 dark:text-green-400">
                             {s.amountPaid != null ? `$${Number(s.amountPaid).toLocaleString()}` : "—"}
                           </TableCell>
+                          <TableCell className="text-right tabular-nums text-amber-600 dark:text-amber-400">
+                            {s.amountDue != null ? `$${Number(s.amountDue).toLocaleString()}` : "—"}
+                          </TableCell>
                         </TableRow>
                       ))}
                       <TableRow className="bg-gray-50 font-semibold dark:bg-gray-800/50">
                         <TableCell colSpan={showClassColumn ? 8 : 7} className="text-right">
-                          Total collected
+                          Total
                         </TableCell>
                         <TableCell className="text-right font-bold text-green-600 dark:text-green-400">
                           ${totalCollected.toLocaleString()}
+                        </TableCell>
+                        <TableCell className="text-right font-bold text-amber-600 dark:text-amber-400">
+                          ${totalBalance.toLocaleString()}
                         </TableCell>
                       </TableRow>
                     </TableBody>

@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { DEFAULT_PROGRAM, parseProgram, type Program } from "@/lib/program";
+import { findEnrolledStudentIdsForTerm } from "@/lib/enrollment";
 
 type ClassWithDept = {
   id: number;
@@ -235,14 +236,14 @@ export async function findStudentsForFinanceTermReport(
     class: { id: number; name: string; department: { code: string } } | null;
     tuitionPayments: { id: number; amount: number; semester: string; year: number }[];
   }>;
-  source: "term_payments" | "class_enrollment" | "mixed" | "none";
+  source: "enrollment_history" | "term_payments" | "class_enrollment" | "mixed" | "none";
 }> {
   const departmentId =
     resolved.scope.mode === "class"
       ? resolved.scope.class.department.id
       : resolved.scope.department.id;
 
-  const [yearPayments, enrolled] = await Promise.all([
+  const [yearPayments, enrolled, historyIds] = await Promise.all([
     prisma.tuitionPayment.findMany({
       where: {
         year,
@@ -260,6 +261,14 @@ export async function findStudentsForFinanceTermReport(
       },
       select: { id: true },
     }),
+    // Enrollment history is the authoritative cohort after class upgrades.
+    findEnrolledStudentIdsForTerm({
+      mode: resolved.scope.mode,
+      classIds: resolved.classIds,
+      departmentId,
+      semester,
+      year,
+    }),
   ]);
 
   const paymentStudentIds = new Set<number>();
@@ -270,7 +279,9 @@ export async function findStudentsForFinanceTermReport(
   }
 
   const enrolledIds = new Set(enrolled.map((s) => s.id));
-  const allIds = [...new Set([...paymentStudentIds, ...enrolledIds])];
+  const allIds = [
+    ...new Set([...historyIds, ...paymentStudentIds, ...enrolledIds]),
+  ];
 
   if (allIds.length === 0) {
     return { students: [], source: "none" };
@@ -289,11 +300,13 @@ export async function findStudentsForFinanceTermReport(
   });
 
   const source =
-    paymentStudentIds.size > 0 && enrolledIds.size > 0
-      ? ("mixed" as const)
-      : paymentStudentIds.size > 0
-        ? ("term_payments" as const)
-        : ("class_enrollment" as const);
+    historyIds.size > 0
+      ? ("enrollment_history" as const)
+      : paymentStudentIds.size > 0 && enrolledIds.size > 0
+        ? ("mixed" as const)
+        : paymentStudentIds.size > 0
+          ? ("term_payments" as const)
+          : ("class_enrollment" as const);
 
   return { students, source };
 }

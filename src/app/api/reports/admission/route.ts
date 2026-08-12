@@ -23,6 +23,16 @@ function countByGender(students: { gender: string | null }[]): GenderCounts {
   return counts;
 }
 
+const EMPTY_RESPONSE = {
+  students: [],
+  summary: {
+    total: 0,
+    byStatus: {} as Record<string, number>,
+    byGender: { Male: 0, Female: 0, Unspecified: 0, total: 0 },
+  },
+  genderBreakdown: null,
+};
+
 export async function GET(req: NextRequest) {
   try {
     const auth = await getAuthUser(req);
@@ -44,82 +54,97 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: "Invalid year" }, { status: 400 });
     }
 
-    const where: Prisma.StudentWhereInput = { program };
-
-    if (departmentId) {
-      where.departmentId = Number(departmentId);
+    // Shared student-level filters (program/status/gender + department).
+    const baseWhere: Prisma.StudentWhereInput = { program };
+    if (departmentId) baseWhere.departmentId = Number(departmentId);
+    if (status && status !== "all") baseWhere.status = status;
+    if (gender && gender !== "all" && (gender === "Male" || gender === "Female")) {
+      baseWhere.gender = { in: genderFilterValues(gender) };
     }
 
-    if (classId) {
-      where.classId = Number(classId);
-    } else if (semester || year != null) {
-      // University-wide (or department) students whose current class matches term
-      const classFilter: Prisma.ClassWhereInput = { program };
-      if (semester) classFilter.semester = semester;
-      if (year != null) classFilter.year = year;
-      if (departmentId) classFilter.departmentId = Number(departmentId);
-      where.class = { is: classFilter };
-    }
+    const termScoped = Boolean(classId || semester || year != null);
 
-    if (status && status !== "all") {
-      where.status = status;
-    }
+    const studentInclude = {
+      department: { select: { id: true, name: true, code: true } },
+      class: { select: { id: true, name: true, semester: true, year: true } },
+    } as const;
 
-    if (gender && gender !== "all") {
-      if (gender === "Male" || gender === "Female") {
-        where.gender = { in: genderFilterValues(gender) };
-      }
-    }
+    type LoadedStudent = Prisma.StudentGetPayload<{ include: typeof studentInclude }>;
 
-    // If classId + semester/year are both set, ensure the class matches the term
-    if (classId && (semester || year != null)) {
-      const cls = await prisma.class.findUnique({
-        where: { id: Number(classId) },
-        select: { semester: true, year: true, program: true },
+    let students: LoadedStudent[];
+    // For term-scoped reports, the class shown/grouped is the historical class
+    // for that term (enrollment history), not the student's current class.
+    let termClassByStudent = new Map<number, { id: number; name: string; semester: string; year: number }>();
+
+    if (!termScoped) {
+      students = await prisma.student.findMany({
+        where: baseWhere,
+        include: studentInclude,
+        orderBy: [{ admissionDate: "desc" }, { createdAt: "desc" }],
       });
-      if (!cls || cls.program !== program) {
-        return NextResponse.json({
-          students: [],
-          summary: {
-            total: 0,
-            byStatus: {},
-            byGender: { Male: 0, Female: 0, Unspecified: 0, total: 0 },
-          },
-          genderBreakdown: null,
-        });
-      }
-      if (semester && cls.semester !== semester) {
-        return NextResponse.json({
-          students: [],
-          summary: {
-            total: 0,
-            byStatus: {},
-            byGender: { Male: 0, Female: 0, Unspecified: 0, total: 0 },
-          },
-          genderBreakdown: null,
-        });
-      }
-      if (year != null && cls.year !== year) {
-        return NextResponse.json({
-          students: [],
-          summary: {
-            total: 0,
-            byStatus: {},
-            byGender: { Male: 0, Female: 0, Unspecified: 0, total: 0 },
-          },
-          genderBreakdown: null,
-        });
-      }
-    }
+    } else {
+      // Resolve the classes that belong to the selected term.
+      const classWhere: Prisma.ClassWhereInput = { program };
+      if (departmentId) classWhere.departmentId = Number(departmentId);
+      if (semester) classWhere.semester = semester;
+      if (year != null) classWhere.year = year;
+      if (classId) classWhere.id = Number(classId);
 
-    const students = await prisma.student.findMany({
-      where,
-      include: {
-        department: { select: { id: true, name: true, code: true } },
-        class: { select: { id: true, name: true, semester: true, year: true } },
-      },
-      orderBy: [{ admissionDate: "desc" }, { createdAt: "desc" }],
-    });
+      const termClasses = await prisma.class.findMany({
+        where: classWhere,
+        select: { id: true, name: true, semester: true, year: true },
+      });
+
+      if (termClasses.length === 0) {
+        return NextResponse.json(EMPTY_RESPONSE);
+      }
+
+      const classMeta = new Map(termClasses.map((c) => [c.id, c]));
+      const termClassIds = termClasses.map((c) => c.id);
+
+      // Cohort = students enrolled in these classes historically (upgrade-safe)
+      // plus students currently in these classes (fallback before backfill).
+      const [enrollmentRows, currentRows] = await Promise.all([
+        prisma.studentEnrollment.findMany({
+          where: { classId: { in: termClassIds } },
+          select: { studentId: true, classId: true },
+        }),
+        prisma.student.findMany({
+          where: { ...baseWhere, classId: { in: termClassIds } },
+          select: { id: true, classId: true },
+        }),
+      ]);
+
+      const cohortIds = new Set<number>();
+      for (const r of enrollmentRows) {
+        cohortIds.add(r.studentId);
+        if (r.classId != null && classMeta.has(r.classId)) {
+          termClassByStudent.set(r.studentId, classMeta.get(r.classId)!);
+        }
+      }
+      for (const r of currentRows) {
+        cohortIds.add(r.id);
+        if (r.classId != null && classMeta.has(r.classId) && !termClassByStudent.has(r.id)) {
+          termClassByStudent.set(r.id, classMeta.get(r.classId)!);
+        }
+      }
+
+      if (cohortIds.size === 0) {
+        return NextResponse.json(EMPTY_RESPONSE);
+      }
+
+      students = await prisma.student.findMany({
+        where: { ...baseWhere, id: { in: [...cohortIds] } },
+        include: studentInclude,
+        orderBy: [{ admissionDate: "desc" }, { createdAt: "desc" }],
+      });
+
+      // Show the historical term class instead of the current class.
+      students = students.map((s) => {
+        const termClass = termClassByStudent.get(s.id);
+        return termClass ? { ...s, class: termClass } : s;
+      });
+    }
 
     const byStatus = students.reduce(
       (acc, s) => {
@@ -183,12 +208,14 @@ export async function GET(req: NextRequest) {
         orderBy: [{ year: "desc" }, { name: "asc" }],
       });
 
+      // Group by the historical term class (falls back to current class).
       const byClassId = new Map<number, { gender: string | null }[]>();
       for (const s of students) {
-        if (s.classId == null) continue;
-        const list = byClassId.get(s.classId) ?? [];
+        const groupClassId = termClassByStudent.get(s.id)?.id ?? s.classId;
+        if (groupClassId == null) continue;
+        const list = byClassId.get(groupClassId) ?? [];
         list.push({ gender: s.gender });
-        byClassId.set(s.classId, list);
+        byClassId.set(groupClassId, list);
       }
 
       const byClass = classesInScope
@@ -208,9 +235,7 @@ export async function GET(req: NextRequest) {
         })
         .filter((row) => row.total > 0);
 
-      let department:
-        | { id: number; name: string; code: string }
-        | undefined;
+      let department: { id: number; name: string; code: string } | undefined;
       if (departmentId) {
         department =
           students[0]?.department ??
@@ -238,7 +263,7 @@ export async function GET(req: NextRequest) {
       filters: {
         program,
         semester: semester || null,
-        year: year,
+        year,
       },
     });
   } catch (e) {

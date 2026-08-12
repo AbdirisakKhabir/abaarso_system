@@ -3,11 +3,12 @@ import { getAuthUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import {
   classifyStudentTermPayment,
-  computeTermTuition,
+  filterTermPayments,
   semesterAmountPaid,
   type StudentPaymentStatusFilter,
 } from "@/lib/tuition-amount";
 import { parseProgram } from "@/lib/program";
+import { findEnrollmentStudentIdsByClass } from "@/lib/enrollment";
 
 export async function GET(req: NextRequest) {
   try {
@@ -45,16 +46,41 @@ export async function GET(req: NextRequest) {
         department: { select: { id: true, name: true, code: true } },
         students: {
           where: { status: "Admitted" },
-          include: {
-            department: { select: { tuitionFee: true } },
-            tuitionPayments: {
-              select: { semester: true, year: true, amount: true },
-            },
-          },
+          select: { id: true },
         },
       },
       orderBy: [{ year: "desc" }, { semester: "asc" }, { name: "asc" }],
     });
+
+    const classIds = classes.map((c) => c.id);
+
+    // Roster per class is upgrade-safe: historical enrollment plus current
+    // students (fallback for terms recorded before history tracking).
+    const historyByClass = await findEnrollmentStudentIdsByClass(classIds);
+    const rosterByClass = new Map<number, Set<number>>();
+    for (const cls of classes) {
+      const set = new Set<number>(historyByClass.get(cls.id) ?? []);
+      for (const s of cls.students) set.add(s.id);
+      rosterByClass.set(cls.id, set);
+    }
+
+    const allStudentIds = [
+      ...new Set([...rosterByClass.values()].flatMap((s) => [...s])),
+    ];
+
+    const students = allStudentIds.length
+      ? await prisma.student.findMany({
+          where: { id: { in: allStudentIds } },
+          select: {
+            id: true,
+            paymentStatus: true,
+            customSemesterFee: true,
+            department: { select: { tuitionFee: true } },
+            tuitionPayments: { select: { semester: true, year: true, amount: true } },
+          },
+        })
+      : [];
+    const studentById = new Map(students.map((s) => [s.id, s]));
 
     const countFilter: StudentPaymentStatusFilter = "all";
 
@@ -64,9 +90,14 @@ export async function GET(req: NextRequest) {
       let unpaidCount = 0;
       let studentCount = 0;
 
-      for (const student of cls.students) {
-        const termPayments = student.tuitionPayments.filter(
-          (p) => p.semester === cls.semester && p.year === cls.year
+      const roster = rosterByClass.get(cls.id) ?? new Set<number>();
+      for (const sid of roster) {
+        const student = studentById.get(sid);
+        if (!student) continue;
+        const termPayments = filterTermPayments(
+          student.tuitionPayments,
+          cls.semester,
+          cls.year
         );
         const classification = classifyStudentTermPayment(
           student,

@@ -7,6 +7,7 @@ import Button from "@/components/ui/button/Button";
 import { DateInput } from "@/components/form/DateInput";
 import { authFetch } from "@/lib/api";
 import { perSemesterTuition, semesterAmountPaid } from "@/lib/tuition-amount";
+import { FINANCE_HEADS, emptyHeadAmounts, paymentIncludesSemesterFee, type FinanceHead } from "@/lib/finance-head";
 import { useAuth } from "@/context/AuthContext";
 import { useFormDraft } from "@/hooks/useFormDraft";
 import {
@@ -24,6 +25,12 @@ import {
 } from "lucide-react";
 
 type Bank = { id: number; name: string; code: string; balance: number; accountNumber?: string | null };
+type PaymentMethod = {
+  id: number;
+  name: string;
+  description: string | null;
+  bank: { id: number; name: string; code: string } | null;
+};
 type SemesterOption = { id: number; name: string; sortOrder: number; isActive: boolean };
 type SearchStudent = {
   id: number;
@@ -42,14 +49,19 @@ type SearchStudent = {
 
 const CURRENT_YEAR = new Date().getFullYear();
 
+const headCheckedInitial = Object.fromEntries(
+  FINANCE_HEADS.map((h) => [h.value, false])
+) as Record<FinanceHead, boolean>;
+
 type TuitionDraft = {
   searchQuery: string;
   selectedStudentId: string;
+  payHeadChecked: Record<FinanceHead, boolean>;
+  payHeadAmounts: Record<FinanceHead, string>;
+  payMethodId: string;
   payBankId: string;
   paySemester: string;
   payYear: string;
-  payAmountType: "half" | "full" | "custom";
-  payAmount: string;
   receiptNumber: string;
   paymentDate: string;
   payNote: string;
@@ -58,11 +70,12 @@ type TuitionDraft = {
 const tuitionDraftInitial: TuitionDraft = {
   searchQuery: "",
   selectedStudentId: "",
+  payHeadChecked: headCheckedInitial,
+  payHeadAmounts: emptyHeadAmounts(),
+  payMethodId: "",
   payBankId: "",
   paySemester: "",
   payYear: String(CURRENT_YEAR),
-  payAmountType: "full",
-  payAmount: "",
   receiptNumber: "",
   paymentDate: new Date().toISOString().slice(0, 10),
   payNote: "",
@@ -71,6 +84,7 @@ const tuitionDraftInitial: TuitionDraft = {
 export default function FinancePage() {
   const { hasPermission } = useAuth();
   const [banks, setBanks] = useState<Bank[]>([]);
+  const [methods, setMethods] = useState<PaymentMethod[]>([]);
   const [semesters, setSemesters] = useState<SemesterOption[]>([]);
 
   const {
@@ -80,7 +94,7 @@ export default function FinancePage() {
     clearDraft,
     discardDraft,
     hasDraft,
-  } = useFormDraft<TuitionDraft>("tuition-payment", tuitionDraftInitial);
+  } = useFormDraft<TuitionDraft>("tuition-payment-v2", tuitionDraftInitial);
 
   const [searchResults, setSearchResults] = useState<SearchStudent[]>([]);
   const [searchLoading, setSearchLoading] = useState(false);
@@ -88,28 +102,49 @@ export default function FinancePage() {
   const [paySubmitting, setPaySubmitting] = useState(false);
   const [payError, setPayError] = useState("");
   const [paySuccess, setPaySuccess] = useState(false);
+  const [paySuccessCount, setPaySuccessCount] = useState(0);
   const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const searchQuery = draft.searchQuery;
+  const payHeadChecked = draft.payHeadChecked ?? headCheckedInitial;
+  const payHeadAmounts = draft.payHeadAmounts ?? emptyHeadAmounts();
+  const payMethodId = draft.payMethodId;
   const payBankId = draft.payBankId;
   const paySemester = draft.paySemester;
   const payYear = draft.payYear;
-  const payAmountType = draft.payAmountType;
-  const payAmount = draft.payAmount;
   const receiptNumber = draft.receiptNumber;
   const paymentDate = draft.paymentDate;
   const payNote = draft.payNote;
 
   const setSearchQuery = (v: string) => setDraftField("searchQuery", v);
+  const setPayMethodId = (v: string) => setDraftField("payMethodId", v);
   const setPayBankId = (v: string) => setDraftField("payBankId", v);
   const setPaySemester = (v: string) => setDraftField("paySemester", v);
   const setPayYear = (v: string) => setDraftField("payYear", v);
-  const setPayAmountType = (v: TuitionDraft["payAmountType"]) =>
-    setDraftField("payAmountType", v);
-  const setPayAmount = (v: string) => setDraftField("payAmount", v);
   const setReceiptNumber = (v: string) => setDraftField("receiptNumber", v);
   const setPaymentDate = (v: string) => setDraftField("paymentDate", v);
   const setPayNote = (v: string) => setDraftField("payNote", v);
+
+  const toggleHead = (head: FinanceHead, checked: boolean) => {
+    setDraftAll((prev) => ({
+      ...prev,
+      payHeadChecked: { ...prev.payHeadChecked, [head]: checked },
+      payHeadAmounts: checked
+        ? prev.payHeadAmounts
+        : { ...prev.payHeadAmounts, [head]: "" },
+    }));
+  };
+
+  const setHeadAmount = (head: FinanceHead, amount: string) => {
+    setDraftAll((prev) => ({
+      ...prev,
+      payHeadAmounts: { ...prev.payHeadAmounts, [head]: amount },
+      payHeadChecked: {
+        ...prev.payHeadChecked,
+        [head]: amount.trim() !== "" ? true : prev.payHeadChecked[head],
+      },
+    }));
+  };
 
   const canRecordPayment = hasPermission("finance.create") || hasPermission("finance.view");
 
@@ -120,6 +155,9 @@ export default function FinancePage() {
         if (d.length > 0 && !payBankId) setPayBankId(String(d[0].id));
       });
     });
+    authFetch("/api/payment-methods").then((r) => {
+      if (r.ok) r.json().then((d: PaymentMethod[]) => setMethods(Array.isArray(d) ? d : []));
+    });
     authFetch("/api/semesters?active=true").then((r) => {
       if (r.ok) r.json().then((d: SemesterOption[]) => {
         setSemesters(d);
@@ -128,9 +166,25 @@ export default function FinancePage() {
     });
   }, []);
 
+  // Default to the first payment method and keep the linked bank in sync.
   useEffect(() => {
-    if (banks.length > 0 && !payBankId) setPayBankId(String(banks[0].id));
-  }, [banks, payBankId]);
+    if (methods.length === 0) return;
+    const current = methods.find((m) => String(m.id) === payMethodId);
+    if (!current) {
+      const first = methods[0];
+      setPayMethodId(String(first.id));
+      if (first.bank) setPayBankId(String(first.bank.id));
+    } else if (current.bank && payBankId !== String(current.bank.id)) {
+      setPayBankId(String(current.bank.id));
+    }
+  }, [methods, payMethodId, payBankId]);
+
+  useEffect(() => {
+    // Only fall back to direct bank selection when no methods are configured.
+    if (methods.length === 0 && banks.length > 0 && !payBankId) {
+      setPayBankId(String(banks[0].id));
+    }
+  }, [methods, banks, payBankId]);
 
   useEffect(() => {
     if (semesters.length > 0 && !paySemester) setPaySemester(semesters[0].name);
@@ -186,35 +240,32 @@ export default function FinancePage() {
     ) ?? [];
   const semesterPaid = semesterAmountPaid(semesterPayments);
   const remainingForSemester = Math.max(0, expectedFull - semesterPaid);
-  const computedAmount =
-    payAmountType === "half"
-      ? remainingForSemester > 0
-        ? remainingForSemester * 0.5
-        : expectedFull * 0.5
-      : payAmountType === "full"
-        ? remainingForSemester > 0
-          ? remainingForSemester
-          : expectedFull
-        : payAmount
-          ? Number(payAmount)
-          : remainingForSemester > 0
-            ? remainingForSemester
-            : expectedFull;
+
+  const allHeadLines = FINANCE_HEADS.map((h) => ({
+    financeHead: h.value,
+    label: h.label,
+    amount: Number(payHeadAmounts[h.value]) || 0,
+  }));
+  const activeLines = allHeadLines.filter((l) => l.amount > 0);
+  const totalAmount = activeLines.reduce((sum, l) => sum + l.amount, 0);
+  const includesSemesterFee = paymentIncludesSemesterFee(activeLines);
+
+  const applySemesterQuickAmount = (mode: "full" | "half") => {
+    const base = remainingForSemester > 0 ? remainingForSemester : expectedFull;
+    const amt = mode === "half" ? base * 0.5 : base;
+    setDraftAll((prev) => ({
+      ...prev,
+      payHeadChecked: { ...prev.payHeadChecked, semester_fee: true },
+      payHeadAmounts: {
+        ...prev.payHeadAmounts,
+        semester_fee: String(amt),
+      },
+    }));
+  };
 
   useEffect(() => {
     setPayError("");
-  }, [selectedStudent, paySemester, payYear]);
-
-  useEffect(() => {
-    if (selectedStudent) {
-      if (payAmountType === "full") {
-        setPayAmount(String(remainingForSemester > 0 ? remainingForSemester : expectedFull));
-      } else if (payAmountType === "half") {
-        const halfBase = remainingForSemester > 0 ? remainingForSemester : expectedFull;
-        setPayAmount(String(halfBase * 0.5));
-      }
-    }
-  }, [selectedStudent, payAmountType, expectedFull, remainingForSemester]);
+  }, [selectedStudent, paySemester, payYear, payHeadChecked, payHeadAmounts]);
 
   const handleSelectStudent = (s: SearchStudent) => {
     setSelectedStudent(s);
@@ -237,8 +288,35 @@ export default function FinancePage() {
     e.preventDefault();
     setPayError("");
     setPaySuccess(false);
-    if (!selectedStudent || !payBankId) {
-      setPayError("Please select a student and payment method (bank)");
+    if (!selectedStudent) {
+      setPayError("Please select a student");
+      return;
+    }
+    if (methods.length > 0 && !payMethodId) {
+      setPayError("Please select a payment method");
+      return;
+    }
+    if (methods.length === 0 && !payBankId) {
+      setPayError("Please select a bank");
+      return;
+    }
+    if (activeLines.length === 0) {
+      const checkedEmpty = FINANCE_HEADS.find(
+        (h) => payHeadChecked[h.value] && !(Number(payHeadAmounts[h.value]) > 0)
+      );
+      setPayError(
+        checkedEmpty
+          ? `Enter an amount for ${checkedEmpty.label}, or uncheck it`
+          : "Select at least one finance head and enter an amount"
+      );
+      return;
+    }
+    if (includesSemesterFee && !paySemester.trim()) {
+      setPayError("Semester is required when recording Semester Fee");
+      return;
+    }
+    if (includesSemesterFee && !payYear.trim()) {
+      setPayError("Year is required when recording Semester Fee");
       return;
     }
     if (!receiptNumber.trim()) {
@@ -247,30 +325,42 @@ export default function FinancePage() {
     }
     setPaySubmitting(true);
     try {
-      const res = await authFetch("/api/tuition-payments", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          studentId: selectedStudent.studentId,
-          semester: paySemester,
-          year: Number(payYear),
-          amount: computedAmount,
-          bankId: Number(payBankId),
-          paymentMethod: "bank_receipt",
-          receiptNumber: receiptNumber.trim(),
-          paymentDate: paymentDate || new Date().toISOString().slice(0, 10),
-          note: payNote || undefined,
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        setPayError(data.error || "Payment failed");
-        return;
+      for (const line of activeLines) {
+        const res = await authFetch("/api/tuition-payments", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            studentId: selectedStudent.studentId,
+            semester: paySemester.trim() || undefined,
+            year: payYear.trim() ? Number(payYear) : undefined,
+            amount: line.amount,
+            financeHead: line.financeHead,
+            paymentMethodId: payMethodId ? Number(payMethodId) : undefined,
+            bankId: payBankId ? Number(payBankId) : undefined,
+            paymentMethod: "bank_receipt",
+            receiptNumber: receiptNumber.trim(),
+            paymentDate: paymentDate || new Date().toISOString().slice(0, 10),
+            note: payNote || undefined,
+          }),
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          setPayError(
+            `${line.label}: ${data.error || "Payment failed"}`
+          );
+          return;
+        }
       }
+      setPaySuccessCount(activeLines.length);
       setPaySuccess(true);
       handleClearStudent();
       clearDraft();
-      setDraftAll({ ...tuitionDraftInitial, payBankId, paySemester });
+      setDraftAll({
+        ...tuitionDraftInitial,
+        payMethodId,
+        payBankId,
+        paySemester,
+      });
       authFetch("/api/banks").then((r) => { if (r.ok) r.json().then(setBanks); });
     } catch {
       setPayError("Network error");
@@ -299,6 +389,11 @@ export default function FinancePage() {
     ? `${selectedStudent.firstName?.[0] ?? ""}${selectedStudent.lastName?.[0] ?? ""}`.toUpperCase() || "?"
     : "";
 
+  const selectedMethod = methods.find((m) => String(m.id) === payMethodId) ?? null;
+  const selectedMethodBank = selectedMethod?.bank
+    ? banks.find((b) => b.id === selectedMethod.bank!.id) ?? null
+    : null;
+
   return (
     <div>
       <PageBreadCrumb pageTitle="Finance" />
@@ -326,6 +421,20 @@ export default function FinancePage() {
             className="text-gray-600 underline-offset-4 hover:text-gray-900 hover:underline dark:text-gray-400 dark:hover:text-white"
           >
             Banks
+          </Link>
+          <span className="text-gray-300 dark:text-gray-600">/</span>
+          <Link
+            href="/finance/payment-methods"
+            className="text-gray-600 underline-offset-4 hover:text-gray-900 hover:underline dark:text-gray-400 dark:hover:text-white"
+          >
+            Payment methods
+          </Link>
+          <span className="text-gray-300 dark:text-gray-600">/</span>
+          <Link
+            href="/reports/finance-heads"
+            className="text-gray-600 underline-offset-4 hover:text-gray-900 hover:underline dark:text-gray-400 dark:hover:text-white"
+          >
+            Finance heads
           </Link>
           <span className="text-gray-300 dark:text-gray-600">/</span>
           <Link
@@ -370,7 +479,10 @@ export default function FinancePage() {
                 <div className="mb-6 flex gap-3 rounded-lg border border-emerald-200 bg-emerald-50/90 px-3 py-2.5 text-sm text-emerald-950 dark:border-emerald-900/40 dark:bg-emerald-950/30 dark:text-emerald-100">
                   <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 opacity-80" />
                   <div>
-                    <p className="font-medium">Saved — student and bank balances are updated.</p>
+                    <p className="font-medium">
+                      Saved {paySuccessCount > 1 ? `${paySuccessCount} payments` : "payment"} — student
+                      and bank balances are updated.
+                    </p>
                     <Link
                       href="/finance/payments"
                       className="mt-1 inline-block text-emerald-800 underline-offset-2 hover:underline dark:text-emerald-300"
@@ -459,150 +571,235 @@ export default function FinancePage() {
             </div>
 
             <div className="p-5 sm:p-6">
-              <h2 className="flex items-center gap-2 text-sm font-semibold text-gray-900 dark:text-white">
-                <Wallet className="h-4 w-4 text-gray-500" strokeWidth={2} />
-                Term &amp; deposit
-              </h2>
-              <div className="mt-4 space-y-4">
-                <div className="grid gap-4 sm:grid-cols-3">
-                  <div>
-                    <label className="mb-1.5 block text-sm text-gray-700 dark:text-gray-300">Semester</label>
-                    <select value={paySemester} onChange={(e) => setPaySemester(e.target.value)} className={selectClass}>
-                      {semesters.map((s) => (
-                        <option key={s.id} value={s.name}>
-                          {s.name}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <div>
-                    <label className="mb-1.5 block text-sm text-gray-700 dark:text-gray-300">Year</label>
-                    <input
-                      type="number"
-                      value={payYear}
-                      onChange={(e) => setPayYear(e.target.value)}
-                      className={inputClass}
-                    />
-                  </div>
-                  <DateInput
-                    id="finance-payment-date"
-                    label={<span className="text-sm text-gray-700 dark:text-gray-300">Payment date</span>}
-                    labelClassName="mb-1.5 block"
-                    value={paymentDate}
-                    onChange={setPaymentDate}
-                    inputClassName={inputClass}
-                  />
-                </div>
-              </div>
-            </div>
-
-            <div className="p-5 sm:p-6">
               <div className="flex flex-col gap-1 sm:flex-row sm:items-baseline sm:justify-between">
                 <h2 className="flex items-center gap-2 text-sm font-semibold text-gray-900 dark:text-white">
                   <Banknote className="h-4 w-4 text-gray-500" strokeWidth={2} />
-                  Amount
+                  Finance heads &amp; amounts
                 </h2>
                 <p className="text-2xl font-semibold tabular-nums text-gray-900 dark:text-white">
-                  ${Number(computedAmount || 0).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 })}
+                  ${totalAmount.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 })}
                 </p>
               </div>
+              <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                Semester Fee is optional. Check only the fees being paid now — e.g. graduation or
+                re-exam only, without semester tuition. Only Semester Fee reduces the
+                student&apos;s tuition balance.
+              </p>
 
-              {selectedStudent && semesterPaid > 0 && remainingForSemester > 0 && (
+              {selectedStudent && payHeadChecked.semester_fee && semesterPaid > 0 && remainingForSemester > 0 && (
                 <div className="mt-3 flex gap-2 rounded-lg border border-blue-200/90 bg-blue-50 px-3 py-2 text-xs text-blue-950 dark:border-blue-900/40 dark:bg-blue-950/25 dark:text-blue-100">
                   <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" />
                   <span>
-                    ${semesterPaid.toLocaleString()} already paid for {paySemester} {payYear}. Remaining: $
-                    {remainingForSemester.toLocaleString()}.
+                    ${semesterPaid.toLocaleString()} semester fee already paid for {paySemester}{" "}
+                    {payYear}. Remaining tuition: ${remainingForSemester.toLocaleString()}.
                   </span>
                 </div>
               )}
 
-              {selectedStudent && expectedFull === 0 && (
-                <div className="mt-3 flex gap-2 rounded-lg border border-amber-200/90 bg-amber-50 px-3 py-2 text-xs text-amber-950 dark:border-amber-900/40 dark:bg-amber-950/25 dark:text-amber-100">
-                  <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-                  <span>Scheduled fee is $0 (e.g. scholarship). Double-check the amount before saving.</span>
-                </div>
-              )}
-
-              <div className="mt-4 flex flex-wrap items-center gap-2">
-                {[
-                  {
-                    value: "full" as const,
-                    label: remainingForSemester > 0 && semesterPaid > 0 ? "Remaining" : "Full",
-                    hint: `$${(remainingForSemester > 0 ? remainingForSemester : expectedFull).toLocaleString()}`,
-                  },
-                  {
-                    value: "half" as const,
-                    label: "Half",
-                    hint: `$${((remainingForSemester > 0 ? remainingForSemester : expectedFull) * 0.5).toLocaleString()}`,
-                  },
-                  { value: "custom" as const, label: "Other", hint: null },
-                ].map((opt) => (
-                  <label
-                    key={opt.value}
-                    className={`inline-flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-2 text-sm transition-colors ${
-                      payAmountType === opt.value
-                        ? "border-gray-900 bg-gray-900 text-white dark:border-white dark:bg-white dark:text-gray-900"
-                        : "border-gray-200 bg-white text-gray-800 hover:border-gray-300 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-200 dark:hover:border-gray-600"
+              <div className="mt-4 space-y-2">
+                {FINANCE_HEADS.map((h) => (
+                  <div
+                    key={h.value}
+                    className={`flex flex-wrap items-center gap-3 rounded-lg border px-3 py-2.5 transition-colors ${
+                      payHeadChecked[h.value]
+                        ? "border-brand-300 bg-brand-50/40 dark:border-brand-800 dark:bg-brand-950/20"
+                        : "border-gray-200 dark:border-gray-800"
                     }`}
                   >
-                    <input
-                      type="radio"
-                      name="amountType"
-                      checked={payAmountType === opt.value}
-                      onChange={() => setPayAmountType(opt.value)}
-                      className="sr-only"
-                    />
-                    <span className="font-medium">{opt.label}</span>
-                    {opt.hint ? <span className="tabular-nums opacity-70">{opt.hint}</span> : null}
-                  </label>
+                    <label className="flex min-w-[180px] flex-1 cursor-pointer items-center gap-2.5 text-sm text-gray-800 dark:text-gray-200">
+                      <input
+                        type="checkbox"
+                        checked={payHeadChecked[h.value]}
+                        onChange={(e) => toggleHead(h.value, e.target.checked)}
+                        className="h-4 w-4 rounded border-gray-300 text-brand-600 focus:ring-brand-500"
+                      />
+                      <span className="font-medium">{h.label}</span>
+                    </label>
+                    <div className="flex flex-wrap items-center gap-2">
+                      {h.value === "semester_fee" && payHeadChecked.semester_fee && selectedStudent && (
+                        <>
+                          <button
+                            type="button"
+                            onClick={() => applySemesterQuickAmount("full")}
+                            className="rounded-md border border-gray-200 px-2 py-1 text-xs font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-white/5"
+                          >
+                            {remainingForSemester > 0 && semesterPaid > 0 ? "Remaining" : "Full"}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => applySemesterQuickAmount("half")}
+                            className="rounded-md border border-gray-200 px-2 py-1 text-xs font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-white/5"
+                          >
+                            Half
+                          </button>
+                        </>
+                      )}
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        disabled={!payHeadChecked[h.value]}
+                        value={payHeadAmounts[h.value]}
+                        onChange={(e) => setHeadAmount(h.value, e.target.value)}
+                        placeholder="0.00"
+                        className="h-9 w-28 rounded-lg border border-gray-200 bg-white px-2.5 text-sm tabular-nums text-gray-800 outline-none focus:border-brand-400 disabled:cursor-not-allowed disabled:opacity-40 dark:border-gray-700 dark:bg-gray-900 dark:text-white"
+                      />
+                    </div>
+                  </div>
                 ))}
-                {payAmountType === "custom" && (
-                  <input
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    value={payAmount}
-                    onChange={(e) => setPayAmount(e.target.value)}
-                    placeholder="Amount"
-                    className="h-11 w-36 rounded-xl border border-gray-200 bg-white px-3 text-sm dark:border-gray-700 dark:bg-gray-900 dark:text-white"
-                  />
-                )}
               </div>
 
-              <div className="mt-8">
-                <h2 className="flex items-center gap-2 text-sm font-semibold text-gray-900 dark:text-white">
-                  <CreditCard className="h-4 w-4 text-gray-500" strokeWidth={2} />
-                  Payment method
-                </h2>
-                <p className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
-                  Select the bank account where this payment was received.
-                </p>
-                <div className="mt-3 grid gap-2 sm:grid-cols-2">
-                  {banks.map((b) => (
-                    <label
-                      key={b.id}
-                      className={`cursor-pointer rounded-lg border px-3 py-3 text-sm transition-colors ${
-                        payBankId === String(b.id)
-                          ? "border-gray-900 bg-gray-900 text-white dark:border-white dark:bg-white dark:text-gray-900"
-                          : "border-gray-200 text-gray-800 hover:border-gray-300 dark:border-gray-700 dark:text-gray-200 dark:hover:border-gray-600"
-                      }`}
-                    >
-                      <input
-                        type="radio"
-                        name="payBankId"
-                        checked={payBankId === String(b.id)}
-                        onChange={() => setPayBankId(String(b.id))}
-                        className="sr-only"
-                      />
-                      <span className="block font-medium">{b.code} — {b.name}</span>
-                      <span className={`mt-0.5 block text-xs tabular-nums ${payBankId === String(b.id) ? "opacity-80" : "text-gray-500 dark:text-gray-400"}`}>
-                        Balance ${b.balance.toLocaleString()}
-                      </span>
-                    </label>
-                  ))}
+              {activeLines.length > 0 && (
+                <div className="mt-4 rounded-lg border border-gray-200 bg-gray-50/80 px-3 py-2.5 text-sm dark:border-gray-800 dark:bg-white/3">
+                  <p className="text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                    Summary
+                  </p>
+                  <ul className="mt-1 space-y-0.5">
+                    {activeLines.map((l) => (
+                      <li key={l.financeHead} className="flex justify-between tabular-nums text-gray-700 dark:text-gray-300">
+                        <span>{l.label}</span>
+                        <span>${l.amount.toLocaleString()}</span>
+                      </li>
+                    ))}
+                  </ul>
                 </div>
+              )}
+            </div>
+
+            <div className="p-5 sm:p-6">
+              <h2 className="flex items-center gap-2 text-sm font-semibold text-gray-900 dark:text-white">
+                <Wallet className="h-4 w-4 text-gray-500" strokeWidth={2} />
+                Term
+                {!includesSemesterFee && (
+                  <span className="text-xs font-normal text-gray-500 dark:text-gray-400">(optional)</span>
+                )}
+              </h2>
+              <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                {includesSemesterFee
+                  ? "Required for Semester Fee — links the tuition payment to an academic term."
+                  : "Optional for other fees. Leave as-is to use the student's current class term, or pick a term for reporting."}
+              </p>
+              <div className="mt-4 grid gap-4 sm:grid-cols-3">
+                <div>
+                  <label className="mb-1.5 block text-sm text-gray-700 dark:text-gray-300">
+                    Semester{includesSemesterFee ? " *" : ""}
+                  </label>
+                  <select value={paySemester} onChange={(e) => setPaySemester(e.target.value)} className={selectClass}>
+                    <option value="">—</option>
+                    {semesters.map((s) => (
+                      <option key={s.id} value={s.name}>
+                        {s.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="mb-1.5 block text-sm text-gray-700 dark:text-gray-300">
+                    Year{includesSemesterFee ? " *" : ""}
+                  </label>
+                  <input
+                    type="number"
+                    value={payYear}
+                    onChange={(e) => setPayYear(e.target.value)}
+                    className={inputClass}
+                    placeholder={String(CURRENT_YEAR)}
+                  />
+                </div>
+                <DateInput
+                  id="finance-payment-date"
+                  label={<span className="text-sm text-gray-700 dark:text-gray-300">Payment date</span>}
+                  labelClassName="mb-1.5 block"
+                  value={paymentDate}
+                  onChange={setPaymentDate}
+                  inputClassName={inputClass}
+                />
               </div>
+            </div>
+
+            <div className="p-5 sm:p-6">
+              <h2 className="flex items-center gap-2 text-sm font-semibold text-gray-900 dark:text-white">
+                <CreditCard className="h-4 w-4 text-gray-500" strokeWidth={2} />
+                Payment method
+              </h2>
+
+                {methods.length > 0 ? (
+                  <>
+                    <p className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
+                      Choose how the payment was received. The deposit is credited to the method&apos;s
+                      linked bank.
+                    </p>
+                    <div className="mt-3">
+                      <select
+                        value={payMethodId}
+                        onChange={(e) => {
+                          setPayMethodId(e.target.value);
+                          const m = methods.find((x) => String(x.id) === e.target.value);
+                          if (m?.bank) setPayBankId(String(m.bank.id));
+                        }}
+                        className={selectClass}
+                      >
+                        {methods.map((m) => (
+                          <option key={m.id} value={m.id}>
+                            {m.name}
+                            {m.bank ? ` — ${m.bank.code}` : ""}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    {selectedMethod?.bank && (
+                      <div className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-gray-200 bg-gray-50/80 px-3 py-2.5 text-sm dark:border-gray-800 dark:bg-white/3">
+                        <span className="text-gray-600 dark:text-gray-300">
+                          Deposits to{" "}
+                          <span className="font-medium text-gray-900 dark:text-white">
+                            {selectedMethod.bank.code} — {selectedMethod.bank.name}
+                          </span>
+                        </span>
+                        {selectedMethodBank && (
+                          <span className="tabular-nums text-xs text-gray-500 dark:text-gray-400">
+                            Balance ${selectedMethodBank.balance.toLocaleString()}
+                          </span>
+                        )}
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  <>
+                    <p className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
+                      No payment methods configured yet — select the bank account directly, or{" "}
+                      <Link
+                        href="/finance/payment-methods"
+                        className="font-medium text-brand-600 hover:underline dark:text-brand-400"
+                      >
+                        add payment methods
+                      </Link>
+                      .
+                    </p>
+                    <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                      {banks.map((b) => (
+                        <label
+                          key={b.id}
+                          className={`cursor-pointer rounded-lg border px-3 py-3 text-sm transition-colors ${
+                            payBankId === String(b.id)
+                              ? "border-gray-900 bg-gray-900 text-white dark:border-white dark:bg-white dark:text-gray-900"
+                              : "border-gray-200 text-gray-800 hover:border-gray-300 dark:border-gray-700 dark:text-gray-200 dark:hover:border-gray-600"
+                          }`}
+                        >
+                          <input
+                            type="radio"
+                            name="payBankId"
+                            checked={payBankId === String(b.id)}
+                            onChange={() => setPayBankId(String(b.id))}
+                            className="sr-only"
+                          />
+                          <span className="block font-medium">{b.code} — {b.name}</span>
+                          <span className={`mt-0.5 block text-xs tabular-nums ${payBankId === String(b.id) ? "opacity-80" : "text-gray-500 dark:text-gray-400"}`}>
+                            Balance ${b.balance.toLocaleString()}
+                          </span>
+                        </label>
+                      ))}
+                    </div>
+                  </>
+                )}
 
               <div className="mt-5">
                 <label className="mb-1.5 block text-sm text-gray-700 dark:text-gray-300">
@@ -639,7 +836,13 @@ export default function FinancePage() {
                 ) : null}
                 <Button
                   type="submit"
-                  disabled={!selectedStudent || !payBankId || paySubmitting || !canRecordPayment}
+                  disabled={
+                    !selectedStudent ||
+                    activeLines.length === 0 ||
+                    (methods.length > 0 ? !payMethodId : !payBankId) ||
+                    paySubmitting ||
+                    !canRecordPayment
+                  }
                   className="rounded-lg px-8 py-2.5 text-sm font-semibold sm:min-w-44"
                 >
                   {paySubmitting ? "Saving…" : "Record payment"}

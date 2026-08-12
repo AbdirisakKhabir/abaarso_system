@@ -3,6 +3,7 @@ import { getAuthUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { deleteImage } from "@/lib/cloudinary";
 import { DEFAULT_PROGRAM, parseProgram } from "@/lib/program";
+import { recordEnrollmentForClass } from "@/lib/enrollment";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -169,6 +170,10 @@ export async function PATCH(req: NextRequest, ctx: RouteContext) {
         class: { select: { id: true, name: true, semester: true, year: true, department: { select: { code: true } } } },
       },
     });
+
+    if (body.classId !== undefined && student.classId) {
+      await recordEnrollmentForClass(prisma, student.id, student.classId);
+    }
 
     return NextResponse.json(student);
   } catch (e: unknown) {

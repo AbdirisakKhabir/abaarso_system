@@ -3,6 +3,7 @@ import { getAuthUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { readWorkbookAoa } from "@/lib/excel";
 import { DEFAULT_PROGRAM, parseProgram } from "@/lib/program";
+import { recordEnrollmentForClass } from "@/lib/enrollment";
 
 function findCol(headerRow: string[], patterns: RegExp[]): number {
   for (const p of patterns) {
@@ -396,6 +397,9 @@ export async function POST(req: NextRequest) {
         },
       });
       created.push(student.id);
+      if (resolvedClassId) {
+        await recordEnrollmentForClass(prisma, student.id, resolvedClassId);
+      }
     }
 
     return NextResponse.json({

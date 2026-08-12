@@ -6,9 +6,11 @@ import {
   resolveFinanceReportScope,
 } from "@/lib/finance-report-scope";
 import {
-  classifyStudentTermPayment,
+  classifyPaymentCompletion,
   computeTermTuition,
   filterTermPayments,
+  matchesStudentPaymentStatusFilter,
+  parsePaymentCompletionFilter,
   parseStudentPaymentStatusFilter,
 } from "@/lib/tuition-amount";
 
@@ -39,6 +41,11 @@ export async function GET(req: NextRequest) {
     const program = searchParams.get("program");
     const paymentStatusFilter = parseStudentPaymentStatusFilter(
       searchParams.get("paymentStatusFilter")
+    );
+    // "paid" = completed payment (default), "partial" = partially paid.
+    const completionFilter = parsePaymentCompletionFilter(
+      searchParams.get("completion"),
+      "paid"
     );
 
     if (!semester || !year) {
@@ -77,31 +84,18 @@ export async function GET(req: NextRequest) {
       parsedYear
     );
 
-    let unpaidInFilter = 0;
+    let paidCount = 0;
+    let partialCount = 0;
+    let nonpaidCount = 0;
     let excludedByType = 0;
 
     const paidStudents = studentsInScope
-      .filter((s) => {
-        const termPayments = filterTermPayments(s.tuitionPayments, semester, parsedYear);
-        // Enrolled-only students with no payments for this term are unpaid, not paid.
-        const fallbackFee = fallbackTuitionFeeFromScope(resolved, s.department?.id);
-        const classification = classifyStudentTermPayment(
-          s,
-          termPayments,
-          paymentStatusFilter,
-          fallbackFee
-        );
-        if (classification === "excluded") {
-          excludedByType += 1;
-          return false;
-        }
-        if (classification === "unpaid") {
-          unpaidInFilter += 1;
-          return false;
-        }
-        return true;
-      })
       .map((s) => {
+        // Scholarship/student-type filter (Fully Paid / Half Scholar / all).
+        if (!matchesStudentPaymentStatusFilter(s.paymentStatus, paymentStatusFilter)) {
+          excludedByType += 1;
+          return null;
+        }
         const termPayments = filterTermPayments(s.tuitionPayments, semester, parsedYear);
         const fallbackFee = fallbackTuitionFeeFromScope(resolved, s.department?.id);
         const { paymentStatus, expectedAmount, paidAmount } = computeTermTuition(
@@ -109,6 +103,19 @@ export async function GET(req: NextRequest) {
           termPayments,
           fallbackFee
         );
+        const completion = classifyPaymentCompletion(expectedAmount, paidAmount);
+        if (completion === "na") {
+          // Nothing due (e.g. full scholarship) — not a paying student here.
+          excludedByType += 1;
+          return null;
+        }
+        if (completion === "paid") paidCount += 1;
+        else if (completion === "partial") partialCount += 1;
+        else nonpaidCount += 1;
+
+        // Only return students matching the requested completion group.
+        if (completion !== completionFilter) return null;
+
         return {
           id: s.id,
           studentId: s.studentId,
@@ -123,22 +130,27 @@ export async function GET(req: NextRequest) {
           },
           className: s.class?.name ?? null,
           paymentStatus,
+          completion,
           amountPaid: paidAmount,
           amountExpected: expectedAmount,
+          amountDue: Math.max(0, expectedAmount - paidAmount),
         };
-      });
+      })
+      .filter((r): r is NonNullable<typeof r> => r !== null);
 
     return NextResponse.json({
       ...financeReportMeta(resolved.scope),
       semester,
       year: parsedYear,
       paymentStatusFilter,
+      completion: completionFilter,
       paidStudents,
       totalPaid: paidStudents.length,
       summary: {
         studentsInScope: studentsInScope.length,
-        paid: paidStudents.length,
-        unpaid: unpaidInFilter,
+        paid: paidCount,
+        partial: partialCount,
+        nonpaid: nonpaidCount,
         excludedByStudentType: excludedByType,
         source,
       },

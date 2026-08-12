@@ -11,6 +11,7 @@
     "db:migrate": "prisma migrate dev",
     "db:seed": "tsx prisma/seed.ts",
     "db:push": "prisma db push",
+    "db:backfill-enrollments": "tsx prisma/backfill-enrollments.ts",
     "postinstall": "prisma generate"
   },
   "dependencies": {

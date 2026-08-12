@@ -155,6 +155,7 @@ model Department {
   courses     Course[]
   classes     Class[]
   students    Student[]
+  enrollments StudentEnrollment[]
   lecturers   LecturerDepartment[]
   createdAt   DateTime             @default(now())
   updatedAt   DateTime             @updatedAt
@@ -227,6 +228,7 @@ model Class {
   attendanceSessions AttendanceSession[]
   attendanceTakers   AttendanceTaker[]
   students           Student[]
+  enrollments        StudentEnrollment[]
   classSchedules     ClassSchedule[]
   createdAt          DateTime            @default(now())
   updatedAt          DateTime            @updatedAt
@@ -287,10 +289,34 @@ model Student {
   examRecords        ExamRecord[]
   tuitionPayments    TuitionPayment[]
   transactionHistory TransactionHistory[]
+  enrollments        StudentEnrollment[]
   createdAt          DateTime             @default(now())
   updatedAt          DateTime             @updatedAt
 
   @@map("students")
+}
+
+/// Historical record of which class/semester/year a student was enrolled in.
+/// Enables accurate per-term reports even after students are upgraded to a
+/// newer semester (which changes Student.classId and loses the prior term).
+model StudentEnrollment {
+  id           Int        @id @default(autoincrement())
+  studentId    Int
+  student      Student    @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  classId      Int?
+  class        Class?     @relation(fields: [classId], references: [id], onDelete: SetNull)
+  departmentId Int
+  department   Department @relation(fields: [departmentId], references: [id], onDelete: Restrict)
+  program      String     @default("Bachelor")
+  semester     String
+  year         Int
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  @@unique([studentId, semester, year])
+  @@index([classId])
+  @@index([departmentId, semester, year])
+  @@map("student_enrollments")
 }
 
 model Bank {
@@ -301,6 +327,7 @@ model Bank {
   balance            Float                @default(0)
   isActive           Boolean              @default(true)
   tuitionPayments    TuitionPayment[] // Payments deposited to this bank
+  paymentMethods     PaymentMethod[]  // Named payment methods that deposit here
   withdrawals        BankWithdrawal[]     @relation("WithdrawFromBank")
   transfersOut       BankTransfer[]       @relation("TransferFromBank")
   transfersIn        BankTransfer[]       @relation("TransferToBank")
@@ -311,6 +338,23 @@ model Bank {
   updatedAt          DateTime             @updatedAt
 
   @@map("banks")
+}
+
+/// A named, reusable payment method that routes deposits to a specific bank
+/// (e.g. "eDahab" -> Mobile Money bank, "Cash" -> Cash drawer bank).
+model PaymentMethod {
+  id              Int              @id @default(autoincrement())
+  name            String           @unique // e.g. "eDahab", "Cash on hand", "Premier Transfer"
+  description     String?
+  bankId          Int
+  bank            Bank             @relation(fields: [bankId], references: [id], onDelete: Restrict)
+  isActive        Boolean          @default(true)
+  tuitionPayments TuitionPayment[]
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+
+  @@index([bankId])
+  @@map("payment_methods")
 }
 
 model TransactionHistory {
@@ -339,10 +383,13 @@ model TuitionPayment {
   student       Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
   bankId        Int? // Optional for legacy payments; required for new deposits
   bank          Bank?    @relation(fields: [bankId], references: [id], onDelete: SetNull)
+  paymentMethodId Int? // Optional link to a configured PaymentMethod
+  method        PaymentMethod? @relation(fields: [paymentMethodId], references: [id], onDelete: SetNull)
   amount        Float    @default(0)
   semester      String // "Fall", "Spring", "Summer"
   year          Int // e.g. 2026
-  paymentMethod String   @default("bank_receipt") // "bank_receipt" | "electronic" | "cash_on_hand"
+  financeHead   String   @default("semester_fee") // fee category: semester_fee | re_exam_fee | graduation_fee | registration_fee | card_activation_fee | others
+  paymentMethod String   @default("bank_receipt") // legacy type: "bank_receipt" | "electronic" | "cash_on_hand"
   receiptNumber String? // Bank receipt number
   transactionId String? // Electronic transaction ID
   paymentDate   DateTime @default(now()) // Date student actually paid
@@ -354,6 +401,7 @@ model TuitionPayment {
   updatedAt     DateTime @updatedAt
 
   @@index([studentId, semester, year])
+  @@index([financeHead])
   @@map("tuition_payments")
 }
 

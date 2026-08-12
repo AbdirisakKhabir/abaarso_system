@@ -222,7 +222,13 @@ export default function BanksPage() {
           <ChevronLeftIcon className="h-4 w-4" />
           Back to Finance
         </Link>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <Link
+            href="/finance/payment-methods"
+            className="inline-flex items-center rounded-lg px-3 py-2 text-sm font-medium text-gray-600 transition-colors hover:bg-gray-100 hover:text-gray-800 dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-gray-200"
+          >
+            Payment methods
+          </Link>
           {canWithdraw && banks.length > 0 && (
             <Button
               variant="outline"

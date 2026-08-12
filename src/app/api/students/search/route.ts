@@ -41,6 +41,8 @@ export async function GET(req: NextRequest) {
           },
         },
         tuitionPayments: {
+          // Only Semester Fee counts toward tuition balance / remaining calc.
+          where: { financeHead: "semester_fee" },
           orderBy: [{ year: "desc" }, { semester: "asc" }],
           select: { id: true, semester: true, year: true, amount: true, paidAt: true },
         },

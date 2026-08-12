@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAuthUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { isTuitionHead } from "@/lib/finance-head";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -28,6 +29,7 @@ export async function DELETE(req: NextRequest, ctx: RouteContext) {
         studentId: true,
         bankId: true,
         amount: true,
+        financeHead: true,
       },
     });
 
@@ -45,10 +47,14 @@ export async function DELETE(req: NextRequest, ctx: RouteContext) {
         where: { tuitionPaymentId: id },
       });
 
-      await tx.student.update({
-        where: { id: payment.studentId },
-        data: { balance: { increment: amt } },
-      });
+      // Only Semester Fee deposits reduced the tuition balance, so only those
+      // restore it on reversal. Other heads never touched the student balance.
+      if (isTuitionHead(payment.financeHead)) {
+        await tx.student.update({
+          where: { id: payment.studentId },
+          data: { balance: { increment: amt } },
+        });
+      }
 
       if (payment.bankId != null) {
         const bank = await tx.bank.findUnique({

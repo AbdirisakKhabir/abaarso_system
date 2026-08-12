@@ -97,6 +97,37 @@ export function classifyStudentTermPayment(
   return isTermFullyPaid(expectedAmount, paidAmount) ? "paid" : "unpaid";
 }
 
+/**
+ * Payment completion for a term, split into three states so partially paid
+ * students are never counted as fully paid:
+ * - "paid":    paid the full expected amount (Completed Payment)
+ * - "partial": paid something, but less than expected (Partially Paid)
+ * - "nonpaid": paid nothing (Non Paid)
+ * - "na":      nothing is due (expected <= 0), e.g. full scholarship
+ */
+export type PaymentCompletion = "paid" | "partial" | "nonpaid" | "na";
+
+export function classifyPaymentCompletion(
+  expectedAmount: number,
+  paidAmount: number
+): PaymentCompletion {
+  if (expectedAmount <= 0) return "na";
+  if (isTermFullyPaid(expectedAmount, paidAmount)) return "paid";
+  if (paidAmount > 1e-6) return "partial";
+  return "nonpaid";
+}
+
+/** The completion groups a report can request. */
+export type PaymentCompletionFilter = "paid" | "partial" | "nonpaid";
+
+export function parsePaymentCompletionFilter(
+  raw: string | null | undefined,
+  fallback: PaymentCompletionFilter
+): PaymentCompletionFilter {
+  if (raw === "paid" || raw === "partial" || raw === "nonpaid") return raw;
+  return fallback;
+}
+
 /** Match tuition payment rows for a report term (trim; case-insensitive; Eight≈8). */
 export function filterTermPayments<T extends { semester: string; year: number; amount: number }>(
   payments: T[],

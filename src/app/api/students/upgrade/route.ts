@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAuthUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { recordEnrollmentsForClass } from "@/lib/enrollment";
 
 /**
  * Upgrade students to another semester/class.
@@ -43,6 +44,9 @@ export async function POST(req: NextRequest) {
     }
 
     let studentIds: number[] = [];
+    // Source class(es) the students are moving out of — used to preserve their
+    // enrollment history for the previous term before classId changes.
+    const sourceClassIds = new Set<number>();
 
     if (classId != null && studentId == null) {
       // Class upgrade: all students in the class
@@ -75,6 +79,7 @@ export async function POST(req: NextRequest) {
       }
 
       studentIds = students.map((s) => s.id);
+      sourceClassIds.add(sourceId);
     } else if (studentId != null && classId == null) {
       // Single student upgrade
       const sid = Number(studentId);
@@ -113,11 +118,17 @@ export async function POST(req: NextRequest) {
       }
 
       studentIds = [sid];
+      if (student.classId) sourceClassIds.add(student.classId);
     } else {
       return NextResponse.json(
         { error: "Provide either (classId + targetClassId) for class upgrade, or (studentId + targetClassId) for single student upgrade" },
         { status: 400 }
       );
+    }
+
+    // Preserve the previous-term enrollment before moving students off the class.
+    for (const src of sourceClassIds) {
+      await recordEnrollmentsForClass(prisma, studentIds, src);
     }
 
     const result = await prisma.student.updateMany({
@@ -126,6 +137,11 @@ export async function POST(req: NextRequest) {
         ? { status: "Graduated", classId: null }
         : { classId: targetId as number },
     });
+
+    // Record the new term's enrollment for the class they moved into.
+    if (!graduateMode) {
+      await recordEnrollmentsForClass(prisma, studentIds, targetId as number);
+    }
 
     if (graduateMode) {
       return NextResponse.json({

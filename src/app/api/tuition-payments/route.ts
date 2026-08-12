@@ -4,6 +4,12 @@ import { getAuthUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { isValidSemester } from "@/lib/semesters";
 import { perSemesterTuition, validateSemesterPayment } from "@/lib/tuition-amount";
+import {
+  financeHeadLabel,
+  isFinanceHead,
+  isTuitionHead,
+  parseFinanceHead,
+} from "@/lib/finance-head";
 
 export async function GET(req: NextRequest) {
   try {
@@ -19,6 +25,7 @@ export async function GET(req: NextRequest) {
     const year = searchParams.get("year");
     const bankId = searchParams.get("bankId");
     const paymentMethod = searchParams.get("paymentMethod");
+    const financeHead = searchParams.get("financeHead");
     const departmentId = searchParams.get("departmentId");
     const classId = searchParams.get("classId");
     const dateFrom = searchParams.get("dateFrom")?.trim();
@@ -87,6 +94,9 @@ export async function GET(req: NextRequest) {
       ["bank_receipt", "electronic", "cash_on_hand"].includes(paymentMethod)
     ) {
       where.paymentMethod = paymentMethod;
+    }
+    if (financeHead && isFinanceHead(financeHead)) {
+      where.financeHead = financeHead;
     }
 
     if (dateFrom || dateTo) {
@@ -160,6 +170,7 @@ export async function GET(req: NextRequest) {
         },
       },
       bank: { select: { id: true, name: true, code: true } },
+      method: { select: { id: true, name: true } },
       recordedBy: { select: { id: true, name: true, email: true } },
     } as const;
 
@@ -218,41 +229,104 @@ export async function POST(req: NextRequest) {
       paymentDate,
     } = body;
 
-    if (!studentIdStr || !semester || !year) {
+    const paymentMethodId =
+      body.paymentMethodId != null && String(body.paymentMethodId).trim() !== ""
+        ? Number(body.paymentMethodId)
+        : null;
+
+    const financeHead = parseFinanceHead(body.financeHead);
+    const tuitionHead = isTuitionHead(financeHead);
+
+    if (!studentIdStr) {
+      return NextResponse.json({ error: "Student ID is required" }, { status: 400 });
+    }
+
+    if (tuitionHead && (!semester || year == null || year === "")) {
       return NextResponse.json(
-        { error: "Student ID, semester, and year are required" },
+        { error: "Semester and year are required for Semester Fee payments" },
         { status: 400 }
       );
     }
 
-    if (!bankId) {
+    // Resolve the bank: either directly (bankId) or via a configured payment method.
+    let selectedMethodId: number | null = null;
+    let effectiveBankId: number | null = bankId != null ? Number(bankId) : null;
+
+    if (paymentMethodId != null) {
+      if (!Number.isInteger(paymentMethodId)) {
+        return NextResponse.json({ error: "Invalid payment method" }, { status: 400 });
+      }
+      const method = await prisma.paymentMethod.findUnique({
+        where: { id: paymentMethodId },
+      });
+      if (!method || !method.isActive) {
+        return NextResponse.json(
+          { error: "Invalid or inactive payment method" },
+          { status: 400 }
+        );
+      }
+      selectedMethodId = method.id;
+      effectiveBankId = method.bankId;
+    }
+
+    if (!effectiveBankId || !Number.isInteger(effectiveBankId)) {
       return NextResponse.json(
-        { error: "Bank is required for recording deposits" },
+        { error: "A payment method or bank is required for recording deposits" },
         { status: 400 }
       );
     }
 
     const bank = await prisma.bank.findUnique({
-      where: { id: Number(bankId) },
+      where: { id: effectiveBankId },
     });
     if (!bank || !bank.isActive) {
       return NextResponse.json({ error: "Invalid or inactive bank" }, { status: 400 });
     }
 
-    if (!(await isValidSemester(semester))) {
-      return NextResponse.json(
-        { error: "Invalid semester. Use a semester from the Semesters settings." },
-        { status: 400 }
-      );
-    }
-
     const student = await prisma.student.findUnique({
       where: { studentId: String(studentIdStr).trim() },
-      include: { department: { select: { tuitionFee: true } } },
+      include: {
+        department: { select: { tuitionFee: true } },
+        class: { select: { semester: true, year: true } },
+      },
     });
 
     if (!student) {
       return NextResponse.json({ error: "Student not found" }, { status: 404 });
+    }
+
+    let resolvedSemester = semester != null ? String(semester).trim() : "";
+    let resolvedYear =
+      year != null && year !== "" && Number.isInteger(Number(year))
+        ? Number(year)
+        : null;
+
+    if (!resolvedSemester && student.class?.semester) {
+      resolvedSemester = student.class.semester;
+    }
+    if (resolvedYear == null && student.class?.year != null) {
+      resolvedYear = student.class.year;
+    }
+
+    if (!resolvedSemester || resolvedYear == null) {
+      const firstSemester = await prisma.semester.findFirst({
+        where: { isActive: true },
+        orderBy: { sortOrder: "asc" },
+        select: { name: true },
+      });
+      if (!resolvedSemester) {
+        resolvedSemester = firstSemester?.name ?? "General";
+      }
+      if (resolvedYear == null) {
+        resolvedYear = new Date().getFullYear();
+      }
+    }
+
+    if (tuitionHead && !(await isValidSemester(resolvedSemester))) {
+      return NextResponse.json(
+        { error: "Invalid semester. Use a semester from the Semesters settings." },
+        { status: 400 }
+      );
     }
 
     const expectedFee = perSemesterTuition(
@@ -264,20 +338,32 @@ export async function POST(req: NextRequest) {
     const amt =
       amount != null
         ? Number(amount)
-        : expectedFee;
+        : tuitionHead
+          ? expectedFee
+          : 0;
 
-    const existingPayments = await prisma.tuitionPayment.findMany({
-      where: {
-        studentId: student.id,
-        semester: String(semester),
-        year: Number(year),
-      },
-      select: { amount: true },
-    });
+    if (tuitionHead) {
+      // Semester Fee follows tuition rules: validated against the expected fee
+      // and limited to the outstanding tuition balance for the term.
+      const existingPayments = await prisma.tuitionPayment.findMany({
+        where: {
+          studentId: student.id,
+          semester: resolvedSemester,
+          year: resolvedYear,
+          financeHead: "semester_fee",
+        },
+        select: { amount: true },
+      });
 
-    const paymentCheck = validateSemesterPayment(existingPayments, amt, expectedFee);
-    if (!paymentCheck.ok) {
-      return NextResponse.json({ error: paymentCheck.error }, { status: 400 });
+      const paymentCheck = validateSemesterPayment(existingPayments, amt, expectedFee);
+      if (!paymentCheck.ok) {
+        return NextResponse.json({ error: paymentCheck.error }, { status: 400 });
+      }
+    } else if (!(amt > 0)) {
+      return NextResponse.json(
+        { error: "Amount must be greater than 0" },
+        { status: 400 }
+      );
     }
 
     const method = String(paymentMethod || "bank_receipt");
@@ -307,9 +393,11 @@ export async function POST(req: NextRequest) {
         data: {
           studentId: student.id,
           bankId: bank.id,
+          paymentMethodId: selectedMethodId,
           amount: amt,
-          semester: String(semester),
-          year: Number(year),
+          semester: resolvedSemester,
+          year: resolvedYear,
+          financeHead,
           paymentMethod: paymentMethodVal,
           receiptNumber:
             paymentMethodVal === "bank_receipt" && receiptNumber
@@ -324,11 +412,15 @@ export async function POST(req: NextRequest) {
           note: note || null,
         },
       });
-      const newBalance = Math.max(0, (student.balance ?? 0) - amt);
-      await tx.student.update({
-        where: { id: student.id },
-        data: { balance: newBalance },
-      });
+      // Only Semester Fee reduces the student's tuition balance; other heads are
+      // standalone fees that are still banked but don't touch tuition receivables.
+      if (tuitionHead) {
+        const newBalance = Math.max(0, (student.balance ?? 0) - amt);
+        await tx.student.update({
+          where: { id: student.id },
+          data: { balance: newBalance },
+        });
+      }
       await tx.bank.update({
         where: { id: bank.id },
         data: { balance: { increment: amt } },
@@ -338,7 +430,7 @@ export async function POST(req: NextRequest) {
           type: "deposit",
           amount: amt,
           bankId: bank.id,
-          description: `Tuition: ${student.firstName} ${student.lastName} (${student.studentId}) - ${String(semester)} ${year}`,
+          description: `${financeHeadLabel(financeHead)}: ${student.firstName} ${student.lastName} (${student.studentId}) - ${resolvedSemester} ${resolvedYear}`,
           studentId: student.id,
           tuitionPaymentId: p.id,
           createdById: auth.userId,

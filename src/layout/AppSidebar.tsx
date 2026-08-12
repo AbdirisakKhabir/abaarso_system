@@ -137,6 +137,7 @@ const academicsItems: NavItem[] = [
       { name: "Record Payment", path: "/finance", permission: "finance.view" },
       { name: "Payments", path: "/finance/payments", permission: "finance.view" },
       { name: "Banks", path: "/finance/banks", permission: "banks.view" },
+      { name: "Payment Methods", path: "/finance/payment-methods", permission: "banks.view" },
       { name: "Expenses", path: "/finance/expenses", permission: "expenses.view" },
     ],
   },
@@ -201,8 +202,9 @@ const reportsItems: NavItem[] = [
     permission: "reports.view",
     subItems: [
       { name: "Student Transactions", path: "/reports/student-transactions", permission: "reports.view" },
+      { name: "Finance Head Report", path: "/reports/finance-heads", permission: "finance.view" },
       { name: "Class Revenue", path: "/reports/class-revenue", permission: "reports.view" },
-      { name: "Unpaid Students", path: "/reports/unpaid-students", permission: "reports.view" },
+      { name: "Non Paid Students", path: "/reports/unpaid-students", permission: "reports.view" },
       { name: "Paid Students", path: "/reports/paid-students", permission: "reports.view" },
       { name: "Scholarship Students", path: "/reports/scholarship-students", permission: "reports.view" },
       { name: "Bank Balances", path: "/reports/bank-balances", permission: "banks.view" },

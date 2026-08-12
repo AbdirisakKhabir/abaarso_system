@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAuthUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { recordEnrollmentForClass } from "@/lib/enrollment";
 
 /**
  * Transfer a student to another department and/or class.
@@ -106,6 +107,8 @@ export async function POST(req: NextRequest) {
         },
       },
     });
+
+    await recordEnrollmentForClass(prisma, updated.id, updated.classId);
 
     return NextResponse.json(updated);
   } catch (e) {

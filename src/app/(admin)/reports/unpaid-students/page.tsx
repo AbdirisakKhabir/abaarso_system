@@ -196,11 +196,11 @@ export default function UnpaidStudentsReportPage() {
   return (
     <div>
       <div className="mb-6 flex flex-wrap items-center justify-between gap-4 no-print">
-        <PageBreadCrumb pageTitle="Unpaid Students Report" />
+        <PageBreadCrumb pageTitle="Non Paid Students Report" />
         {(unpaidClassInfo || unpaidDeptInfo) && (
           <ReportExportButtons
-            title="Unpaid Students Report"
-            filename={`Unpaid_Students_${unpaidClassInfo?.department?.code || unpaidDeptInfo?.code || "class"}_${unpaidSemester}_${unpaidYear}`}
+            title="Non Paid Students Report"
+            filename={`Non_Paid_Students_${unpaidClassInfo?.department?.code || unpaidDeptInfo?.code || "class"}_${unpaidSemester}_${unpaidYear}`}
             subtitle={
               unpaidClassInfo
                 ? `${unpaidClassInfo.department.code} - ${unpaidClassInfo.name} (${unpaidClassInfo.semester} ${unpaidClassInfo.year})`
@@ -217,12 +217,13 @@ export default function UnpaidStudentsReportPage() {
 
       <div className="min-w-0 overflow-hidden rounded-2xl border border-gray-200 bg-white p-6 dark:border-gray-800 dark:bg-white/5">
         <h3 className="mb-4 text-lg font-semibold text-gray-800 dark:text-white/90">
-          Unpaid Students by Semester & Class
+          Non Paid Students by Semester & Class
         </h3>
         <p className="mb-6 text-sm text-gray-500 dark:text-gray-400">
-          Select semester, year, department, and class. Uses tuition payments for that term, so it
-          still works after the class was upgraded to a newer semester. Scholarship students are on
-          a separate report.
+          Lists students who paid nothing for the selected term. Partially paid students appear on
+          the Paid Students report under the &ldquo;Partially paid&rdquo; filter. Uses tuition
+          payments for that term, so it still works after a class is upgraded. Scholarship students
+          are on a separate report.
         </p>
         <div className="no-print mb-6 flex flex-wrap items-end gap-4">
           <div>
@@ -324,7 +325,7 @@ export default function UnpaidStudentsReportPage() {
         {(unpaidClassInfo || unpaidDeptInfo) && (
           <>
             <div className="mb-4 print:block hidden print:mb-2">
-              <h1 className="text-xl font-bold text-gray-900">Unpaid Students Report</h1>
+              <h1 className="text-xl font-bold text-gray-900">Non Paid Students Report</h1>
               <p className="text-sm text-gray-600">
                 {unpaidClassInfo
                   ? `${unpaidClassInfo.department.code} - ${unpaidClassInfo.name} (${unpaidClassInfo.semester} ${unpaidClassInfo.year})`
@@ -337,8 +338,8 @@ export default function UnpaidStudentsReportPage() {
               <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-8 text-center dark:border-gray-700 dark:bg-white/5">
                 <p className="text-sm font-medium text-gray-600 dark:text-gray-400">
                   {unpaidClassInfo
-                    ? `All students in this class have paid for ${unpaidClassInfo.semester} ${unpaidClassInfo.year}.`
-                    : `All students in this department have paid for ${unpaidSemester} ${unpaidYear}.`}
+                    ? `No non-paid students in this class for ${unpaidClassInfo.semester} ${unpaidClassInfo.year} — everyone has paid at least partially.`
+                    : `No non-paid students in this department for ${unpaidSemester} ${unpaidYear} — everyone has paid at least partially.`}
                 </p>
               </div>
             ) : (
@@ -356,7 +357,7 @@ export default function UnpaidStudentsReportPage() {
                   <FinanceReportChartGrid>
                     {unpaidByStatus.labels.length > 0 && (
                       <FinanceReportDonut
-                        title="Unpaid students by payment type"
+                        title="Non paid students by payment type"
                         labels={unpaidByStatus.labels}
                         series={unpaidByStatus.series}
                         valueFormatter={formatCount}

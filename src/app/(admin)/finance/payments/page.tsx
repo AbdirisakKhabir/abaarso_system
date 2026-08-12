@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/table";
 import { DEFAULT_PAGE_SIZE, PAGE_SIZE_OPTIONS } from "@/hooks/usePagination";
 import { authFetch } from "@/lib/api";
+import { FINANCE_HEADS, financeHeadLabel } from "@/lib/finance-head";
 import { useAuth } from "@/context/AuthContext";
 import { DollarLineIcon, ListIcon, TrashBinIcon } from "@/icons";
 
@@ -22,6 +23,7 @@ export type FinancePaymentRow = {
   amount: number;
   semester: string;
   year: number;
+  financeHead: string;
   paymentMethod: string;
   receiptNumber: string | null;
   transactionId: string | null;
@@ -29,6 +31,7 @@ export type FinancePaymentRow = {
   paidAt: string;
   note: string | null;
   bank: { id: number; name: string; code: string } | null;
+  method: { id: number; name: string } | null;
   student: {
     studentId: string;
     firstName: string;
@@ -115,6 +118,7 @@ export default function FinancePaymentsPage() {
   const [filterClass, setFilterClass] = useState("");
   const [filterBank, setFilterBank] = useState("");
   const [filterMethod, setFilterMethod] = useState("");
+  const [filterHead, setFilterHead] = useState("");
   const [filterDateFrom, setFilterDateFrom] = useState("");
   const [filterDateTo, setFilterDateTo] = useState("");
 
@@ -154,6 +158,7 @@ export default function FinancePaymentsPage() {
       if (filterClass) params.set("classId", filterClass);
       if (filterBank) params.set("bankId", filterBank);
       if (filterMethod) params.set("paymentMethod", filterMethod);
+      if (filterHead) params.set("financeHead", filterHead);
       if (opts?.includeDates !== false) {
         if (filterDateFrom) params.set("dateFrom", filterDateFrom);
         if (filterDateTo) params.set("dateTo", filterDateTo);
@@ -168,6 +173,7 @@ export default function FinancePaymentsPage() {
       filterClass,
       filterBank,
       filterMethod,
+      filterHead,
       filterDateFrom,
       filterDateTo,
     ]
@@ -272,6 +278,7 @@ export default function FinancePaymentsPage() {
     setFilterClass("");
     setFilterBank("");
     setFilterMethod("");
+    setFilterHead("");
     setFilterDateFrom("");
     setFilterDateTo("");
     setFinancePage(1);
@@ -326,6 +333,7 @@ export default function FinancePaymentsPage() {
       filterClass ||
       filterBank ||
       filterMethod ||
+      filterHead ||
       filterDateFrom ||
       filterDateTo
   );
@@ -347,6 +355,18 @@ export default function FinancePaymentsPage() {
         </span>
         <Link href="/finance/banks" className="font-medium text-brand-600 hover:underline dark:text-brand-400">
           Manage banks
+        </Link>
+        <span className="text-gray-300 dark:text-gray-600" aria-hidden>
+          ·
+        </span>
+        <Link href="/finance/payment-methods" className="font-medium text-brand-600 hover:underline dark:text-brand-400">
+          Payment methods
+        </Link>
+        <span className="text-gray-300 dark:text-gray-600" aria-hidden>
+          ·
+        </span>
+        <Link href="/reports/finance-heads" className="font-medium text-brand-600 hover:underline dark:text-brand-400">
+          Finance head report
         </Link>
         <span className="text-gray-300 dark:text-gray-600" aria-hidden>
           ·
@@ -473,6 +493,23 @@ export default function FinancePaymentsPage() {
             </div>
             <div>
               <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400">
+                Finance head
+              </label>
+              <select
+                value={filterHead}
+                onChange={(e) => setFilterHead(e.target.value)}
+                className={`${selectClassName} min-w-[160px]`}
+              >
+                <option value="">All</option>
+                {FINANCE_HEADS.map((h) => (
+                  <option key={h.value} value={h.value}>
+                    {h.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400">
                 Method
               </label>
               <select
@@ -579,6 +616,7 @@ export default function FinancePaymentsPage() {
                       <TableCell isHeader>Date</TableCell>
                       <TableCell isHeader>Student</TableCell>
                       <TableCell isHeader>Semester</TableCell>
+                      <TableCell isHeader>Finance Head</TableCell>
                       <TableCell isHeader className="text-right">
                         Amount
                       </TableCell>
@@ -613,10 +651,11 @@ export default function FinancePaymentsPage() {
                         <TableCell>
                           {p.semester} {p.year}
                         </TableCell>
+                        <TableCell>{financeHeadLabel(p.financeHead)}</TableCell>
                         <TableCell className="text-right font-semibold text-green-600 dark:text-green-400">
                           ${Number(p.amount).toLocaleString()}
                         </TableCell>
-                        <TableCell>{paymentMethodLabel(p.paymentMethod)}</TableCell>
+                        <TableCell>{p.method?.name || paymentMethodLabel(p.paymentMethod)}</TableCell>
                         <TableCell>
                           {p.bank ? `${p.bank.code} · ${p.bank.name}` : "—"}
                         </TableCell>
