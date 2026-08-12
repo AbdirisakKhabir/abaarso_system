@@ -166,25 +166,24 @@ export default function FinancePage() {
     });
   }, []);
 
-  // Default to the first payment method and keep the linked bank in sync.
+  // Default selection: first payment method, else first bank. Keep linked bank in sync for methods.
   useEffect(() => {
-    if (methods.length === 0) return;
-    const current = methods.find((m) => String(m.id) === payMethodId);
-    if (!current) {
+    if (payMethodId) {
+      const current = methods.find((m) => String(m.id) === payMethodId);
+      if (current?.bank && payBankId !== String(current.bank.id)) {
+        setPayBankId(String(current.bank.id));
+      }
+      return;
+    }
+    if (payBankId) return;
+    if (methods.length > 0) {
       const first = methods[0];
       setPayMethodId(String(first.id));
       if (first.bank) setPayBankId(String(first.bank.id));
-    } else if (current.bank && payBankId !== String(current.bank.id)) {
-      setPayBankId(String(current.bank.id));
-    }
-  }, [methods, payMethodId, payBankId]);
-
-  useEffect(() => {
-    // Only fall back to direct bank selection when no methods are configured.
-    if (methods.length === 0 && banks.length > 0 && !payBankId) {
+    } else if (banks.length > 0) {
       setPayBankId(String(banks[0].id));
     }
-  }, [methods, banks, payBankId]);
+  }, [methods, banks, payMethodId, payBankId]);
 
   useEffect(() => {
     if (semesters.length > 0 && !paySemester) setPaySemester(semesters[0].name);
@@ -290,12 +289,8 @@ export default function FinancePage() {
       setPayError("Please select a student");
       return;
     }
-    if (methods.length > 0 && !payMethodId) {
-      setPayError("Please select a payment method");
-      return;
-    }
-    if (methods.length === 0 && !payBankId) {
-      setPayError("Please select a bank");
+    if (!payBankId) {
+      setPayError("Please select a payment method or bank");
       return;
     }
     if (activeLines.length === 0) {
@@ -617,45 +612,78 @@ export default function FinancePage() {
                 <CreditCard className="h-4 w-4 text-gray-500" strokeWidth={2} />
                 Payment method
               </h2>
-              {methods.length > 0 ? (
-                <div className="mt-3">
-                  <select
-                    value={payMethodId}
-                    onChange={(e) => {
-                      setPayMethodId(e.target.value);
-                      const m = methods.find((x) => String(x.id) === e.target.value);
-                      if (m?.bank) setPayBankId(String(m.bank.id));
-                    }}
-                    className={selectClass}
-                  >
-                    {methods.map((m) => (
-                      <option key={m.id} value={m.id}>
-                        {m.name}
-                        {m.bank ? ` — ${m.bank.code}` : ""}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              ) : (
-                <>
-                  <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
-                    <Link href="/finance/payment-methods" className="text-brand-600 hover:underline dark:text-brand-400">
-                      Add payment methods
-                    </Link>{" "}
-                    or select a bank:
-                  </p>
-                  <select
-                    value={payBankId}
-                    onChange={(e) => setPayBankId(e.target.value)}
-                    className={`${selectClass} mt-2`}
-                  >
-                    {banks.map((b) => (
-                      <option key={b.id} value={b.id}>
-                        {b.code} — {b.name}
-                      </option>
-                    ))}
-                  </select>
-                </>
+              <div className="mt-3 grid grid-cols-2 gap-2">
+                {methods.map((m) => {
+                  const selected = payMethodId === String(m.id);
+                  return (
+                    <label
+                      key={`method-${m.id}`}
+                      className={`cursor-pointer rounded-lg border px-2.5 py-2 text-xs transition-colors ${
+                        selected
+                          ? "border-gray-900 bg-gray-900 text-white dark:border-white dark:bg-white dark:text-gray-900"
+                          : "border-gray-200 text-gray-800 hover:border-gray-300 dark:border-gray-700 dark:text-gray-200 dark:hover:border-gray-600"
+                      }`}
+                    >
+                      <input
+                        type="radio"
+                        name="paySelection"
+                        checked={selected}
+                        onChange={() => {
+                          setPayMethodId(String(m.id));
+                          if (m.bank) setPayBankId(String(m.bank.id));
+                        }}
+                        className="sr-only"
+                      />
+                      <span className="block font-medium leading-snug">{m.name}</span>
+                      {m.bank && (
+                        <span
+                          className={`mt-0.5 block truncate ${selected ? "opacity-80" : "text-gray-500 dark:text-gray-400"}`}
+                        >
+                          {m.bank.code}
+                        </span>
+                      )}
+                    </label>
+                  );
+                })}
+                {banks.map((b) => {
+                  const selected = !payMethodId && payBankId === String(b.id);
+                  return (
+                    <label
+                      key={`bank-${b.id}`}
+                      className={`cursor-pointer rounded-lg border px-2.5 py-2 text-xs transition-colors ${
+                        selected
+                          ? "border-gray-900 bg-gray-900 text-white dark:border-white dark:bg-white dark:text-gray-900"
+                          : "border-gray-200 text-gray-800 hover:border-gray-300 dark:border-gray-700 dark:text-gray-200 dark:hover:border-gray-600"
+                      }`}
+                    >
+                      <input
+                        type="radio"
+                        name="paySelection"
+                        checked={selected}
+                        onChange={() => {
+                          setPayMethodId("");
+                          setPayBankId(String(b.id));
+                        }}
+                        className="sr-only"
+                      />
+                      <span className="block font-medium leading-snug">{b.code}</span>
+                      <span
+                        className={`mt-0.5 block truncate ${selected ? "opacity-80" : "text-gray-500 dark:text-gray-400"}`}
+                      >
+                        {b.name}
+                      </span>
+                    </label>
+                  );
+                })}
+              </div>
+              {methods.length === 0 && banks.length === 0 && (
+                <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
+                  No banks or{" "}
+                  <Link href="/finance/payment-methods" className="text-brand-600 hover:underline dark:text-brand-400">
+                    payment methods
+                  </Link>{" "}
+                  configured yet.
+                </p>
               )}
               <div className="mt-3">
                 <label className="mb-1 block text-xs text-gray-600 dark:text-gray-400">
@@ -814,7 +842,7 @@ export default function FinancePage() {
                   disabled={
                     !selectedStudent ||
                     activeLines.length === 0 ||
-                    (methods.length > 0 ? !payMethodId : !payBankId) ||
+                    !payBankId ||
                     paySubmitting ||
                     !canRecordPayment
                   }
