@@ -166,7 +166,7 @@ export default function FinancePage() {
     });
   }, []);
 
-  // Default selection: first payment method, else first bank. Keep linked bank in sync for methods.
+  // Default: first payment method, else first bank. Keep linked bank when a method is selected.
   useEffect(() => {
     if (payMethodId) {
       const current = methods.find((m) => String(m.id) === payMethodId);
@@ -289,8 +289,8 @@ export default function FinancePage() {
       setPayError("Please select a student");
       return;
     }
-    if (!payBankId) {
-      setPayError("Please select a payment method or bank");
+    if (!payMethodId && !payBankId) {
+      setPayError("Select a payment method or a bank account");
       return;
     }
     if (activeLines.length === 0) {
@@ -438,7 +438,7 @@ export default function FinancePage() {
         </nav>
       </div>
 
-      <div className="mx-auto min-w-0 max-w-lg">
+      <div className="mx-auto min-w-0 max-w-2xl">
         {hasDraft && !paySuccess && (
           <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950 dark:border-amber-900/40 dark:bg-amber-950/25 dark:text-amber-100">
             <span className="flex items-center gap-2">
@@ -610,71 +610,60 @@ export default function FinancePage() {
             <div className="p-4">
               <h2 className="flex items-center gap-2 text-sm font-semibold text-gray-900 dark:text-white">
                 <CreditCard className="h-4 w-4 text-gray-500" strokeWidth={2} />
-                Payment method
+                Collect via
               </h2>
-              <div className="mt-3 grid grid-cols-2 gap-2">
-                {methods.map((m) => {
-                  const selected = payMethodId === String(m.id);
-                  return (
-                    <label
-                      key={`method-${m.id}`}
-                      className={`cursor-pointer rounded-lg border px-2.5 py-2 text-xs transition-colors ${
-                        selected
-                          ? "border-gray-900 bg-gray-900 text-white dark:border-white dark:bg-white dark:text-gray-900"
-                          : "border-gray-200 text-gray-800 hover:border-gray-300 dark:border-gray-700 dark:text-gray-200 dark:hover:border-gray-600"
-                      }`}
-                    >
-                      <input
-                        type="radio"
-                        name="paySelection"
-                        checked={selected}
-                        onChange={() => {
-                          setPayMethodId(String(m.id));
-                          if (m.bank) setPayBankId(String(m.bank.id));
-                        }}
-                        className="sr-only"
-                      />
-                      <span className="block font-medium leading-snug">{m.name}</span>
-                      {m.bank && (
-                        <span
-                          className={`mt-0.5 block truncate ${selected ? "opacity-80" : "text-gray-500 dark:text-gray-400"}`}
-                        >
-                          {m.bank.code}
-                        </span>
-                      )}
-                    </label>
-                  );
-                })}
-                {banks.map((b) => {
-                  const selected = !payMethodId && payBankId === String(b.id);
-                  return (
-                    <label
-                      key={`bank-${b.id}`}
-                      className={`cursor-pointer rounded-lg border px-2.5 py-2 text-xs transition-colors ${
-                        selected
-                          ? "border-gray-900 bg-gray-900 text-white dark:border-white dark:bg-white dark:text-gray-900"
-                          : "border-gray-200 text-gray-800 hover:border-gray-300 dark:border-gray-700 dark:text-gray-200 dark:hover:border-gray-600"
-                      }`}
-                    >
-                      <input
-                        type="radio"
-                        name="paySelection"
-                        checked={selected}
-                        onChange={() => {
-                          setPayMethodId("");
-                          setPayBankId(String(b.id));
-                        }}
-                        className="sr-only"
-                      />
-                      <span className="block font-medium leading-snug">{b.code}</span>
-                      <span
-                        className={`mt-0.5 block truncate ${selected ? "opacity-80" : "text-gray-500 dark:text-gray-400"}`}
-                      >
-                        {b.name}
-                      </span>
-                    </label>
-                  );
-                })}
+              <p className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
+                Choose either a payment method or a bank account — not both.
+              </p>
+              <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                <div>
+                  <label className="mb-1 block text-xs text-gray-600 dark:text-gray-400">
+                    Payment method
+                  </label>
+                  <select
+                    value={payMethodId}
+                    onChange={(e) => {
+                      const id = e.target.value;
+                      if (!id) {
+                        setPayMethodId("");
+                        return;
+                      }
+                      setPayMethodId(id);
+                      const m = methods.find((x) => String(x.id) === id);
+                      if (m?.bank) setPayBankId(String(m.bank.id));
+                    }}
+                    className={selectClass}
+                  >
+                    <option value="">— None —</option>
+                    {methods.map((m) => (
+                      <option key={m.id} value={m.id}>
+                        {m.name}
+                        {m.bank ? ` (${m.bank.code})` : ""}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs text-gray-600 dark:text-gray-400">
+                    Bank account
+                  </label>
+                  <select
+                    value={payMethodId ? "" : payBankId}
+                    onChange={(e) => {
+                      const id = e.target.value;
+                      setPayMethodId("");
+                      setPayBankId(id);
+                    }}
+                    className={selectClass}
+                  >
+                    <option value="">— None —</option>
+                    {banks.map((b) => (
+                      <option key={b.id} value={b.id}>
+                        {b.code} — {b.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
               </div>
               {methods.length === 0 && banks.length === 0 && (
                 <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
@@ -685,27 +674,29 @@ export default function FinancePage() {
                   configured yet.
                 </p>
               )}
-              <div className="mt-3">
-                <label className="mb-1 block text-xs text-gray-600 dark:text-gray-400">
-                  Receipt / reference # <span className="text-red-600 dark:text-red-400">*</span>
-                </label>
-                <input
-                  type="text"
-                  value={receiptNumber}
-                  onChange={(e) => setReceiptNumber(e.target.value)}
-                  placeholder="Slip or transfer reference"
-                  className={inputClass}
-                />
-              </div>
-              <div className="mt-3">
-                <label className="mb-1 block text-xs text-gray-600 dark:text-gray-400">Staff note</label>
-                <input
-                  type="text"
-                  value={payNote}
-                  onChange={(e) => setPayNote(e.target.value)}
-                  placeholder="Optional"
-                  className={inputClass}
-                />
+              <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                <div>
+                  <label className="mb-1 block text-xs text-gray-600 dark:text-gray-400">
+                    Receipt / reference # <span className="text-red-600 dark:text-red-400">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={receiptNumber}
+                    onChange={(e) => setReceiptNumber(e.target.value)}
+                    placeholder="Slip or transfer reference"
+                    className={inputClass}
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs text-gray-600 dark:text-gray-400">Staff note</label>
+                  <input
+                    type="text"
+                    value={payNote}
+                    onChange={(e) => setPayNote(e.target.value)}
+                    placeholder="Optional"
+                    className={inputClass}
+                  />
+                </div>
               </div>
             </div>
 
@@ -842,7 +833,7 @@ export default function FinancePage() {
                   disabled={
                     !selectedStudent ||
                     activeLines.length === 0 ||
-                    !payBankId ||
+                    (!payMethodId && !payBankId) ||
                     paySubmitting ||
                     !canRecordPayment
                   }
