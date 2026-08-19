@@ -90,7 +90,7 @@ export default function ChargeHistoryPage() {
 
   // load filter options
   useEffect(() => {
-    authFetch("/api/settings/semesters")
+    authFetch("/api/semesters?active=true")
       .then((r) => r.ok ? r.json() : null)
       .then((data) => {
         const list = Array.isArray(data) ? data : Array.isArray(data?.semesters) ? data.semesters : [];

@@ -15,6 +15,7 @@ import {
 import { authFetch } from "@/lib/api";
 import { buildTermSequence } from "@/lib/semester-term-sequence";
 import { perSemesterTuition } from "@/lib/tuition-amount";
+import { semestersMatch } from "@/lib/semester-match";
 import { useAuth } from "@/context/AuthContext";
 import {
   AlertCircle,
@@ -34,12 +35,14 @@ import {
 // ── Types ──────────────────────────────────────────────────────────────────────
 
 type SemesterOption = { id: number; name: string; sortOrder: number; isActive: boolean };
+type DepartmentOption = { id: number; name: string; code: string };
 type ClassOption = {
   id: number;
   name: string;
   semester: string;
   year: number;
-  department: { code: string };
+  departmentId?: number;
+  department: { id?: number; code: string; name?: string };
   activeStudentCount?: number;
 };
 type SearchStudent = {
@@ -80,6 +83,22 @@ const selectCls =
   "h-10 w-full rounded-lg border border-gray-200 bg-transparent px-3 text-sm text-gray-800 outline-none focus:border-brand-300 focus:ring-2 focus:ring-brand-500/15 dark:border-gray-700 dark:text-white/80 dark:focus:border-brand-500/40";
 const labelCls = "mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300";
 
+function asList<T>(data: unknown): T[] {
+  if (Array.isArray(data)) return data as T[];
+  if (data && typeof data === "object") {
+    const o = data as Record<string, unknown>;
+    for (const key of ["items", "semesters", "classes", "departments"]) {
+      if (Array.isArray(o[key])) return o[key] as T[];
+    }
+  }
+  return [];
+}
+
+function classDepartmentId(c: ClassOption): number | null {
+  const id = c.department?.id ?? c.departmentId;
+  return Number.isInteger(id) && (id as number) > 0 ? (id as number) : null;
+}
+
 function fmtAmt(n: number) {
   return n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
@@ -90,10 +109,12 @@ export default function ChargeTuitionPage() {
   const { hasPermission } = useAuth();
   const canCharge = hasPermission("finance.charge") || hasPermission("admission.edit");
 
-  // -- semester & class options
+  // -- semester, department & class options
   const [semesters, setSemesters] = useState<SemesterOption[]>([]);
+  const [departments, setDepartments] = useState<DepartmentOption[]>([]);
   const [classOptions, setClassOptions] = useState<ClassOption[]>([]);
   const [classesLoading, setClassesLoading] = useState(false);
+  const [departmentId, setDepartmentId] = useState("");
 
   // -- form state
   const [mode, setMode] = useState<ChargeMode>("class");
@@ -122,56 +143,66 @@ export default function ChargeTuitionPage() {
 
   const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // ── Load semesters on mount ────────────────────────────────────────────────
+  // ── Load semesters & departments on mount ────────────────────────────────
   useEffect(() => {
-    authFetch("/api/settings/semesters")
-      .then((r) => r.ok ? r.json() : null)
+    authFetch("/api/semesters?active=true")
+      .then((r) => (r.ok ? r.json() : null))
       .then((data) => {
-        const list: SemesterOption[] = Array.isArray(data)
-          ? data
-          : Array.isArray(data?.semesters)
-            ? data.semesters
-            : [];
-        const active = list.filter((s) => s.isActive !== false);
-        setSemesters(active);
-        if (!startSemester && active.length > 0) setStartSemester(active[0].name);
+        const list = asList<SemesterOption>(data).filter((s) => s.isActive !== false);
+        list.sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0) || a.name.localeCompare(b.name));
+        setSemesters(list);
+        setStartSemester((prev) => prev || list[0]?.name || "");
       })
       .catch(() => {});
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    authFetch("/api/departments")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        const list = asList<DepartmentOption>(data);
+        list.sort((a, b) => a.name.localeCompare(b.name));
+        setDepartments(list);
+      })
+      .catch(() => {});
   }, []);
 
-  // ── Load classes ──────────────────────────────────────────────────────────
+  // ── Load classes (full list, then filter by department in the UI) ─────────
   const loadClasses = useCallback(async () => {
     setClassesLoading(true);
     try {
-      const res = await authFetch("/api/classes?pageSize=200");
+      const res = await authFetch("/api/classes?active=true");
       if (!res.ok) return;
-      const data = await res.json();
-      const items: ClassOption[] = Array.isArray(data)
-        ? data
-        : Array.isArray(data?.items)
-          ? data.items
-          : Array.isArray(data?.classes)
-            ? data.classes
-            : [];
-      setClassOptions(items);
-      if (!classId && items[0]) setClassId(String(items[0].id));
-    } catch { /* noop */ } finally {
+      setClassOptions(asList<ClassOption>(await res.json()));
+    } catch {
+      /* noop */
+    } finally {
       setClassesLoading(false);
     }
-  }, [classId]);
+  }, []);
 
-  useEffect(() => { void loadClasses(); }, []);
+  useEffect(() => {
+    void loadClasses();
+  }, [loadClasses]);
+
+  const classesForDepartment = useMemo(() => {
+    if (!departmentId) return [];
+    const did = Number(departmentId);
+    return classOptions.filter((c) => classDepartmentId(c) === did);
+  }, [classOptions, departmentId]);
+
+  const handleDepartmentChange = (id: string) => {
+    setDepartmentId(id);
+    setClassId("");
+  };
 
   // Class mode always invoices the class's own semester/year (one term).
   useEffect(() => {
     if (mode !== "class") return;
     const cls = classOptions.find((c) => String(c.id) === classId);
     if (!cls) return;
-    setStartSemester(cls.semester);
+    const match = semesters.find((s) => semestersMatch(s.name, cls.semester));
+    setStartSemester(match?.name ?? cls.semester);
     setStartYear(cls.year);
     setSemesterCount(1);
-  }, [mode, classId, classOptions]);
+  }, [mode, classId, classOptions, semesters]);
 
   // ── Student search debounce ───────────────────────────────────────────────
   useEffect(() => {
@@ -192,16 +223,22 @@ export default function ChargeTuitionPage() {
 
   // ── Preview periods ───────────────────────────────────────────────────────
   const previewPeriods = useMemo(() => {
-    if (!startSemester || semesters.length === 0) return [];
-    try {
-      return buildTermSequence(
-        semesters.map((s) => s.name),
-        startSemester,
-        startYear,
-        semesterCount
-      );
-    } catch { return []; }
-  }, [startSemester, startYear, semesterCount, semesters]);
+    if (!startSemester) return [];
+    const names = semesters.map((s) => s.name);
+    const resolved =
+      names.find((n) => n === startSemester) ??
+      names.find((n) => semestersMatch(n, startSemester)) ??
+      startSemester;
+    const count = mode === "class" ? 1 : semesterCount;
+    if (names.includes(resolved)) {
+      try {
+        return buildTermSequence(names, resolved, startYear, count);
+      } catch {
+        return [{ semester: resolved, year: startYear }];
+      }
+    }
+    return [{ semester: resolved, year: startYear }];
+  }, [startSemester, startYear, semesterCount, semesters, mode]);
 
   // ── Effective per-semester for a student ─────────────────────────────────
   const effectivePer = useCallback((s: SearchStudent): number => {
@@ -522,35 +559,59 @@ export default function ChargeTuitionPage() {
                 </div>
               </div>
 
-              {/* Class selector */}
+              {/* Class selector: department first, then class */}
               {mode === "class" ? (
-                <div>
-                  <label htmlFor="charge-class" className={labelCls}>Class</label>
-                  <select
-                    id="charge-class"
-                    value={classId}
-                    onChange={(e) => setClassId(e.target.value)}
-                    disabled={classesLoading}
-                    required
-                    className={selectCls}
-                  >
-                    <option value="">
-                      {classesLoading ? "Loading…" : classOptions.length === 0 ? "No classes found" : "Select class"}
-                    </option>
-                    {classOptions.map((c) => (
-                      <option key={c.id} value={String(c.id)}>
-                        {c.department.code} — {c.name}
-                        {" "}({c.semester} {c.year})
-                        {typeof c.activeStudentCount === "number" ? ` · ${c.activeStudentCount} students` : ""}
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div>
+                    <label htmlFor="charge-department" className={labelCls}>Department</label>
+                    <select
+                      id="charge-department"
+                      value={departmentId}
+                      onChange={(e) => handleDepartmentChange(e.target.value)}
+                      required
+                      className={selectCls}
+                    >
+                      <option value="">Select department</option>
+                      {departments.map((d) => (
+                        <option key={d.id} value={String(d.id)}>
+                          {d.code} — {d.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label htmlFor="charge-class" className={labelCls}>Class</label>
+                    <select
+                      id="charge-class"
+                      value={classId}
+                      onChange={(e) => setClassId(e.target.value)}
+                      disabled={!departmentId || classesLoading}
+                      required
+                      className={selectCls}
+                    >
+                      <option value="">
+                        {!departmentId
+                          ? "Select a department first"
+                          : classesLoading
+                            ? "Loading…"
+                            : classesForDepartment.length === 0
+                              ? "No classes in this department"
+                              : "Select class"}
                       </option>
-                    ))}
-                  </select>
-                  {selectedClass && (
-                    <p className="mt-1.5 text-xs text-gray-500 dark:text-gray-400">
-                      This class is billed for <strong>{selectedClass.semester} {selectedClass.year}</strong>.
-                      Students already charged for that term are skipped.
-                    </p>
-                  )}
+                      {classesForDepartment.map((c) => (
+                        <option key={c.id} value={String(c.id)}>
+                          {c.name} ({c.semester} {c.year})
+                          {typeof c.activeStudentCount === "number" ? ` · ${c.activeStudentCount} students` : ""}
+                        </option>
+                      ))}
+                    </select>
+                    {selectedClass && (
+                      <p className="mt-1.5 text-xs text-gray-500 dark:text-gray-400">
+                        This class is billed for <strong>{selectedClass.semester} {selectedClass.year}</strong>.
+                        Students already charged for that term are skipped.
+                      </p>
+                    )}
+                  </div>
                 </div>
               ) : (
                 /* Student search */
@@ -734,12 +795,21 @@ export default function ChargeTuitionPage() {
                     onChange={(e) => setStartSemester(e.target.value)}
                     className={selectCls}
                   >
-                    {semesters.length === 0
-                      ? <option value="">Loading semesters…</option>
-                      : semesters.map((s) => (
-                          <option key={s.id} value={s.name}>{s.name}</option>
-                        ))
-                    }
+                    {semesters.length === 0 && !startSemester ? (
+                      <option value="">Loading semesters…</option>
+                    ) : (
+                      <>
+                        {startSemester &&
+                        !semesters.some((s) => s.name === startSemester) ? (
+                          <option value={startSemester}>{startSemester}</option>
+                        ) : null}
+                        {semesters.map((s) => (
+                          <option key={s.id} value={s.name}>
+                            {s.name}
+                          </option>
+                        ))}
+                      </>
+                    )}
                   </select>
                 </div>
                 <div>
