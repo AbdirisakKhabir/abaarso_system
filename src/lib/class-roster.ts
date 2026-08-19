@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma";
-import { semestersMatch } from "@/lib/enrollment";
+import { semestersMatch } from "@/lib/semester-match";
 
 /**
  * Student IDs that belong to a class for reporting — including students who

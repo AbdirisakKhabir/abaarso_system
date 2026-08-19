@@ -1,4 +1,4 @@
-import { normalizedSemester, semestersMatch } from "@/lib/enrollment";
+import { normalizedSemester, semestersMatch } from "@/lib/semester-match";
 
 export type TermLedgerInput = {
   currentClass?: { semester: string; year: number } | null;

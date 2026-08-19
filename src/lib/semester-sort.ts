@@ -1,4 +1,4 @@
-import { normalizedSemester } from "./enrollment";
+import { normalizedSemester } from "./semester-match";
 
 /**
  * Consistent semester ordering for transcripts and GPA (chronological within each year).

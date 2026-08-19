@@ -12,7 +12,7 @@ import {
   findTerm,
   oldestUnpaidTerm,
 } from "@/lib/student-term-ledger";
-import { semestersMatch } from "@/lib/enrollment";
+import { semestersMatch } from "@/lib/semester-match";
 import { FINANCE_HEADS, financeHeadLabel, paymentIncludesSemesterFee, type FinanceHead } from "@/lib/finance-head";
 import { useAuth } from "@/context/AuthContext";
 import { useFormDraft } from "@/hooks/useFormDraft";

@@ -8,7 +8,7 @@ function createPrisma() {
   return new PrismaClient({
     adapter,
     log: process.env.NODE_ENV === "development" ? ["query", "error", "warn"] : ["error"],
-  });
+  } as unknown as ConstructorParameters<typeof PrismaClient>[0]);
 }
 
 export const prisma =

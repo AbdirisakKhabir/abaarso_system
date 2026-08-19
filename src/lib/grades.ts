@@ -9,7 +9,7 @@
 //   Total:         /100
 
 import { semesterOrdinal } from "./semester-sort";
-import { normalizedSemester } from "./enrollment";
+import { normalizedSemester } from "./semester-match";
 
 export interface GradeInfo {
   grade: string;
