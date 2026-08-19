@@ -9,6 +9,7 @@
 //   Total:         /100
 
 import { semesterOrdinal } from "./semester-sort";
+import { normalizedSemester } from "./enrollment";
 
 export interface GradeInfo {
   grade: string;
@@ -99,7 +100,7 @@ export function calculateGPA(
   const semMap = new Map<string, { semester: string; year: number; items: { gradePoints: number; creditHours: number }[] }>();
 
   for (const r of records) {
-    const key = `${r.semester}-${r.year}`;
+    const key = `${normalizedSemester(r.semester)}-${r.year}`;
     if (!semMap.has(key)) {
       semMap.set(key, { semester: r.semester, year: r.year, items: [] });
     }

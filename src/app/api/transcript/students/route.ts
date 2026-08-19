@@ -2,6 +2,7 @@ import type { Prisma } from "@prisma/client";
 import { NextRequest, NextResponse } from "next/server";
 import { getAuthUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { classRosterStudentWhere } from "@/lib/class-roster";
 
 export async function GET(req: NextRequest) {
   try {
@@ -19,7 +20,10 @@ export async function GET(req: NextRequest) {
       status: { in: ["Admitted", "Graduated"] },
     };
     if (departmentId) where.departmentId = Number(departmentId);
-    if (classId) where.classId = Number(classId);
+    if (classId) {
+      const rosterWhere = await classRosterStudentWhere(Number(classId));
+      where.id = rosterWhere.id;
+    }
     if (q) {
       where.AND = [
         {

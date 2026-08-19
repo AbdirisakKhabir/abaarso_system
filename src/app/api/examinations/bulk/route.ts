@@ -3,6 +3,7 @@ import { getAuthUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { calculateTotal, getGradeInfo } from "@/lib/grades";
 import { isValidSemester } from "@/lib/semesters";
+import { recordEnrollmentForClass, semestersMatch } from "@/lib/enrollment";
 
 type RecordInput = {
   studentId: number;
@@ -83,6 +84,30 @@ export async function POST(req: NextRequest) {
     const updated: number[] = [];
     const errors: string[] = [];
 
+    const payloadStudentIds = [
+      ...new Set(
+        records
+          .map((r) => Number(r.studentId))
+          .filter((n) => Number.isInteger(n) && n > 0)
+      ),
+    ];
+    const existingRows =
+      payloadStudentIds.length > 0
+        ? await prisma.examRecord.findMany({
+            where: {
+              courseId: effectiveCourseId,
+              year: cls.year,
+              studentId: { in: payloadStudentIds },
+            },
+          })
+        : [];
+    const existingByStudent = new Map<number, (typeof existingRows)[number]>();
+    for (const row of existingRows) {
+      if (semestersMatch(row.semester, cls.semester)) {
+        existingByStudent.set(row.studentId, row);
+      }
+    }
+
     for (const r of records) {
       const studentId = Number(r.studentId);
       if (!Number.isInteger(studentId)) {
@@ -128,16 +153,7 @@ export async function POST(req: NextRequest) {
         gradePoints = info.gradePoints;
       }
 
-      const existing = await prisma.examRecord.findUnique({
-        where: {
-          studentId_courseId_semester_year: {
-            studentId,
-            courseId: effectiveCourseId,
-            semester: cls.semester,
-            year: cls.year,
-          },
-        },
-      });
+      const existing = existingByStudent.get(studentId);
 
       const data = {
         ...marks,
@@ -165,6 +181,11 @@ export async function POST(req: NextRequest) {
         });
         created.push(rec.id);
       }
+    }
+
+    const stamped = new Set(records.map((r) => Number(r.studentId)).filter((n) => Number.isInteger(n)));
+    for (const sid of stamped) {
+      await recordEnrollmentForClass(prisma, sid, Number(classId));
     }
 
     return NextResponse.json({

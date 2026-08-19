@@ -6,6 +6,8 @@ import { parsePaginationParams } from "@/lib/pagination";
 import { perSemesterTuition } from "@/lib/tuition-amount";
 import { DEFAULT_PROGRAM, parseProgram } from "@/lib/program";
 import { recordEnrollmentForClass } from "@/lib/enrollment";
+import { recordTuitionChargeForClass } from "@/lib/tuition-charge";
+import { findClassRosterStudentIds } from "@/lib/class-roster";
 
 // Generate a unique student ID like STD-2026-0001
 async function generateStudentId(): Promise<string> {
@@ -98,6 +100,17 @@ export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url);
     const { paginate, page, pageSize, skip } = parsePaginationParams(searchParams);
     const where = buildStudentWhere(searchParams);
+
+    // Historical roster: include students later upgraded out of this class.
+    if (searchParams.get("roster") === "1") {
+      const classId = searchParams.get("classId");
+      const cid = classId && classId !== "all" ? Number(classId) : NaN;
+      if (Number.isInteger(cid) && cid > 0) {
+        const ids = await findClassRosterStudentIds(cid);
+        delete where.classId;
+        where.id = { in: ids.length > 0 ? ids : [-1] };
+      }
+    }
 
     if (paginate) {
       const [items, total] = await Promise.all([
@@ -312,6 +325,15 @@ export async function POST(req: NextRequest) {
     });
 
     await recordEnrollmentForClass(prisma, student.id, student.classId);
+    if (finalBalance > 0) {
+      await recordTuitionChargeForClass(prisma, {
+        studentId: student.id,
+        classId: student.classId,
+        amount: finalBalance,
+        chargedById: auth.userId,
+        note: "Registration",
+      });
+    }
 
     return NextResponse.json(student);
   } catch (e: unknown) {

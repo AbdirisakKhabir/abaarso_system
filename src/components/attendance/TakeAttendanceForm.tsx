@@ -171,10 +171,15 @@ export default function TakeAttendanceForm({ onSuccess }: TakeAttendanceFormProp
     setLoadingStudents(true);
     try {
       const res = await authFetch(
-        `/api/students?status=Admitted&classId=${encodeURIComponent(classId)}`
+          `/api/students?classId=${encodeURIComponent(classId)}&roster=1`
       );
       if (res.ok) {
-        const admitted: (StudentOption & { status: string })[] = await res.json();
+        const data = await res.json();
+        const admitted: (StudentOption & { status: string })[] = Array.isArray(data)
+          ? data
+          : Array.isArray(data?.items)
+            ? data.items
+            : [];
         setStudents(
           admitted.map((s) => ({
             studentId: s.id,

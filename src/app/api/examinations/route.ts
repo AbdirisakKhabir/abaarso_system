@@ -3,6 +3,7 @@ import { getAuthUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { calculateTotal, getGradeInfo } from "@/lib/grades";
 import { isValidSemester } from "@/lib/semesters";
+import { semestersMatch } from "@/lib/enrollment";
 
 export async function GET(req: NextRequest) {
   try {
@@ -20,10 +21,9 @@ export async function GET(req: NextRequest) {
     const where: Record<string, unknown> = {};
     if (studentId) where.studentId = Number(studentId);
     if (courseId) where.courseId = Number(courseId);
-    if (semester) where.semester = semester;
     if (year) where.year = Number(year);
 
-    const records = await prisma.examRecord.findMany({
+    const recordsRaw = await prisma.examRecord.findMany({
       where,
       include: {
         student: {
@@ -48,6 +48,9 @@ export async function GET(req: NextRequest) {
       },
       orderBy: [{ year: "desc" }, { semester: "asc" }, { student: { firstName: "asc" } }],
     });
+    const records = semester
+      ? recordsRaw.filter((r) => semestersMatch(r.semester, semester))
+      : recordsRaw;
 
     return NextResponse.json(records);
   } catch (e) {
@@ -98,17 +101,15 @@ export async function POST(req: NextRequest) {
     const totalMarks = calculateTotal(marks);
     const { grade, gradePoints } = getGradeInfo(totalMarks);
 
-    // Check for duplicate
-    const existing = await prisma.examRecord.findUnique({
+    // Check for duplicate (including "Semester 8" vs "Semester Eight")
+    const existingRows = await prisma.examRecord.findMany({
       where: {
-        studentId_courseId_semester_year: {
-          studentId: parsedStudentId,
-          courseId: parsedCourseId,
-          semester,
-          year: parsedYear,
-        },
+        studentId: parsedStudentId,
+        courseId: parsedCourseId,
+        year: parsedYear,
       },
     });
+    const existing = existingRows.find((row) => semestersMatch(row.semester, semester));
     if (existing) {
       return NextResponse.json({ error: "Exam record for this student/course/semester/year already exists" }, { status: 400 });
     }

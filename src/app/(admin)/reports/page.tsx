@@ -19,6 +19,7 @@ const reportLinks = [
   { name: "Student Transactions", path: "/reports/student-transactions", icon: DollarLineIcon, description: "View student payment status by department and class" },
   { name: "Class Revenue", path: "/reports/class-revenue", icon: DollarLineIcon, description: "View class revenue with paid/unpaid counts" },
   { name: "Non Paid Students", path: "/reports/unpaid-students", icon: DollarLineIcon, description: "Tuition-paying students who paid nothing for a semester and class" },
+  { name: "Student Balances", path: "/reports/student-balances", icon: DollarLineIcon, description: "Students with outstanding tuition by charged semester" },
   { name: "Paid Students", path: "/reports/paid-students", icon: DollarLineIcon, description: "Completed or partially paid tuition students for a semester and class" },
   { name: "Scholarship Students", path: "/reports/scholarship-students", icon: DollarLineIcon, description: "Full and half scholarship students by semester, class, and scholarship type" },
 ];

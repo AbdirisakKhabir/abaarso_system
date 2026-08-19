@@ -1,12 +1,18 @@
 "use client";
 
-import React, { useCallback, useEffect, useState, useRef } from "react";
+import React, { useCallback, useEffect, useMemo, useState, useRef } from "react";
 import Link from "next/link";
 import PageBreadCrumb from "@/components/common/PageBreadCrumb";
 import Button from "@/components/ui/button/Button";
 import { DateInput } from "@/components/form/DateInput";
 import { authFetch } from "@/lib/api";
 import { perSemesterTuition, semesterAmountPaid } from "@/lib/tuition-amount";
+import {
+  computeStudentOwing,
+  findTerm,
+  oldestUnpaidTerm,
+} from "@/lib/student-term-ledger";
+import { semestersMatch } from "@/lib/enrollment";
 import { FINANCE_HEADS, financeHeadLabel, paymentIncludesSemesterFee, type FinanceHead } from "@/lib/finance-head";
 import { useAuth } from "@/context/AuthContext";
 import { useFormDraft } from "@/hooks/useFormDraft";
@@ -33,6 +39,14 @@ type PaymentMethod = {
   bank: { id: number; name: string; code: string } | null;
 };
 type SemesterOption = { id: number; name: string; sortOrder: number; isActive: boolean };
+type OwingTerm = {
+  semester: string;
+  year: number | null;
+  remaining: number;
+  isCurrent?: boolean;
+  alreadyCharged?: boolean;
+};
+
 type SearchStudent = {
   id: number;
   studentId: string;
@@ -46,6 +60,13 @@ type SearchStudent = {
   department: { name: string; code: string; tuitionFee: number | null };
   class: { name: string; semester: string; year: number; department: { code: string } } | null;
   tuitionPayments: { semester: string; year: number; amount: number }[];
+  tuitionCharges?: { semester: string; year: number; amount: number }[];
+  enrollments?: { semester: string; year: number; class: { id: number; name: string } | null }[];
+  owingTotal?: number;
+  unknownBalance?: number;
+  owingSource?: string;
+  owingTerms?: OwingTerm[];
+  owingPrimary?: OwingTerm | null;
 };
 
 const CURRENT_YEAR = new Date().getFullYear();
@@ -77,6 +98,26 @@ const tuitionDraftInitial: TuitionDraft = {
   paymentDate: new Date().toISOString().slice(0, 10),
   payNote: "",
 };
+
+function studentOwingInput(s: SearchStudent) {
+  return {
+    currentClass: s.class,
+    enrollments: s.enrollments,
+    charges: s.tuitionCharges,
+    payments: s.tuitionPayments,
+    expectedPerSemester: perSemesterTuition(
+      s.department?.tuitionFee ?? 0,
+      s.paymentStatus,
+      s.customSemesterFee
+    ),
+    accountBalance: s.balance ?? 0,
+  };
+}
+
+function owingLabel(term: { semester: string; year: number | null }) {
+  if (!term.year) return term.semester;
+  return `${term.semester} ${term.year}`;
+}
 
 function newHeadRow(): HeadRow {
   return { id: `row-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, financeHead: "", amount: "" };
@@ -233,12 +274,24 @@ export default function FinancePage() {
         selectedStudent.customSemesterFee
       )
     : 0;
+  const owing = useMemo(
+    () => (selectedStudent ? computeStudentOwing(studentOwingInput(selectedStudent)) : null),
+    [selectedStudent]
+  );
+  const termLedger = owing?.terms ?? [];
+  const selectedTerm = findTerm(termLedger, paySemester, Number(payYear));
   const semesterPayments =
     selectedStudent?.tuitionPayments.filter(
-      (p) => p.semester === paySemester && p.year === Number(payYear)
+      (p) => p.year === Number(payYear) && semestersMatch(p.semester, paySemester)
     ) ?? [];
-  const semesterPaid = semesterAmountPaid(semesterPayments);
-  const remainingForSemester = Math.max(0, expectedFull - semesterPaid);
+  const semesterPaid = selectedTerm?.paid ?? semesterAmountPaid(semesterPayments);
+  const remainingForSemester = selectedTerm
+    ? selectedTerm.remaining
+    : Math.max(0, expectedFull - semesterPaid);
+  const owingTotal = owing?.owingTotal ?? selectedStudent?.owingTotal ?? selectedStudent?.balance ?? 0;
+  const unknownBalance = owing?.unknownBalance ?? selectedStudent?.unknownBalance ?? 0;
+  const unpaidTerms = termLedger.filter((t) => t.remaining > 1e-6 && t.alreadyCharged);
+  const currentCatalogDue = termLedger.find((t) => t.isCurrent && !t.alreadyCharged && t.remaining > 1e-6);
 
   const usedHeads = new Set(
     payHeadRows.map((r) => r.financeHead).filter((h): h is FinanceHead => Boolean(h))
@@ -267,12 +320,24 @@ export default function FinancePage() {
   const handleSelectStudent = (s: SearchStudent) => {
     setSelectedStudent(s);
     setSearchResults([]);
+    const owingNow = computeStudentOwing(studentOwingInput(s));
+    const unpaid = owingNow.primary ?? oldestUnpaidTerm(owingNow.terms);
+    const canUseTerm = unpaid && unpaid.year > 0;
+    const semesterName = canUseTerm
+      ? semesters.find((opt) => semestersMatch(opt.name, unpaid.semester))?.name ?? unpaid.semester
+      : s.class
+        ? semesters.find((opt) => semestersMatch(opt.name, s.class!.semester))?.name ?? s.class.semester
+        : undefined;
     setDraftAll((prev) => ({
       ...prev,
       selectedStudentId: s.studentId,
       searchQuery: `${s.firstName} ${s.lastName} (${s.studentId})`,
-      ...(s.class?.semester ? { paySemester: s.class.semester } : {}),
-      ...(s.class?.year != null ? { payYear: String(s.class.year) } : {}),
+      paySemester: semesterName ?? prev.paySemester,
+      payYear: canUseTerm
+        ? String(unpaid.year)
+        : s.class?.year != null
+          ? String(s.class.year)
+          : prev.payYear,
     }));
   };
 
@@ -409,6 +474,20 @@ export default function FinancePage() {
           </Link>
           <span className="text-gray-300 dark:text-gray-600">/</span>
           <Link
+            href="/finance/charge"
+            className="text-gray-600 underline-offset-4 hover:text-gray-900 hover:underline dark:text-gray-400 dark:hover:text-white"
+          >
+            Charge Tuition
+          </Link>
+          <span className="text-gray-300 dark:text-gray-600">/</span>
+          <Link
+            href="/finance/charges"
+            className="text-gray-600 underline-offset-4 hover:text-gray-900 hover:underline dark:text-gray-400 dark:hover:text-white"
+          >
+            Charge History
+          </Link>
+          <span className="text-gray-300 dark:text-gray-600">/</span>
+          <Link
             href="/finance/banks"
             className="text-gray-600 underline-offset-4 hover:text-gray-900 hover:underline dark:text-gray-400 dark:hover:text-white"
           >
@@ -514,7 +593,13 @@ export default function FinancePage() {
                 </div>
                 {searchResults.length > 0 && (
                   <div className="absolute left-0 right-0 top-full z-20 mt-1 max-h-60 overflow-auto rounded-lg border border-gray-200 bg-white py-1 shadow-lg dark:border-gray-700 dark:bg-gray-900">
-                    {searchResults.map((s) => (
+                    {searchResults.map((s) => {
+                      const source =
+                        s.owingPrimary && s.owingPrimary.year
+                          ? owingLabel(s.owingPrimary)
+                          : s.owingSource;
+                      const total = s.owingTotal ?? s.balance ?? 0;
+                      return (
                       <button
                         key={s.id}
                         type="button"
@@ -525,39 +610,173 @@ export default function FinancePage() {
                           {s.firstName} {s.lastName}
                         </span>
                         <span className="text-xs text-gray-500 dark:text-gray-400">
-                          {s.studentId} · {s.department?.code} · owed ${(s.balance ?? 0).toLocaleString()}
+                          {s.studentId} · {s.department?.code}
+                          {total > 0 ? (
+                            <>
+                              {" · "}
+                              <span className="font-medium text-amber-700 dark:text-amber-400">
+                                ${total.toLocaleString()} owed
+                              </span>
+                              {source && source !== "No outstanding tuition" ? (
+                                <> from {source}</>
+                              ) : null}
+                            </>
+                          ) : (
+                            " · paid in full"
+                          )}
                         </span>
                       </button>
-                    ))}
+                      );
+                    })}
                   </div>
                 )}
               </div>
 
               {selectedStudent && (
-                <div className="mt-4 flex flex-col gap-3 border-l-2 border-brand-500 bg-gray-50/80 px-4 py-3 sm:flex-row sm:items-center sm:justify-between dark:bg-white/3">
-                  <div className="flex items-center gap-3">
-                    <div
-                      className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-gray-200/90 text-sm font-semibold text-gray-700 dark:bg-gray-700 dark:text-gray-200"
-                      aria-hidden
-                    >
-                      {studentInitials}
+                <div className="mt-4 border-l-2 border-brand-500 bg-gray-50/80 px-4 py-3 dark:bg-white/3">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                    <div className="flex items-center gap-3">
+                      <div
+                        className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-gray-200/90 text-sm font-semibold text-gray-700 dark:bg-gray-700 dark:text-gray-200"
+                        aria-hidden
+                      >
+                        {studentInitials}
+                      </div>
+                      <div>
+                        <p className="font-medium text-gray-900 dark:text-white">
+                          {selectedStudent.firstName} {selectedStudent.lastName}
+                        </p>
+                        <p className="font-mono text-xs text-gray-600 dark:text-gray-400">{selectedStudent.studentId}</p>
+                        <p className="mt-0.5 text-xs text-gray-600 dark:text-gray-400">
+                          {selectedStudent.department?.name}
+                          {selectedStudent.class
+                            ? ` · Current class: ${selectedStudent.class.name} (${selectedStudent.class.semester} ${selectedStudent.class.year})`
+                            : ""}
+                        </p>
+                      </div>
                     </div>
-                    <div>
-                      <p className="font-medium text-gray-900 dark:text-white">
-                        {selectedStudent.firstName} {selectedStudent.lastName}
-                      </p>
-                      <p className="font-mono text-xs text-gray-600 dark:text-gray-400">{selectedStudent.studentId}</p>
-                      <p className="mt-0.5 text-xs text-gray-600 dark:text-gray-400">
-                        {selectedStudent.department?.name} · Balance{" "}
-                        <span className="tabular-nums text-gray-900 dark:text-gray-200">
-                          ${(selectedStudent.balance ?? 0).toLocaleString()}
-                        </span>
-                      </p>
-                    </div>
+                    <Button type="button" variant="outline" size="sm" onClick={handleClearStudent} startIcon={<X className="h-3.5 w-3.5" />}>
+                      Clear
+                    </Button>
                   </div>
-                  <Button type="button" variant="outline" size="sm" onClick={handleClearStudent} startIcon={<X className="h-3.5 w-3.5" />}>
-                    Clear
-                  </Button>
+
+                  <div className="mt-3 rounded-lg border border-amber-200/80 bg-white px-3 py-2.5 dark:border-amber-900/40 dark:bg-gray-900/40">
+                    <p className="text-[11px] font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                      Outstanding balance
+                    </p>
+                    <p className="mt-0.5 text-lg font-semibold tabular-nums text-gray-900 dark:text-white">
+                      ${owingTotal.toLocaleString()}
+                    </p>
+                    {owingTotal <= 1e-6 && !currentCatalogDue ? (
+                      <p className="mt-0.5 text-xs text-success-600 dark:text-success-400">No outstanding tuition</p>
+                    ) : (
+                      <ul className="mt-1.5 space-y-0.5 text-xs text-gray-700 dark:text-gray-300">
+                        {unpaidTerms.map((t) => (
+                          <li key={`${t.semester}-${t.year}`}>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setPaySemester(
+                                  semesters.find((opt) => semestersMatch(opt.name, t.semester))?.name ??
+                                    t.semester
+                                );
+                                setPayYear(String(t.year));
+                              }}
+                              className={`text-left hover:text-brand-600 dark:hover:text-brand-400 ${
+                                selectedTerm &&
+                                semestersMatch(selectedTerm.semester, t.semester) &&
+                                selectedTerm.year === t.year
+                                  ? "font-medium text-brand-600 dark:text-brand-400"
+                                  : ""
+                              }`}
+                            >
+                              ${t.remaining.toLocaleString()} from {t.semester} {t.year}
+                              {t.isCurrent ? " (current class)" : " (previous semester)"}
+                            </button>
+                          </li>
+                        ))}
+                        {unknownBalance > 1e-6 ? (
+                          <li className="text-gray-500 dark:text-gray-400">
+                            ${unknownBalance.toLocaleString()} from unknown semester (charged before term tracking)
+                          </li>
+                        ) : null}
+                        {currentCatalogDue ? (
+                          <li>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setPaySemester(
+                                  semesters.find((opt) =>
+                                    semestersMatch(opt.name, currentCatalogDue.semester)
+                                  )?.name ?? currentCatalogDue.semester
+                                );
+                                setPayYear(String(currentCatalogDue.year));
+                              }}
+                              className="text-left text-gray-500 hover:text-brand-600 dark:text-gray-400 dark:hover:text-brand-400"
+                            >
+                              ${currentCatalogDue.remaining.toLocaleString()} catalog fee for{" "}
+                              {currentCatalogDue.semester} {currentCatalogDue.year} (not invoiced yet)
+                            </button>
+                          </li>
+                        ) : null}
+                      </ul>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {selectedStudent && termLedger.length > 0 && (
+                <div className="mt-3 overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-700">
+                  <table className="min-w-full text-xs">
+                    <thead className="bg-gray-50 dark:bg-white/5">
+                      <tr>
+                        <th className="px-3 py-2 text-left font-semibold text-gray-600 dark:text-gray-400">Semester</th>
+                        <th className="px-3 py-2 text-right font-semibold text-gray-600 dark:text-gray-400">Charged</th>
+                        <th className="px-3 py-2 text-right font-semibold text-gray-600 dark:text-gray-400">Paid</th>
+                        <th className="px-3 py-2 text-right font-semibold text-gray-600 dark:text-gray-400">Remaining</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
+                      {termLedger.map((t) => {
+                        const active = t.semester === paySemester && t.year === Number(payYear);
+                        return (
+                          <tr key={`${t.semester}-${t.year}`}>
+                            <td className="px-3 py-2">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setPaySemester(t.semester);
+                                  setPayYear(String(t.year));
+                                }}
+                                className={`text-left font-medium ${
+                                  active
+                                    ? "text-brand-600 dark:text-brand-400"
+                                    : "text-gray-800 hover:text-brand-600 dark:text-white/90"
+                                }`}
+                              >
+                                {t.semester} {t.year}
+                                {t.isCurrent ? (
+                                  <span className="ml-1.5 text-[10px] font-normal text-gray-400">current</span>
+                                ) : (
+                                  <span className="ml-1.5 text-[10px] font-normal text-gray-400">previous</span>
+                                )}
+                              </button>
+                            </td>
+                            <td className="px-3 py-2 text-right tabular-nums">
+                              {t.alreadyCharged ? `$${t.charged.toLocaleString()}` : "—"}
+                            </td>
+                            <td className="px-3 py-2 text-right tabular-nums">${t.paid.toLocaleString()}</td>
+                            <td className={`px-3 py-2 text-right tabular-nums font-medium ${t.remaining > 0 ? "text-amber-700 dark:text-amber-400" : "text-success-600"}`}>
+                              ${t.remaining.toLocaleString()}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                  <p className="border-t border-gray-100 px-3 py-1.5 text-[11px] text-gray-500 dark:border-gray-800 dark:text-gray-400">
+                    Click a semester to record payment against that term. Previous terms stay after a class upgrade.
+                  </p>
                 </div>
               )}
             </div>
@@ -713,12 +932,12 @@ export default function FinancePage() {
 
               {selectedStudent &&
                 payHeadRows.some((r) => r.financeHead === "semester_fee") &&
-                semesterPaid > 0 &&
                 remainingForSemester > 0 && (
                   <div className="mb-3 flex gap-2 rounded-md border border-blue-200/90 bg-blue-50 px-2.5 py-2 text-xs text-blue-950 dark:border-blue-900/40 dark:bg-blue-950/25 dark:text-blue-100">
                     <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" />
                     <span>
-                      Remaining tuition for {paySemester} {payYear}: ${remainingForSemester.toLocaleString()}
+                      Remaining for {paySemester} {payYear}: ${remainingForSemester.toLocaleString()}
+                      {semesterPaid > 0 ? ` (already paid $${semesterPaid.toLocaleString()} this term)` : ""}
                     </span>
                   </div>
                 )}

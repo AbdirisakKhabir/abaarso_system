@@ -1,3 +1,5 @@
+import { normalizedSemester } from "./enrollment";
+
 /**
  * Consistent semester ordering for transcripts and GPA (chronological within each year).
  * Supports DB-driven names (Semester table sortOrder), "Semester 1"…"Semester N", and Fall/Spring/Summer.
@@ -10,10 +12,11 @@ export function semesterOrdinal(semester: string, semOrderMap?: Record<string, n
     return semOrderMap[s]!;
   }
 
-  const semNum = /semester\s*(\d+)/i.exec(s);
+  const canon = normalizedSemester(s);
+  const semNum = /^semester(\d+)$/.exec(canon);
   if (semNum) return 100 + Number(semNum[1]);
 
-  const onlyDigits = /^(\d+)$/.exec(s);
+  const onlyDigits = /^(\d+)$/.exec(canon);
   if (onlyDigits) return 100 + Number(onlyDigits[1]);
 
   const legacy: Record<string, number> = {

@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { DEFAULT_PROGRAM, parseProgram, type Program } from "@/lib/program";
 import { findEnrolledStudentIdsForTerm } from "@/lib/enrollment";
+import { findClassRosterStudentIds } from "@/lib/class-roster";
 
 type ClassWithDept = {
   id: number;
@@ -176,7 +177,10 @@ const financeStudentInclude = {
   department: { select: { id: true, name: true, code: true, tuitionFee: true } },
   class: { select: { id: true, name: true, department: { select: { code: true } } } },
   tuitionPayments: {
-    select: { id: true, amount: true, semester: true, year: true },
+    select: { id: true, amount: true, semester: true, year: true, financeHead: true },
+  },
+  tuitionCharges: {
+    select: { amount: true, semester: true, year: true },
   },
 } as const;
 
@@ -214,9 +218,8 @@ export function semestersMatch(a: string, b: string): boolean {
 /**
  * Load students for paid/unpaid term reports after class upgrades.
  *
- * Cohort is based on tuition payments for the selected semester/year in the
- * department (students may already have moved to a newer class). Currently
- * enrolled students in the selected class(es) are always included too.
+ * Cohort: historical class roster, enrollment, Semester Fee payments, and
+ * tuition charges for the selected term (students may have moved class).
  */
 export async function findStudentsForFinanceTermReport(
   resolved: { classIds: number[]; scope: FinanceReportScope; program: Program },
@@ -232,9 +235,11 @@ export async function findStudentsForFinanceTermReport(
     phone: string | null;
     paymentStatus: string | null;
     customSemesterFee: number | null;
+    balance: number;
     department: { id: number; name: string; code: string; tuitionFee: number | null };
     class: { id: number; name: string; department: { code: string } } | null;
     tuitionPayments: { id: number; amount: number; semester: string; year: number }[];
+    tuitionCharges: { amount: number; semester: string; year: number }[];
   }>;
   source: "enrollment_history" | "term_payments" | "class_enrollment" | "mixed" | "none";
 }> {
@@ -243,8 +248,19 @@ export async function findStudentsForFinanceTermReport(
       ? resolved.scope.class.department.id
       : resolved.scope.department.id;
 
-  const [yearPayments, enrolled, historyIds] = await Promise.all([
+  const [yearPayments, yearCharges, enrolled, historyIds, rosterIds] = await Promise.all([
     prisma.tuitionPayment.findMany({
+      where: {
+        year,
+        financeHead: "semester_fee",
+        student: {
+          departmentId,
+          status: { in: ["Admitted", "Graduated"] },
+        },
+      },
+      select: { studentId: true, semester: true },
+    }),
+    prisma.tuitionCharge.findMany({
       where: {
         year,
         student: {
@@ -261,7 +277,6 @@ export async function findStudentsForFinanceTermReport(
       },
       select: { id: true },
     }),
-    // Enrollment history is the authoritative cohort after class upgrades.
     findEnrolledStudentIdsForTerm({
       mode: resolved.scope.mode,
       classIds: resolved.classIds,
@@ -269,44 +284,67 @@ export async function findStudentsForFinanceTermReport(
       semester,
       year,
     }),
+    Promise.all(resolved.classIds.map((id) => findClassRosterStudentIds(id))).then((sets) => {
+      const ids = new Set<number>();
+      for (const list of sets) for (const id of list) ids.add(id);
+      return ids;
+    }),
   ]);
 
   const paymentStudentIds = new Set<number>();
   for (const p of yearPayments) {
-    if (semestersMatch(p.semester, semester)) {
-      paymentStudentIds.add(p.studentId);
-    }
+    if (semestersMatch(p.semester, semester)) paymentStudentIds.add(p.studentId);
+  }
+  const chargedStudentIds = new Set<number>();
+  for (const c of yearCharges) {
+    if (semestersMatch(c.semester, semester)) chargedStudentIds.add(c.studentId);
   }
 
   const enrolledIds = new Set(enrolled.map((s) => s.id));
-  const allIds = [
-    ...new Set([...historyIds, ...paymentStudentIds, ...enrolledIds]),
-  ];
+  const allIds = new Set<number>([
+    ...historyIds,
+    ...enrolledIds,
+    ...rosterIds,
+    ...paymentStudentIds,
+  ]);
+  // Department-wide: include anyone invoiced for this term even if they left every class.
+  if (resolved.scope.mode === "department") {
+    for (const id of chargedStudentIds) allIds.add(id);
+  }
 
-  if (allIds.length === 0) {
+  if (allIds.size === 0) {
     return { students: [], source: "none" };
   }
 
   const students = await prisma.student.findMany({
-    where: { id: { in: allIds } },
+    where: {
+      id: { in: [...allIds] },
+      program: resolved.program,
+      status: { in: ["Admitted", "Graduated"] },
+    },
     include: {
-      ...financeStudentInclude,
+      department: financeStudentInclude.department,
+      class: financeStudentInclude.class,
       tuitionPayments: {
+        where: { year, financeHead: "semester_fee" },
+        select: { id: true, amount: true, semester: true, year: true },
+      },
+      tuitionCharges: {
         where: { year },
-        select: financeStudentInclude.tuitionPayments.select,
+        select: financeStudentInclude.tuitionCharges.select,
       },
     },
     orderBy: [{ studentId: "asc" }],
   });
 
   const source =
-    historyIds.size > 0
+    historyIds.size > 0 || rosterIds.size > 0
       ? ("enrollment_history" as const)
-      : paymentStudentIds.size > 0 && enrolledIds.size > 0
-        ? ("mixed" as const)
-        : paymentStudentIds.size > 0
-          ? ("term_payments" as const)
-          : ("class_enrollment" as const);
+      : chargedStudentIds.size > 0 || paymentStudentIds.size > 0
+        ? ("term_payments" as const)
+        : enrolledIds.size > 0
+          ? ("class_enrollment" as const)
+          : ("mixed" as const);
 
   return { students, source };
 }

@@ -14,6 +14,7 @@ const paymentReportLinks = [
   { name: "Finance Head Report", path: "/reports/finance-heads", icon: DollarLineIcon, description: "Re-exam, graduation, registration, and other non-tuition fees (excludes Semester Fee)" },
   { name: "Class Revenue", path: "/reports/class-revenue", icon: DollarLineIcon, description: "Class revenue with paid and unpaid counts" },
   { name: "Unpaid Students", path: "/reports/unpaid-students", icon: DollarLineIcon, description: "Tuition-paying students not fully paid for a semester and class" },
+  { name: "Student Balances", path: "/reports/student-balances", icon: DollarLineIcon, description: "Outstanding tuition by the semester the student was charged (unknown term called out separately)" },
   { name: "Paid Students", path: "/reports/paid-students", icon: DollarLineIcon, description: "Tuition-paying students fully paid for a semester and class" },
   { name: "Scholarship Students", path: "/reports/scholarship-students", icon: DollarLineIcon, description: "Full and half scholarship students by semester, class, and type" },
   { name: "Bank Balances", path: "/reports/bank-balances", icon: DollarLineIcon, description: "Balance per bank account" },

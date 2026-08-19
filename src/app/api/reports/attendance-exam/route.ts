@@ -7,6 +7,7 @@ import {
 } from "@/lib/attendance";
 import { getSemesterDateRange } from "@/lib/semester-dates";
 import { parseProgram } from "@/lib/program";
+import { classRosterStudentWhere, examBelongsToClassTerm } from "@/lib/class-roster";
 
 /**
  * GET /api/reports/attendance-exam?classId=X&courseId=Y
@@ -51,8 +52,9 @@ export async function GET(req: NextRequest) {
       );
     }
 
+    const rosterWhere = await classRosterStudentWhere(Number(classId));
     const students = await prisma.student.findMany({
-      where: { classId: Number(classId), status: "Admitted", program },
+      where: { ...rosterWhere, status: { in: ["Admitted", "Graduated"] }, program },
       select: {
         id: true,
         studentId: true,
@@ -111,24 +113,24 @@ export async function GET(req: NextRequest) {
     // Exam records - optionally filtered by course
     const examWhere: {
       studentId: { in: number[] };
-      semester: string;
       year: number;
       courseId?: number;
     } = {
-      studentId: { in: studentIds },
-      semester: cls.semester,
+      studentId: { in: studentIds.length > 0 ? studentIds : [-1] },
       year: cls.year,
     };
     if (courseId) {
       examWhere.courseId = Number(courseId);
     }
 
-    const examRecords = await prisma.examRecord.findMany({
-      where: examWhere,
-      include: {
-        course: { select: { id: true, code: true, name: true } },
-      },
-    });
+    const examRecords = (
+      await prisma.examRecord.findMany({
+        where: examWhere,
+        include: {
+          course: { select: { id: true, code: true, name: true } },
+        },
+      })
+    ).filter((er) => examBelongsToClassTerm(er, cls));
 
     const examsByStudent = new Map<number, typeof examRecords>();
     for (const er of examRecords) {

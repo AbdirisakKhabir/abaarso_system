@@ -37,7 +37,17 @@ type StudentProfile = {
   paymentStatus: string;
   balance: number;
   admissionDate: string;
-  tuitionPayments: { id: number; semester: string; year: number; amount: number; paidAt: string }[];
+  tuitionPayments: { id: number; semester: string; year: number; amount: number; paidAt: string; financeHead?: string }[];
+  tuitionCharges?: { id: number; semester: string; year: number; amount: number; note: string | null; createdAt: string }[];
+  enrollments?: { id: number; semester: string; year: number; class: { id: number; name: string } | null }[];
+  examRecords?: {
+    id: number;
+    semester: string;
+    year: number;
+    totalMarks: number;
+    grade: string | null;
+    course: { code: string; name: string };
+  }[];
 };
 
 export default function StudentProfilePage() {
@@ -306,6 +316,76 @@ export default function StudentProfilePage() {
             </div>
           </div>
 
+          {/* Academic history by semester */}
+          <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm dark:border-gray-800 dark:bg-white/[0.03]">
+            <h3 className="mb-5 flex items-center gap-2 text-lg font-semibold text-gray-800 dark:text-white/90">
+              <GroupIcon className="h-5 w-5 text-brand-500" />
+              Semester history
+            </h3>
+            {(student.enrollments ?? []).length === 0 ? (
+              <p className="text-sm text-gray-500 dark:text-gray-400">
+                No previous class enrollments recorded yet. History is saved when the student is charged, pays, or is upgraded.
+              </p>
+            ) : (
+              <div className="space-y-2">
+                {(student.enrollments ?? []).map((e) => {
+                  const isCurrent =
+                    student.class &&
+                    e.semester === student.class.semester &&
+                    e.year === student.class.year;
+                  return (
+                    <div
+                      key={e.id}
+                      className="flex items-center justify-between rounded-xl border border-gray-100 px-4 py-3 dark:border-gray-800"
+                    >
+                      <div>
+                        <p className="font-medium text-gray-800 dark:text-white/90">
+                          {e.semester} {e.year}
+                          {isCurrent && (
+                            <span className="ml-2 text-xs font-normal text-brand-600 dark:text-brand-400">
+                              current
+                            </span>
+                          )}
+                        </p>
+                        <p className="text-xs text-gray-500">{e.class?.name ?? "Class not recorded"}</p>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          {/* Charges */}
+          <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm dark:border-gray-800 dark:bg-white/[0.03]">
+            <h3 className="mb-5 flex items-center gap-2 text-lg font-semibold text-gray-800 dark:text-white/90">
+              <DollarLineIcon className="h-5 w-5 text-brand-500" />
+              Tuition charges (invoices)
+            </h3>
+            {(student.tuitionCharges ?? []).length === 0 ? (
+              <p className="text-sm text-gray-500 dark:text-gray-400">No semester charges recorded.</p>
+            ) : (
+              <div className="space-y-2">
+                {(student.tuitionCharges ?? []).map((c) => (
+                  <div
+                    key={c.id}
+                    className="flex items-center justify-between rounded-xl border border-gray-100 px-4 py-3 dark:border-gray-800"
+                  >
+                    <div>
+                      <p className="font-medium text-gray-800 dark:text-white/90">
+                        {c.semester} {c.year}
+                      </p>
+                      <p className="text-xs text-gray-500">{c.note || "Tuition charge"}</p>
+                    </div>
+                    <span className="font-semibold tabular-nums text-gray-800 dark:text-white/90">
+                      ${c.amount.toLocaleString()}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
           {/* Payment History */}
           <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm dark:border-gray-800 dark:bg-white/[0.03]">
             <h3 className="mb-5 flex items-center gap-2 text-lg font-semibold text-gray-800 dark:text-white/90">
@@ -340,6 +420,42 @@ export default function StudentProfilePage() {
                     </span>
                   </div>
                 ))}
+              </div>
+            )}
+          </div>
+
+          <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm dark:border-gray-800 dark:bg-white/[0.03]">
+            <h3 className="mb-5 flex items-center gap-2 text-lg font-semibold text-gray-800 dark:text-white/90">
+              Exam records
+            </h3>
+            {(student.examRecords ?? []).length === 0 ? (
+              <p className="text-sm text-gray-500 dark:text-gray-400">No exam records yet.</p>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="min-w-full text-sm">
+                  <thead>
+                    <tr className="text-left text-xs text-gray-500">
+                      <th className="pb-2 pr-3">Semester</th>
+                      <th className="pb-2 pr-3">Course</th>
+                      <th className="pb-2 pr-3 text-right">Total</th>
+                      <th className="pb-2 text-right">Grade</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
+                    {(student.examRecords ?? []).map((r) => (
+                      <tr key={r.id}>
+                        <td className="py-2 pr-3 whitespace-nowrap">
+                          {r.semester} {r.year}
+                        </td>
+                        <td className="py-2 pr-3">
+                          {r.course.code} — {r.course.name}
+                        </td>
+                        <td className="py-2 pr-3 text-right tabular-nums">{r.totalMarks}</td>
+                        <td className="py-2 text-right font-medium">{r.grade ?? "—"}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
             )}
           </div>

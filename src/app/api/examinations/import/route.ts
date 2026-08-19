@@ -3,6 +3,7 @@ import { getAuthUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { readWorkbookAoa } from "@/lib/excel";
 import { calculateTotal, getGradeInfo, getGradePointsFromGrade } from "@/lib/grades";
+import { recordEnrollmentForClass, semestersMatch } from "@/lib/enrollment";
 
 /** Find column index by flexible header matching */
 function findCol(headerRow: string[], patterns: RegExp[]): number {
@@ -105,6 +106,7 @@ export async function POST(req: NextRequest) {
     const created: number[] = [];
     const updated: number[] = [];
     const errors: string[] = [];
+    const importedStudentIds = new Set<number>();
 
     for (let i = dataStartRow; i < data.length; i++) {
       const row = data[i] as (string | number)[];
@@ -162,16 +164,16 @@ export async function POST(req: NextRequest) {
         gradePoints = info.gradePoints;
       }
 
-      const existing = await prisma.examRecord.findUnique({
+      const existingCandidates = await prisma.examRecord.findMany({
         where: {
-          studentId_courseId_semester_year: {
-            studentId: student.id,
-            courseId: course.id,
-            semester: cls.semester,
-            year: cls.year,
-          },
+          studentId: student.id,
+          courseId: course.id,
+          year: cls.year,
         },
       });
+      const existing = existingCandidates.find((row) =>
+        semestersMatch(row.semester, cls.semester)
+      );
 
       if (existing) {
         await prisma.examRecord.update({
@@ -179,6 +181,7 @@ export async function POST(req: NextRequest) {
           data: { ...marks, totalMarks, grade, gradePoints, status: "draft" },
         });
         updated.push(existing.id);
+        importedStudentIds.add(student.id);
       } else {
         const rec = await prisma.examRecord.create({
           data: {
@@ -194,7 +197,12 @@ export async function POST(req: NextRequest) {
           },
         });
         created.push(rec.id);
+        importedStudentIds.add(student.id);
       }
+    }
+
+    for (const sid of importedStudentIds) {
+      await recordEnrollmentForClass(prisma, sid, Number(classId));
     }
 
     return NextResponse.json({

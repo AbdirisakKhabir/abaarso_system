@@ -91,6 +91,8 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    const previousClassId = student.classId;
+
     const updated = await prisma.student.update({
       where: { id: sid },
       data,
@@ -108,6 +110,9 @@ export async function POST(req: NextRequest) {
       },
     });
 
+    if (previousClassId && previousClassId !== updated.classId) {
+      await recordEnrollmentForClass(prisma, updated.id, previousClassId);
+    }
     await recordEnrollmentForClass(prisma, updated.id, updated.classId);
 
     return NextResponse.json(updated);

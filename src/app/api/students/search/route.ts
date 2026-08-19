@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAuthUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { perSemesterTuition } from "@/lib/tuition-amount";
+import { computeStudentOwing, formatOwingSource } from "@/lib/student-term-ledger";
 
 export async function GET(req: NextRequest) {
   try {
@@ -17,13 +19,12 @@ export async function GET(req: NextRequest) {
       return NextResponse.json([]);
     }
 
-    const search = `%${q}%`;
     const students = await prisma.student.findMany({
       where: {
         OR: [
           { studentId: { contains: q } },
-          { firstName: { contains: search } },
-          { lastName: { contains: search } },
+          { firstName: { contains: q } },
+          { lastName: { contains: q } },
           { phone: { contains: q } },
           { email: { contains: q } },
         ],
@@ -41,16 +42,67 @@ export async function GET(req: NextRequest) {
           },
         },
         tuitionPayments: {
-          // Only Semester Fee counts toward tuition balance / remaining calc.
           where: { financeHead: "semester_fee" },
           orderBy: [{ year: "desc" }, { semester: "asc" }],
           select: { id: true, semester: true, year: true, amount: true, paidAt: true },
+        },
+        tuitionCharges: {
+          select: { semester: true, year: true, amount: true },
+          orderBy: [{ year: "asc" }, { semester: "asc" }],
+        },
+        enrollments: {
+          select: {
+            semester: true,
+            year: true,
+            class: { select: { id: true, name: true } },
+          },
+          orderBy: [{ year: "asc" }, { semester: "asc" }],
         },
       },
       orderBy: { studentId: "asc" },
     });
 
-    return NextResponse.json(students);
+    const payload = students.map((s) => {
+      const owing = computeStudentOwing({
+        currentClass: s.class,
+        enrollments: s.enrollments,
+        charges: s.tuitionCharges,
+        payments: s.tuitionPayments,
+        expectedPerSemester: perSemesterTuition(
+          s.department?.tuitionFee ?? 0,
+          s.paymentStatus,
+          s.customSemesterFee
+        ),
+        accountBalance: s.balance ?? 0,
+      });
+      return {
+        ...s,
+        owingTotal: owing.owingTotal,
+        unknownBalance: owing.unknownBalance,
+        owingSource: formatOwingSource(owing),
+        owingTerms: owing.terms
+          .filter((t) => t.remaining > 1e-6)
+          .map((t) => ({
+            semester: t.semester,
+            year: t.year,
+            remaining: t.remaining,
+            isCurrent: t.isCurrent,
+            alreadyCharged: t.alreadyCharged,
+          })),
+        owingPrimary: owing.primary
+          ? {
+              semester: owing.primary.semester,
+              year: owing.primary.year,
+              remaining: owing.primary.remaining,
+              isCurrent: owing.primary.isCurrent,
+            }
+          : owing.unknownBalance > 1e-6
+            ? { semester: "Unknown semester", year: null as number | null, remaining: owing.unknownBalance, isCurrent: false }
+            : null,
+      };
+    });
+
+    return NextResponse.json(payload);
   } catch (e) {
     console.error("Student search error:", e);
     return NextResponse.json({ error: "Something went wrong" }, { status: 500 });

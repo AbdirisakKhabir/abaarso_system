@@ -31,7 +31,31 @@ export async function GET(req: NextRequest, ctx: RouteContext) {
         },
         tuitionPayments: {
           orderBy: [{ year: "desc" }, { semester: "asc" }],
-          select: { id: true, semester: true, year: true, amount: true, paidAt: true },
+          select: { id: true, semester: true, year: true, amount: true, paidAt: true, financeHead: true },
+        },
+        tuitionCharges: {
+          orderBy: [{ year: "desc" }, { createdAt: "desc" }],
+          select: { id: true, semester: true, year: true, amount: true, note: true, createdAt: true },
+        },
+        enrollments: {
+          orderBy: [{ year: "desc" }, { semester: "asc" }],
+          select: {
+            id: true,
+            semester: true,
+            year: true,
+            class: { select: { id: true, name: true } },
+          },
+        },
+        examRecords: {
+          orderBy: [{ year: "desc" }, { semester: "asc" }],
+          select: {
+            id: true,
+            semester: true,
+            year: true,
+            totalMarks: true,
+            grade: true,
+            course: { select: { code: true, name: true } },
+          },
         },
       },
     });

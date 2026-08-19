@@ -142,15 +142,19 @@ export async function PATCH(req: NextRequest, ctx: RouteContext) {
       }
       data.admissionDate = d;
     }
+    const existing = await prisma.student.findUnique({
+      where: { id },
+      select: { classId: true, imagePublicId: true },
+    });
+    if (!existing) {
+      return NextResponse.json({ error: "Student not found" }, { status: 404 });
+    }
+
     // Handle image update: if new image provided, delete old one from Cloudinary
     if (body.imageUrl !== undefined) {
-      const currentStudent = await prisma.student.findUnique({
-        where: { id },
-        select: { imagePublicId: true },
-      });
-      if (currentStudent?.imagePublicId && body.imagePublicId !== currentStudent.imagePublicId) {
+      if (existing.imagePublicId && body.imagePublicId !== existing.imagePublicId) {
         try {
-          await deleteImage(currentStudent.imagePublicId);
+          await deleteImage(existing.imagePublicId);
         } catch {
           // Ignore Cloudinary deletion errors
         }
@@ -171,8 +175,13 @@ export async function PATCH(req: NextRequest, ctx: RouteContext) {
       },
     });
 
-    if (body.classId !== undefined && student.classId) {
-      await recordEnrollmentForClass(prisma, student.id, student.classId);
+    if (body.classId !== undefined) {
+      if (existing.classId && existing.classId !== student.classId) {
+        await recordEnrollmentForClass(prisma, student.id, existing.classId);
+      }
+      if (student.classId) {
+        await recordEnrollmentForClass(prisma, student.id, student.classId);
+      }
     }
 
     return NextResponse.json(student);

@@ -18,17 +18,19 @@ const SEMESTER_WORDS: Record<string, string> = {
   twelve: "12",
 };
 
+/** Canonical form so "Semester Eight" and "Semester 8" compare equal. */
+export function normalizedSemester(s: string): string {
+  let out = String(s ?? "").trim().toLowerCase().replace(/\s+/g, " ");
+  for (const [word, num] of Object.entries(SEMESTER_WORDS)) {
+    out = out.replace(new RegExp(`\\b${word}\\b`, "g"), num);
+  }
+  return out.replace(/[^a-z0-9]/g, "");
+}
+
 /** Loose semester compare so "Semester Eight" and "Semester 8" match. */
-function semestersMatch(a: string, b: string): boolean {
-  const norm = (s: string) => {
-    let out = String(s ?? "").trim().toLowerCase().replace(/\s+/g, " ");
-    for (const [word, num] of Object.entries(SEMESTER_WORDS)) {
-      out = out.replace(new RegExp(`\\b${word}\\b`, "g"), num);
-    }
-    return out.replace(/[^a-z0-9]/g, "");
-  };
+export function semestersMatch(a: string, b: string): boolean {
   if (String(a ?? "").trim().toLowerCase() === String(b ?? "").trim().toLowerCase()) return true;
-  return norm(a) === norm(b);
+  return normalizedSemester(a) === normalizedSemester(b);
 }
 
 /**
@@ -70,6 +72,79 @@ export async function recordEnrollmentForClass(
     });
   } catch (e) {
     console.error("recordEnrollmentForClass failed", { studentId, classId, e });
+  }
+}
+
+/**
+ * Ensure a (student, semester, year) enrollment row exists so finance/exam
+ * history stays attached to that term after the student is upgraded.
+ * Does not overwrite an existing concrete classId.
+ */
+export async function ensureEnrollmentForTerm(
+  db: Db,
+  params: {
+    studentId: number;
+    semester: string;
+    year: number;
+    departmentId: number;
+    program?: string | null;
+    classId?: number | null;
+  }
+): Promise<void> {
+  const semester = String(params.semester ?? "").trim();
+  const year = params.year;
+  if (!semester || !Number.isInteger(year)) return;
+
+  try {
+    let classId =
+      params.classId && Number.isInteger(params.classId) ? params.classId : null;
+
+    if (!classId) {
+      const matches = await db.class.findMany({
+        where: {
+          departmentId: params.departmentId,
+          semester,
+          year,
+          ...(params.program ? { program: params.program } : {}),
+        },
+        select: { id: true },
+        take: 2,
+      });
+      if (matches.length === 1) classId = matches[0].id;
+    }
+
+    const existing = await db.studentEnrollment.findUnique({
+      where: {
+        studentId_semester_year: {
+          studentId: params.studentId,
+          semester,
+          year,
+        },
+      },
+    });
+
+    if (existing) {
+      if (existing.classId == null && classId) {
+        await db.studentEnrollment.update({
+          where: { id: existing.id },
+          data: { classId },
+        });
+      }
+      return;
+    }
+
+    await db.studentEnrollment.create({
+      data: {
+        studentId: params.studentId,
+        classId,
+        departmentId: params.departmentId,
+        program: params.program ?? "Bachelor",
+        semester,
+        year,
+      },
+    });
+  } catch (e) {
+    console.error("ensureEnrollmentForTerm failed", params, e);
   }
 }
 

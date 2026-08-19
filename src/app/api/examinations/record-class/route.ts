@@ -6,6 +6,7 @@ import {
   computeAttendancePercent,
 } from "@/lib/attendance";
 import { getSemesterDateRange } from "@/lib/semester-dates";
+import { classRosterStudentWhere, examBelongsToClassTerm } from "@/lib/class-roster";
 
 /**
  * GET /api/examinations/record-class?classId=X&courseId=Y
@@ -61,9 +62,10 @@ export async function GET(req: NextRequest) {
       );
     }
 
-    // Get all students in this class (students with classId = this class)
+    // Historical roster so exams still load after students are upgraded.
+    const rosterWhere = await classRosterStudentWhere(parsedClassId);
     const students = await prisma.student.findMany({
-      where: { classId: parsedClassId, status: "Admitted" },
+      where: { ...rosterWhere, status: { in: ["Admitted", "Graduated"] } },
       select: {
         id: true,
         studentId: true,
@@ -76,28 +78,34 @@ export async function GET(req: NextRequest) {
 
     const studentIds = students.map((s) => s.id);
 
-    // Fetch existing exam records for this course in this semester
-    const examRecords = await prisma.examRecord.findMany({
-      where: {
-        studentId: { in: studentIds },
-        courseId: parsedCourseId,
-        semester: cls.semester,
-        year: cls.year,
-      },
-      select: {
-        studentId: true,
-        midExam: true,
-        finalExam: true,
-        assessment: true,
-        project: true,
-        assignment: true,
-        presentation: true,
-        totalMarks: true,
-        grade: true,
-        gradePoints: true,
-      },
-    });
-    const examByStudent = new Map(examRecords.map((r) => [r.studentId, r]));
+    const examRecordsRaw = studentIds.length
+      ? await prisma.examRecord.findMany({
+          where: {
+            studentId: { in: studentIds },
+            courseId: parsedCourseId,
+            year: cls.year,
+          },
+          select: {
+            studentId: true,
+            semester: true,
+            year: true,
+            midExam: true,
+            finalExam: true,
+            assessment: true,
+            project: true,
+            assignment: true,
+            presentation: true,
+            totalMarks: true,
+            grade: true,
+            gradePoints: true,
+          },
+        })
+      : [];
+    const examByStudent = new Map(
+      examRecordsRaw
+        .filter((r) => examBelongsToClassTerm(r, cls))
+        .map((r) => [r.studentId, r])
+    );
 
     // Compute attendance for each student (semester-filtered)
     const { start, end } = getSemesterDateRange(cls.semester, cls.year);

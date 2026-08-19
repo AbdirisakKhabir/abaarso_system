@@ -9,9 +9,11 @@ import {
   classifyPaymentCompletion,
   computeTermTuition,
   filterTermPayments,
+  matchesCompletionFilter,
   matchesStudentPaymentStatusFilter,
   parsePaymentCompletionFilter,
   parseStudentPaymentStatusFilter,
+  semesterAmountPaid,
 } from "@/lib/tuition-amount";
 
 function fallbackTuitionFeeFromScope(
@@ -42,10 +44,10 @@ export async function GET(req: NextRequest) {
     const paymentStatusFilter = parseStudentPaymentStatusFilter(
       searchParams.get("paymentStatusFilter")
     );
-    // Non-paid students (paid nothing) by default; "partial" available too.
+    // Anyone who still owes for the term (unpaid + partial). "nonpaid" / "partial" still available.
     const completionFilter = parsePaymentCompletionFilter(
       searchParams.get("completion"),
-      "nonpaid"
+      "owing"
     );
 
     if (!semester || !year) {
@@ -89,21 +91,34 @@ export async function GET(req: NextRequest) {
 
     const unpaidStudents = studentsInScope
       .map((s) => {
-        if (!matchesStudentPaymentStatusFilter(s.paymentStatus, paymentStatusFilter)) {
+        const termPayments = filterTermPayments(s.tuitionPayments, semester, parsedYear);
+        const chargedAmount = semesterAmountPaid(
+          filterTermPayments(s.tuitionCharges, semester, parsedYear)
+        );
+        const fallbackFee = fallbackTuitionFeeFromScope(resolved, s.department?.id);
+        const typeOk = matchesStudentPaymentStatusFilter(s.paymentStatus, paymentStatusFilter);
+        if (!typeOk && !(paymentStatusFilter === "all" && chargedAmount > 0)) {
           return null;
         }
-        const termPayments = filterTermPayments(s.tuitionPayments, semester, parsedYear);
-        const fallbackFee = fallbackTuitionFeeFromScope(resolved, s.department?.id);
-        const { paymentStatus, expectedAmount, paidAmount } = computeTermTuition(
+        const { paymentStatus, expectedAmount: billedOrCatalog, paidAmount } = computeTermTuition(
           s,
           termPayments,
-          fallbackFee
+          fallbackFee,
+          chargedAmount
         );
+        // Legacy leftover: student is in this class, has a ledger balance, but no invoice row.
+        const inThisClass = s.class?.id != null && resolved.classIds.includes(s.class.id);
+        const expectedAmount =
+          billedOrCatalog > 0
+            ? billedOrCatalog
+            : chargedAmount <= 0 && paidAmount <= 0 && inThisClass && (s.balance ?? 0) > 0
+              ? Number(s.balance)
+              : billedOrCatalog;
         const completion = classifyPaymentCompletion(expectedAmount, paidAmount);
         if (completion === "partial") partialCount += 1;
         else if (completion === "nonpaid") nonpaidCount += 1;
 
-        if (completion !== completionFilter) return null;
+        if (!matchesCompletionFilter(completion, completionFilter)) return null;
 
         const amountDue = Math.max(0, expectedAmount - paidAmount);
         return {

@@ -19,6 +19,7 @@ export async function backfillEnrollments(): Promise<{
     attendanceClasses: number;
     examRecords: number;
     payments: number;
+    charges: number;
   };
   written: number;
 }> {
@@ -137,7 +138,33 @@ export async function backfillEnrollments(): Promise<{
     });
   }
 
-  // 4. Tuition payments
+  // 4. Tuition charges (invoiced terms)
+  const charges = await prisma.tuitionCharge.findMany({
+    select: {
+      studentId: true,
+      semester: true,
+      year: true,
+      student: { select: { departmentId: true, program: true } },
+    },
+  });
+  for (const ch of charges) {
+    const deptId = ch.student.departmentId;
+    const program = ch.student.program;
+    const tk = `${deptId}|${normSem(ch.semester)}|${ch.year}|${program}`;
+    const resolved = classByTerm.get(tk);
+    const cls = resolved != null ? classMeta.get(resolved) : null;
+    consider({
+      studentId: ch.studentId,
+      classId: cls?.id ?? null,
+      departmentId: deptId,
+      program,
+      semester: cls?.semester ?? ch.semester,
+      year: ch.year,
+      priority: 2,
+    });
+  }
+
+  // 5. Tuition payments
   const payments = await prisma.tuitionPayment.findMany({
     select: {
       studentId: true,
@@ -197,6 +224,7 @@ export async function backfillEnrollments(): Promise<{
       attendanceClasses: classes.length,
       examRecords: exams.length,
       payments: payments.length,
+      charges: charges.length,
     },
     written,
   };

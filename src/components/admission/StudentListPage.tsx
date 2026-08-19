@@ -1071,6 +1071,7 @@ export default function StudentListPage({ program }: { program: Program }) {
                   Default <strong>Per semester</strong> comes from the department fee and payment status (half scholar = 50%,
                   full scholarship = $0). You can type a different amount for any student; the{" "}
                   <strong>line total</strong> (per semester × semester count) is added to their balance.
+                  Each billed semester is stored so the Student Balances report can show which term they still owe.
                 </p>
                 {chargeError && (
                   <div className="rounded-lg bg-error-50 px-4 py-3 text-sm text-error-600 dark:bg-error-500/10 dark:text-error-400">

@@ -3,6 +3,7 @@ import { getAuthUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { isAllowedAttendanceStatus } from "@/lib/attendanceConstants";
 import { assertUserCanManageAttendanceSession } from "@/lib/attendanceTaker";
+import { recordEnrollmentsForClass } from "@/lib/enrollment";
 
 export async function GET(req: NextRequest) {
   try {
@@ -228,6 +229,11 @@ export async function POST(req: NextRequest) {
         },
       },
     });
+
+    const studentIds = (records as { studentId: number }[])
+      .map((r) => Number(r.studentId))
+      .filter((id) => Number.isInteger(id) && id > 0);
+    await recordEnrollmentsForClass(prisma, studentIds, parsedClassId);
 
     return NextResponse.json(session);
   } catch (e: unknown) {

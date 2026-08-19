@@ -20,6 +20,7 @@ model User {
   isActive           Boolean              @default(true)
   attendanceSessions AttendanceSession[]
   tuitionPayments    TuitionPayment[]
+  tuitionCharges     TuitionCharge[]
   bankWithdrawals    BankWithdrawal[]
   bankTransfers      BankTransfer[]
   transactionHistory TransactionHistory[]
@@ -288,6 +289,7 @@ model Student {
   attendanceRecords  AttendanceRecord[]
   examRecords        ExamRecord[]
   tuitionPayments    TuitionPayment[]
+  tuitionCharges     TuitionCharge[]
   transactionHistory TransactionHistory[]
   enrollments        StudentEnrollment[]
   createdAt          DateTime             @default(now())
@@ -403,6 +405,27 @@ model TuitionPayment {
   @@index([studentId, semester, year])
   @@index([financeHead])
   @@map("tuition_payments")
+}
+
+/// One billed term of tuition. Created when staff charge a student (registration
+/// or Tuition charge & invoice). Remaining for a term = charged − Semester Fee paid.
+/// Older balances charged before this table exist as student.balance with no row
+/// and show as "Unknown semester" on the Student Balances report.
+model TuitionCharge {
+  id          Int      @id @default(autoincrement())
+  studentId   Int
+  student     Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  semester    String
+  year        Int
+  amount      Float
+  note        String?
+  chargedById Int?
+  chargedBy   User?    @relation(fields: [chargedById], references: [id], onDelete: SetNull)
+  createdAt   DateTime @default(now())
+
+  @@index([studentId, semester, year])
+  @@index([semester, year])
+  @@map("tuition_charges")
 }
 
 model BankWithdrawal {

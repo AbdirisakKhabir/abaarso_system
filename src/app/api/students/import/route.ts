@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { readWorkbookAoa } from "@/lib/excel";
 import { DEFAULT_PROGRAM, parseProgram } from "@/lib/program";
 import { recordEnrollmentForClass } from "@/lib/enrollment";
+import { recordTuitionChargeForClass } from "@/lib/tuition-charge";
 
 function findCol(headerRow: string[], patterns: RegExp[]): number {
   for (const p of patterns) {
@@ -399,6 +400,15 @@ export async function POST(req: NextRequest) {
       created.push(student.id);
       if (resolvedClassId) {
         await recordEnrollmentForClass(prisma, student.id, resolvedClassId);
+      }
+      if (initialBalance > 0) {
+        await recordTuitionChargeForClass(prisma, {
+          studentId: student.id,
+          classId: resolvedClassId,
+          amount: initialBalance,
+          chargedById: auth.userId,
+          note: "Import",
+        });
       }
     }
 

@@ -54,6 +54,7 @@ export default function UnpaidStudentsReportPage() {
   const [filterDeptId, setFilterDeptId] = useState<string>("all");
   const [unpaidClassId, setUnpaidClassId] = useState("");
   const [paymentStatusFilter, setPaymentStatusFilter] = useState<string>("all");
+  const [completionFilter, setCompletionFilter] = useState<string>("owing");
   const [unpaidStudents, setUnpaidStudents] = useState<UnpaidStudent[]>([]);
   const [reportScope, setReportScope] = useState<"class" | "department">("class");
   const [unpaidClassInfo, setUnpaidClassInfo] = useState<{ name: string; semester: string; year: number; department: { code: string; name: string } } | null>(null);
@@ -118,6 +119,7 @@ export default function UnpaidStudentsReportPage() {
       });
       if (filterDeptId !== "all") params.set("departmentId", filterDeptId);
       params.set("paymentStatusFilter", paymentStatusFilter);
+      params.set("completion", completionFilter);
       const res = await authFetch(`/api/finance/unpaid-students?${params}`);
       const data = await res.json();
       if (!res.ok) {
@@ -217,13 +219,12 @@ export default function UnpaidStudentsReportPage() {
 
       <div className="min-w-0 overflow-hidden rounded-2xl border border-gray-200 bg-white p-6 dark:border-gray-800 dark:bg-white/5">
         <h3 className="mb-4 text-lg font-semibold text-gray-800 dark:text-white/90">
-          Non Paid Students by Semester & Class
+          Unpaid Students by Semester &amp; Class
         </h3>
         <p className="mb-6 text-sm text-gray-500 dark:text-gray-400">
-          Lists students who paid nothing for the selected term. Partially paid students appear on
-          the Paid Students report under the &ldquo;Partially paid&rdquo; filter. Uses tuition
-          payments for that term, so it still works after a class is upgraded. Scholarship students
-          are on a separate report.
+          Lists students who still owe tuition for the selected term, including those who paid
+          part of the invoice. Amount due is invoiced charge minus Semester Fee paid for that
+          semester — the same remaining balance shown on Admission after a charge.
         </p>
         <div className="no-print mb-6 flex flex-wrap items-end gap-4">
           <div>
@@ -300,6 +301,20 @@ export default function UnpaidStudentsReportPage() {
             </select>
           </div>
           <div>
+            <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">
+              Balance
+            </label>
+            <select
+              value={completionFilter}
+              onChange={(e) => setCompletionFilter(e.target.value)}
+              className="h-10 w-full min-w-0 sm:w-auto sm:min-w-[180px] rounded-lg border border-gray-200 bg-transparent px-3 text-sm text-gray-800 outline-none focus:border-brand-300 dark:border-gray-700 dark:text-white dark:focus:border-brand-500/40"
+            >
+              <option value="owing">Still owing (unpaid + partial)</option>
+              <option value="nonpaid">Paid nothing</option>
+              <option value="partial">Partially paid</option>
+            </select>
+          </div>
+          <div>
             <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">Class</label>
             <select
               value={unpaidClassId}
@@ -338,8 +353,8 @@ export default function UnpaidStudentsReportPage() {
               <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-8 text-center dark:border-gray-700 dark:bg-white/5">
                 <p className="text-sm font-medium text-gray-600 dark:text-gray-400">
                   {unpaidClassInfo
-                    ? `No non-paid students in this class for ${unpaidClassInfo.semester} ${unpaidClassInfo.year} — everyone has paid at least partially.`
-                    : `No non-paid students in this department for ${unpaidSemester} ${unpaidYear} — everyone has paid at least partially.`}
+                    ? `No students still owing for ${unpaidClassInfo.semester} ${unpaidClassInfo.year} in this class.`
+                    : `No students still owing for ${unpaidSemester} ${unpaidYear} in this department.`}
                 </p>
               </div>
             ) : (

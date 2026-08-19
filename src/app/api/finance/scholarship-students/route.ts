@@ -8,6 +8,7 @@ import {
   type ScholarshipStatus,
 } from "@/lib/tuition-amount";
 import { parseProgram } from "@/lib/program";
+import { classRosterStudentWhere } from "@/lib/class-roster";
 
 export async function GET(req: NextRequest) {
   try {
@@ -71,10 +72,11 @@ export async function GET(req: NextRequest) {
       );
     }
 
+    const rosterWhere = await classRosterStudentWhere(parsedClassId);
     const studentsInClass = await prisma.student.findMany({
       where: {
-        classId: parsedClassId,
-        status: "Admitted",
+        ...rosterWhere,
+        status: { in: ["Admitted", "Graduated"] },
         program,
         paymentStatus:
           scholarshipType === "all"

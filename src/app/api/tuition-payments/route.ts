@@ -10,6 +10,8 @@ import {
   isTuitionHead,
   parseFinanceHead,
 } from "@/lib/finance-head";
+import { findClassRosterStudentIds } from "@/lib/class-roster";
+import { ensureEnrollmentForTerm } from "@/lib/enrollment";
 
 export async function GET(req: NextRequest) {
   try {
@@ -57,17 +59,17 @@ export async function GET(req: NextRequest) {
       if (Number.isInteger(did) && did > 0) studentWhere.departmentId = did;
     }
 
-    // Class filter: use the class's department + semester/year so payments still
-    // appear after students were upgraded out of that class.
+    // Class filter: historical roster + that class's term (survives upgrades).
     if (classId) {
       const cid = Number(classId);
       if (Number.isInteger(cid) && cid > 0) {
         const cls = await prisma.class.findUnique({
           where: { id: cid },
-          select: { departmentId: true, semester: true, year: true },
+          select: { semester: true, year: true },
         });
         if (cls) {
-          studentWhere.departmentId = cls.departmentId;
+          const ids = await findClassRosterStudentIds(cid);
+          studentWhere.id = { in: ids.length > 0 ? ids : [-1] };
           if (!semester) where.semester = cls.semester;
           if (!year) where.year = cls.year;
         } else {
@@ -286,8 +288,8 @@ export async function POST(req: NextRequest) {
     const student = await prisma.student.findUnique({
       where: { studentId: String(studentIdStr).trim() },
       include: {
-        department: { select: { tuitionFee: true } },
-        class: { select: { semester: true, year: true } },
+        department: { select: { tuitionFee: true, id: true } },
+        class: { select: { semester: true, year: true, id: true } },
       },
     });
 
@@ -329,11 +331,25 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const expectedFee = perSemesterTuition(
-      student.department.tuitionFee ?? 0,
-      student.paymentStatus,
-      student.customSemesterFee
-    );
+    const chargeAgg = tuitionHead
+      ? await prisma.tuitionCharge.aggregate({
+          where: {
+            studentId: student.id,
+            semester: resolvedSemester,
+            year: resolvedYear,
+          },
+          _sum: { amount: true },
+        })
+      : { _sum: { amount: null } };
+    const chargedForTerm = Number(chargeAgg._sum.amount) || 0;
+    const expectedFee =
+      chargedForTerm > 0
+        ? chargedForTerm
+        : perSemesterTuition(
+            student.department.tuitionFee ?? 0,
+            student.paymentStatus,
+            student.customSemesterFee
+          );
 
     const amt =
       amount != null
@@ -436,6 +452,22 @@ export async function POST(req: NextRequest) {
           createdById: auth.userId,
         },
       });
+      if (tuitionHead) {
+        const classIdForTerm =
+          student.class &&
+          student.class.semester === resolvedSemester &&
+          student.class.year === resolvedYear
+            ? student.class.id
+            : null;
+        await ensureEnrollmentForTerm(tx, {
+          studentId: student.id,
+          semester: resolvedSemester,
+          year: resolvedYear,
+          departmentId: student.departmentId,
+          program: student.program,
+          classId: classIdForTerm,
+        });
+      }
       return tx.tuitionPayment.findUnique({
         where: { id: p.id },
         include: {

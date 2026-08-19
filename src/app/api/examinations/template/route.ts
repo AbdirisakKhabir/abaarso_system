@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { workbookBufferFromAoa } from "@/lib/excel";
 import { computeAttendanceMarks } from "@/lib/attendance";
 import { getSemesterDateRange } from "@/lib/semester-dates";
+import { classRosterStudentWhere } from "@/lib/class-roster";
 
 export async function GET(req: NextRequest) {
   try {
@@ -41,8 +42,9 @@ export async function GET(req: NextRequest) {
       );
     }
 
+    const rosterWhere = await classRosterStudentWhere(Number(classId));
     const students = await prisma.student.findMany({
-      where: { classId: Number(classId), status: "Admitted" },
+      where: { ...rosterWhere, status: { in: ["Admitted", "Graduated"] } },
       select: { id: true, studentId: true, firstName: true, lastName: true },
       orderBy: [{ studentId: "asc" }],
     });

@@ -58,15 +58,19 @@ export function computeTermTuition(
   student: TuitionStudent,
   termPayments: { amount: number }[],
   /** Fallback when student.department.tuitionFee is null (e.g. class department fee). */
-  fallbackTuitionFee?: number | null
+  fallbackTuitionFee?: number | null,
+  /** Invoiced amount for this term from TuitionCharge. Wins over the catalog fee. */
+  chargedAmount?: number | null
 ) {
   const paymentStatus = normalizePaymentStatus(student.paymentStatus);
   const deptFee = student.department.tuitionFee ?? fallbackTuitionFee ?? 0;
-  const expectedAmount = perSemesterTuition(
+  const catalogAmount = perSemesterTuition(
     deptFee,
     paymentStatus,
     student.customSemesterFee
   );
+  const billed = Number(chargedAmount);
+  const expectedAmount = Number.isFinite(billed) && billed > 0 ? billed : catalogAmount;
   const paidAmount = semesterAmountPaid(termPayments);
   return { paymentStatus, expectedAmount, paidAmount };
 }
@@ -117,15 +121,23 @@ export function classifyPaymentCompletion(
   return "nonpaid";
 }
 
-/** The completion groups a report can request. */
-export type PaymentCompletionFilter = "paid" | "partial" | "nonpaid";
+/** The completion groups a report can request. "owing" = unpaid or partial. */
+export type PaymentCompletionFilter = "paid" | "partial" | "nonpaid" | "owing";
 
 export function parsePaymentCompletionFilter(
   raw: string | null | undefined,
   fallback: PaymentCompletionFilter
 ): PaymentCompletionFilter {
-  if (raw === "paid" || raw === "partial" || raw === "nonpaid") return raw;
+  if (raw === "paid" || raw === "partial" || raw === "nonpaid" || raw === "owing") return raw;
   return fallback;
+}
+
+export function matchesCompletionFilter(
+  completion: PaymentCompletion,
+  filter: PaymentCompletionFilter
+): boolean {
+  if (filter === "owing") return completion === "nonpaid" || completion === "partial";
+  return completion === filter;
 }
 
 /** Match tuition payment rows for a report term (trim; case-insensitive; Eight≈8). */

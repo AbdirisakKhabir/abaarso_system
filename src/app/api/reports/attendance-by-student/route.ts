@@ -7,6 +7,7 @@ import {
 } from "@/lib/attendance";
 import { getSemesterDateRange } from "@/lib/semester-dates";
 import { parseProgram } from "@/lib/program";
+import { classRosterStudentWhere } from "@/lib/class-roster";
 
 /**
  * GET /api/reports/attendance-by-student
@@ -126,13 +127,16 @@ export async function GET(req: NextRequest) {
       (a, b) => b.sessionCount - a.sessionCount || a.code.localeCompare(b.code)
     );
 
+    const rosterWhere = parsedClassId
+      ? await classRosterStudentWhere(parsedClassId)
+      : null;
     const students = await prisma.student.findMany({
       where: {
-        status: "Admitted",
+        status: { in: ["Admitted", "Graduated"] },
         program,
         ...(parsedStudentId ? { id: parsedStudentId } : {}),
-        ...(parsedClassId ? { classId: parsedClassId } : {}),
-        ...(parsedDepartmentId ? { departmentId: parsedDepartmentId } : {}),
+        ...(rosterWhere ?? {}),
+        ...(parsedDepartmentId && !parsedClassId ? { departmentId: parsedDepartmentId } : {}),
         ...(search && !parsedStudentId
           ? {
               OR: [

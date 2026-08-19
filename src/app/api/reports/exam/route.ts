@@ -7,6 +7,7 @@ import {
 } from "@/lib/attendance";
 import { getSemesterDateRange } from "@/lib/semester-dates";
 import { parseProgram } from "@/lib/program";
+import { classRosterStudentWhere, examBelongsToClassTerm } from "@/lib/class-roster";
 
 export async function GET(req: NextRequest) {
   try {
@@ -22,10 +23,11 @@ export async function GET(req: NextRequest) {
     const semester = searchParams.get("semester");
     const year = searchParams.get("year");
 
+    let classTerm: { semester: string; year: number } | null = null;
     let where: {
       course?: { departmentId?: number };
       courseId?: number;
-      student?: { classId?: number; program?: "Bachelor" | "Masters" };
+      student?: { id?: { in: number[] }; classId?: number; program?: "Bachelor" | "Masters" };
       semester?: string;
       year?: number;
     } = {
@@ -48,18 +50,19 @@ export async function GET(req: NextRequest) {
             { status: 400 }
           );
         }
-        where.student = { classId: Number(classId), program };
+        classTerm = { semester: cls.semester, year: cls.year };
+        const rosterWhere = await classRosterStudentWhere(Number(classId));
+        where.student = { ...rosterWhere, program };
         where.course = { departmentId: cls.departmentId };
-        where.semester = cls.semester;
         where.year = cls.year;
         delete where.courseId;
+        delete where.semester;
       }
     } else {
-      if (semester && semester !== "all") where.semester = semester;
       if (year) where.year = Number(year);
     }
 
-    const records = await prisma.examRecord.findMany({
+    const recordsRaw = await prisma.examRecord.findMany({
       where,
       include: {
         student: {
@@ -83,6 +86,11 @@ export async function GET(req: NextRequest) {
       },
       orderBy: [{ year: "desc" }, { semester: "asc" }, { student: { firstName: "asc" } }],
     });
+    const records = classTerm
+      ? recordsRaw.filter((r) => examBelongsToClassTerm(r, classTerm))
+      : semester && semester !== "all"
+        ? recordsRaw.filter((r) => examBelongsToClassTerm(r, { semester, year: r.year }))
+        : recordsRaw;
 
     // When filtering by class, enrich with per-course attendance (sessions for that exam's course)
     let enrichedRecords = records;

@@ -12,6 +12,7 @@ import {
   matchesStudentPaymentStatusFilter,
   parsePaymentCompletionFilter,
   parseStudentPaymentStatusFilter,
+  semesterAmountPaid,
 } from "@/lib/tuition-amount";
 
 function fallbackTuitionFeeFromScope(
@@ -91,17 +92,21 @@ export async function GET(req: NextRequest) {
 
     const paidStudents = studentsInScope
       .map((s) => {
-        // Scholarship/student-type filter (Fully Paid / Half Scholar / all).
-        if (!matchesStudentPaymentStatusFilter(s.paymentStatus, paymentStatusFilter)) {
+        const termPayments = filterTermPayments(s.tuitionPayments, semester, parsedYear);
+        const chargedAmount = semesterAmountPaid(
+          filterTermPayments(s.tuitionCharges, semester, parsedYear)
+        );
+        const fallbackFee = fallbackTuitionFeeFromScope(resolved, s.department?.id);
+        const typeOk = matchesStudentPaymentStatusFilter(s.paymentStatus, paymentStatusFilter);
+        if (!typeOk && !(paymentStatusFilter === "all" && chargedAmount > 0)) {
           excludedByType += 1;
           return null;
         }
-        const termPayments = filterTermPayments(s.tuitionPayments, semester, parsedYear);
-        const fallbackFee = fallbackTuitionFeeFromScope(resolved, s.department?.id);
         const { paymentStatus, expectedAmount, paidAmount } = computeTermTuition(
           s,
           termPayments,
-          fallbackFee
+          fallbackFee,
+          chargedAmount
         );
         const completion = classifyPaymentCompletion(expectedAmount, paidAmount);
         if (completion === "na") {

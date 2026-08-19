@@ -3,6 +3,7 @@ import { getAuthUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { calculateGPA } from "@/lib/grades";
 import { sortExamRecordsBySemesterChronologically } from "@/lib/semester-sort";
+import { classRosterStudentWhere } from "@/lib/class-roster";
 
 export async function GET(req: NextRequest) {
   try {
@@ -29,9 +30,10 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: "Class not found" }, { status: 404 });
     }
 
+    const rosterWhere = await classRosterStudentWhere(Number(classId));
     const students = await prisma.student.findMany({
       where: {
-        classId: Number(classId),
+        ...rosterWhere,
         status: { in: ["Admitted", "Graduated"] },
       },
       select: {
