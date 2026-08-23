@@ -66,3 +66,72 @@ export async function recordTuitionChargeForClass(
   });
   return true;
 }
+
+export type DischargeStudentResult = {
+  id: number;
+  studentId: string;
+  firstName: string;
+  lastName: string;
+  reversed: number;
+  newBalance: number;
+  chargesRemoved: number;
+};
+
+/**
+ * Reverse billed tuition for a set of charge rows and/or manual balance amounts.
+ * Balance is never driven below zero.
+ */
+export async function dischargeTuition(
+  db: Db,
+  params: {
+    items: {
+      studentId: number;
+      reverseAmount: number;
+      chargeIds: number[];
+    }[];
+    minimizeBalance: boolean;
+    removeCharges: boolean;
+  }
+): Promise<DischargeStudentResult[]> {
+  const results: DischargeStudentResult[] = [];
+  for (const item of params.items) {
+    const student = await db.student.findUnique({
+      where: { id: item.studentId },
+      select: { id: true, studentId: true, firstName: true, lastName: true, balance: true },
+    });
+    if (!student) continue;
+
+    let reversed = 0;
+    if (params.minimizeBalance) {
+      const amt = Math.max(0, Number(item.reverseAmount) || 0);
+      reversed = Math.min(Math.max(0, student.balance ?? 0), amt);
+      if (reversed > 0) {
+        const updated = await db.student.update({
+          where: { id: student.id },
+          data: { balance: { decrement: reversed } },
+          select: { balance: true },
+        });
+        student.balance = updated.balance;
+      }
+    }
+
+    let chargesRemoved = 0;
+    if (params.removeCharges && item.chargeIds.length > 0) {
+      const del = await db.tuitionCharge.deleteMany({
+        where: { id: { in: item.chargeIds }, studentId: student.id },
+      });
+      chargesRemoved = del.count;
+    }
+
+    results.push({
+      id: student.id,
+      studentId: student.studentId,
+      firstName: student.firstName,
+      lastName: student.lastName,
+      reversed,
+      newBalance: student.balance ?? 0,
+      chargesRemoved,
+    });
+  }
+  return results;
+}

@@ -59,6 +59,7 @@ export async function GET(req: NextRequest) {
         include: {
           student: {
             select: {
+              id: true,
               studentId: true,
               firstName: true,
               lastName: true,

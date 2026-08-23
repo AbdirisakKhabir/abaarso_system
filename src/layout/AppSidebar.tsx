@@ -134,9 +134,11 @@ const academicsItems: NavItem[] = [
     path: "/finance",
     permission: "finance.view",
     subItems: [
-      { name: "Record Payment", path: "/finance", permission: "finance.view" },
+      { name: "Record Fee", path: "/finance", permission: "finance.view" },
+      { name: "Finance Heads", path: "/finance/heads", permission: "finance.view" },
       { name: "Payments", path: "/finance/payments", permission: "finance.view" },
       { name: "Charge Tuition", path: "/finance/charge", permission: "finance.view" },
+      { name: "Discharge Tuition", path: "/finance/discharge", permission: "finance.view" },
       { name: "Charge History", path: "/finance/charges", permission: "finance.view" },
       { name: "Banks", path: "/finance/banks", permission: "banks.view" },
       { name: "Payment Methods", path: "/finance/payment-methods", permission: "banks.view" },

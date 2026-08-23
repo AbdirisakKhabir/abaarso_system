@@ -422,12 +422,20 @@ export default function ChargeTuitionPage() {
                 </p>
               </div>
             </div>
-            <Link
-              href="/finance/charges"
-              className="text-sm text-brand-600 underline-offset-4 hover:underline dark:text-brand-400"
-            >
-              Charge history →
-            </Link>
+            <div className="flex items-center gap-3">
+              <Link
+                href="/finance/discharge"
+                className="text-sm text-brand-600 underline-offset-4 hover:underline dark:text-brand-400"
+              >
+                Discharge →
+              </Link>
+              <Link
+                href="/finance/charges"
+                className="text-sm text-brand-600 underline-offset-4 hover:underline dark:text-brand-400"
+              >
+                Charge history →
+              </Link>
+            </div>
           </div>
 
           <form onSubmit={handleSubmit} className="p-5 sm:p-6">

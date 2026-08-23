@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useCallback, useEffect, useMemo, useState, useRef } from "react";
+import React, { useEffect, useMemo, useState, useRef } from "react";
 import Link from "next/link";
 import PageBreadCrumb from "@/components/common/PageBreadCrumb";
 import Button from "@/components/ui/button/Button";
@@ -13,7 +13,6 @@ import {
   oldestUnpaidTerm,
 } from "@/lib/student-term-ledger";
 import { semestersMatch } from "@/lib/semester-match";
-import { FINANCE_HEADS, financeHeadLabel, paymentIncludesSemesterFee, type FinanceHead } from "@/lib/finance-head";
 import { useAuth } from "@/context/AuthContext";
 import { useFormDraft } from "@/hooks/useFormDraft";
 import {
@@ -24,8 +23,6 @@ import {
   FileText,
   Info,
   Search,
-  Plus,
-  Trash2,
   User,
   Wallet,
   X,
@@ -71,12 +68,10 @@ type SearchStudent = {
 
 const CURRENT_YEAR = new Date().getFullYear();
 
-type HeadRow = { id: string; financeHead: FinanceHead | ""; amount: string };
-
 type TuitionDraft = {
   searchQuery: string;
   selectedStudentId: string;
-  payHeadRows: HeadRow[];
+  payAmount: string;
   payMethodId: string;
   payBankId: string;
   paySemester: string;
@@ -89,7 +84,7 @@ type TuitionDraft = {
 const tuitionDraftInitial: TuitionDraft = {
   searchQuery: "",
   selectedStudentId: "",
-  payHeadRows: [],
+  payAmount: "",
   payMethodId: "",
   payBankId: "",
   paySemester: "",
@@ -119,9 +114,6 @@ function owingLabel(term: { semester: string; year: number | null }) {
   return `${term.semester} ${term.year}`;
 }
 
-function newHeadRow(): HeadRow {
-  return { id: `row-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, financeHead: "", amount: "" };
-}
 
 export default function FinancePage() {
   const { hasPermission } = useAuth();
@@ -136,7 +128,7 @@ export default function FinancePage() {
     clearDraft,
     discardDraft,
     hasDraft,
-  } = useFormDraft<TuitionDraft>("tuition-payment-v3", tuitionDraftInitial);
+  } = useFormDraft<TuitionDraft>("tuition-fee-v1", tuitionDraftInitial);
 
   const [searchResults, setSearchResults] = useState<SearchStudent[]>([]);
   const [searchLoading, setSearchLoading] = useState(false);
@@ -148,7 +140,7 @@ export default function FinancePage() {
   const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const searchQuery = draft.searchQuery;
-  const payHeadRows = draft.payHeadRows ?? [];
+  const payAmount = draft.payAmount ?? "";
   const payMethodId = draft.payMethodId;
   const payBankId = draft.payBankId;
   const paySemester = draft.paySemester;
@@ -158,6 +150,7 @@ export default function FinancePage() {
   const payNote = draft.payNote;
 
   const setSearchQuery = (v: string) => setDraftField("searchQuery", v);
+  const setPayAmount = (v: string) => setDraftField("payAmount", v);
   const setPayMethodId = (v: string) => setDraftField("payMethodId", v);
   const setPayBankId = (v: string) => setDraftField("payBankId", v);
   const setPaySemester = (v: string) => setDraftField("paySemester", v);
@@ -165,27 +158,6 @@ export default function FinancePage() {
   const setReceiptNumber = (v: string) => setDraftField("receiptNumber", v);
   const setPaymentDate = (v: string) => setDraftField("paymentDate", v);
   const setPayNote = (v: string) => setDraftField("payNote", v);
-
-  const addHeadRow = () => {
-    setDraftAll((prev) => ({
-      ...prev,
-      payHeadRows: [...(prev.payHeadRows ?? []), newHeadRow()],
-    }));
-  };
-
-  const removeHeadRow = (id: string) => {
-    setDraftAll((prev) => ({
-      ...prev,
-      payHeadRows: (prev.payHeadRows ?? []).filter((r) => r.id !== id),
-    }));
-  };
-
-  const updateHeadRow = (id: string, patch: Partial<Pick<HeadRow, "financeHead" | "amount">>) => {
-    setDraftAll((prev) => ({
-      ...prev,
-      payHeadRows: (prev.payHeadRows ?? []).map((r) => (r.id === id ? { ...r, ...patch } : r)),
-    }));
-  };
 
   const canRecordPayment = hasPermission("finance.create") || hasPermission("finance.view");
 
@@ -293,29 +265,16 @@ export default function FinancePage() {
   const unpaidTerms = termLedger.filter((t) => t.remaining > 1e-6 && t.alreadyCharged);
   const currentCatalogDue = termLedger.find((t) => t.isCurrent && !t.alreadyCharged && t.remaining > 1e-6);
 
-  const usedHeads = new Set(
-    payHeadRows.map((r) => r.financeHead).filter((h): h is FinanceHead => Boolean(h))
-  );
+  const feeAmount = Number(payAmount) || 0;
 
-  const activeLines = payHeadRows
-    .filter((r) => r.financeHead && Number(r.amount) > 0)
-    .map((r) => ({
-      financeHead: r.financeHead as FinanceHead,
-      label: financeHeadLabel(r.financeHead),
-      amount: Number(r.amount),
-    }));
-  const totalAmount = activeLines.reduce((sum, l) => sum + l.amount, 0);
-  const includesSemesterFee = paymentIncludesSemesterFee(activeLines);
-
-  const applySemesterQuickAmount = (rowId: string, mode: "full" | "half") => {
+  const applySemesterQuickAmount = (mode: "full" | "half") => {
     const base = remainingForSemester > 0 ? remainingForSemester : expectedFull;
-    const amt = mode === "half" ? base * 0.5 : base;
-    updateHeadRow(rowId, { financeHead: "semester_fee", amount: String(amt) });
+    setPayAmount(String(mode === "half" ? base * 0.5 : base));
   };
 
   useEffect(() => {
     setPayError("");
-  }, [selectedStudent, paySemester, payYear, payHeadRows]);
+  }, [selectedStudent, paySemester, payYear, payAmount]);
 
   const handleSelectStudent = (s: SearchStudent) => {
     setSelectedStudent(s);
@@ -328,6 +287,7 @@ export default function FinancePage() {
       : s.class
         ? semesters.find((opt) => semestersMatch(opt.name, s.class!.semester))?.name ?? s.class.semester
         : undefined;
+    const remaining = unpaid?.remaining ?? 0;
     setDraftAll((prev) => ({
       ...prev,
       selectedStudentId: s.studentId,
@@ -338,6 +298,7 @@ export default function FinancePage() {
         : s.class?.year != null
           ? String(s.class.year)
           : prev.payYear,
+      payAmount: remaining > 0 ? String(remaining) : prev.payAmount,
     }));
   };
 
@@ -358,25 +319,16 @@ export default function FinancePage() {
       setPayError("Select a payment method or a bank account");
       return;
     }
-    if (activeLines.length === 0) {
-      const incomplete = payHeadRows.find((r) => (r.financeHead && !(Number(r.amount) > 0)) || (!r.financeHead && r.amount.trim()));
-      setPayError(
-        incomplete
-          ? incomplete.financeHead
-            ? `Enter an amount for ${financeHeadLabel(incomplete.financeHead)}`
-            : "Select a finance head for each amount entered"
-          : payHeadRows.length === 0
-            ? "Add at least one finance head and amount"
-            : "Enter an amount for each finance head"
-      );
+    if (!(feeAmount > 0)) {
+      setPayError("Enter a fee amount greater than zero");
       return;
     }
-    if (includesSemesterFee && !paySemester.trim()) {
-      setPayError("Semester is required when recording Semester Fee");
+    if (!paySemester.trim()) {
+      setPayError("Semester is required");
       return;
     }
-    if (includesSemesterFee && !payYear.trim()) {
-      setPayError("Year is required when recording Semester Fee");
+    if (!payYear.trim()) {
+      setPayError("Year is required");
       return;
     }
     if (!receiptNumber.trim()) {
@@ -385,33 +337,29 @@ export default function FinancePage() {
     }
     setPaySubmitting(true);
     try {
-      for (const line of activeLines) {
-        const res = await authFetch("/api/tuition-payments", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            studentId: selectedStudent.studentId,
-            semester: paySemester.trim() || undefined,
-            year: payYear.trim() ? Number(payYear) : undefined,
-            amount: line.amount,
-            financeHead: line.financeHead,
-            paymentMethodId: payMethodId ? Number(payMethodId) : undefined,
-            bankId: payBankId ? Number(payBankId) : undefined,
-            paymentMethod: "bank_receipt",
-            receiptNumber: receiptNumber.trim(),
-            paymentDate: paymentDate || new Date().toISOString().slice(0, 10),
-            note: payNote || undefined,
-          }),
-        });
-        const data = await res.json();
-        if (!res.ok) {
-          setPayError(
-            `${line.label}: ${data.error || "Payment failed"}`
-          );
-          return;
-        }
+      const res = await authFetch("/api/tuition-payments", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          studentId: selectedStudent.studentId,
+          semester: paySemester.trim(),
+          year: Number(payYear),
+          amount: feeAmount,
+          financeHead: "semester_fee",
+          paymentMethodId: payMethodId ? Number(payMethodId) : undefined,
+          bankId: payBankId ? Number(payBankId) : undefined,
+          paymentMethod: "bank_receipt",
+          receiptNumber: receiptNumber.trim(),
+          paymentDate: paymentDate || new Date().toISOString().slice(0, 10),
+          note: payNote || undefined,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setPayError(data.error || "Payment failed");
+        return;
       }
-      setPaySuccessCount(activeLines.length);
+      setPaySuccessCount(1);
       setPaySuccess(true);
       handleClearStudent();
       clearDraft();
@@ -444,8 +392,6 @@ export default function FinancePage() {
     "h-9 w-full rounded-lg border border-gray-200 bg-white px-3 text-sm text-gray-800 outline-none transition-all placeholder:text-gray-400 focus:border-brand-400 focus:ring-2 focus:ring-brand-500/15 dark:border-gray-600 dark:bg-gray-900/80 dark:text-white dark:placeholder:text-gray-500 dark:focus:border-brand-500 dark:focus:ring-brand-500/20";
   const selectClass =
     "h-9 w-full appearance-none rounded-lg border border-gray-200 bg-white px-3 text-sm text-gray-800 outline-none transition-all focus:border-brand-400 focus:ring-2 focus:ring-brand-500/15 dark:border-gray-600 dark:bg-gray-900/80 dark:text-white dark:focus:border-brand-500 dark:focus:ring-brand-500/20";
-  const tableInputClass =
-    "h-8 w-full min-w-0 rounded-md border border-gray-200 bg-white px-2 text-sm tabular-nums text-gray-800 outline-none focus:border-brand-400 dark:border-gray-700 dark:bg-gray-900 dark:text-white";
 
   const studentInitials = selectedStudent
     ? `${selectedStudent.firstName?.[0] ?? ""}${selectedStudent.lastName?.[0] ?? ""}`.toUpperCase() || "?"
@@ -453,16 +399,16 @@ export default function FinancePage() {
 
   return (
     <div>
-      <PageBreadCrumb pageTitle="Finance" />
+      <PageBreadCrumb pageTitle="Record Fee" />
 
       <div className="mb-6 flex flex-wrap items-baseline justify-between gap-4">
         <div>
           <p className="text-xs font-medium uppercase tracking-widest text-gray-400 dark:text-gray-500">Finance</p>
           <h1 className="mt-1 text-2xl font-semibold tracking-tight text-gray-900 dark:text-white">
-            Record tuition payment
+            Record semester fee
           </h1>
           <p className="mt-1 max-w-xl text-sm text-gray-600 dark:text-gray-400">
-            Post a deposit against a student&apos;s balance and credit the right bank account.
+            Collect tuition for a billed semester and credit the right bank account.
           </p>
         </div>
         <nav className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
@@ -502,10 +448,17 @@ export default function FinancePage() {
           </Link>
           <span className="text-gray-300 dark:text-gray-600">/</span>
           <Link
+            href="/finance/heads"
+            className="text-gray-600 underline-offset-4 hover:text-gray-900 hover:underline dark:text-gray-400 dark:hover:text-white"
+          >
+            Finance heads form
+          </Link>
+          <span className="text-gray-300 dark:text-gray-600">/</span>
+          <Link
             href="/reports/finance-heads"
             className="text-gray-600 underline-offset-4 hover:text-gray-900 hover:underline dark:text-gray-400 dark:hover:text-white"
           >
-            Finance heads
+            Heads report
           </Link>
           <span className="text-gray-300 dark:text-gray-600">/</span>
           <Link
@@ -785,14 +738,11 @@ export default function FinancePage() {
               <h2 className="flex items-center gap-2 text-sm font-semibold text-gray-900 dark:text-white">
                 <Wallet className="h-4 w-4 text-gray-500" strokeWidth={2} />
                 Term
-                {!includesSemesterFee && (
-                  <span className="text-xs font-normal text-gray-500 dark:text-gray-400">(optional)</span>
-                )}
               </h2>
               <div className="mt-3 grid gap-3 sm:grid-cols-3">
                 <div>
                   <label className="mb-1 block text-xs text-gray-600 dark:text-gray-400">
-                    Semester{includesSemesterFee ? " *" : ""}
+                    Semester <span className="text-red-600 dark:text-red-400">*</span>
                   </label>
                   <select value={paySemester} onChange={(e) => setPaySemester(e.target.value)} className={selectClass}>
                     <option value="">—</option>
@@ -805,7 +755,7 @@ export default function FinancePage() {
                 </div>
                 <div>
                   <label className="mb-1 block text-xs text-gray-600 dark:text-gray-400">
-                    Year{includesSemesterFee ? " *" : ""}
+                    Year <span className="text-red-600 dark:text-red-400">*</span>
                   </label>
                   <input
                     type="number"
@@ -923,123 +873,53 @@ export default function FinancePage() {
               <div className="mb-3 flex items-center justify-between gap-2">
                 <h2 className="flex items-center gap-2 text-sm font-semibold text-gray-900 dark:text-white">
                   <Banknote className="h-4 w-4 text-gray-500" strokeWidth={2} />
-                  Finance heads &amp; amounts
+                  Semester fee amount
                 </h2>
                 <span className="text-sm font-semibold tabular-nums text-gray-900 dark:text-white">
-                  ${totalAmount.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 })}
+                  ${feeAmount.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 })}
                 </span>
               </div>
 
-              {selectedStudent &&
-                payHeadRows.some((r) => r.financeHead === "semester_fee") &&
-                remainingForSemester > 0 && (
-                  <div className="mb-3 flex gap-2 rounded-md border border-blue-200/90 bg-blue-50 px-2.5 py-2 text-xs text-blue-950 dark:border-blue-900/40 dark:bg-blue-950/25 dark:text-blue-100">
-                    <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-                    <span>
-                      Remaining for {paySemester} {payYear}: ${remainingForSemester.toLocaleString()}
-                      {semesterPaid > 0 ? ` (already paid $${semesterPaid.toLocaleString()} this term)` : ""}
-                    </span>
-                  </div>
-                )}
+              {selectedStudent && remainingForSemester > 0 && (
+                <div className="mb-3 flex gap-2 rounded-md border border-blue-200/90 bg-blue-50 px-2.5 py-2 text-xs text-blue-950 dark:border-blue-900/40 dark:bg-blue-950/25 dark:text-blue-100">
+                  <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                  <span>
+                    Remaining for {paySemester} {payYear}: ${remainingForSemester.toLocaleString()}
+                    {semesterPaid > 0 ? ` (already paid $${semesterPaid.toLocaleString()} this term)` : ""}
+                  </span>
+                </div>
+              )}
 
-              <div className="overflow-hidden rounded-lg border border-gray-200 dark:border-gray-800">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b border-gray-200 bg-gray-50 text-left text-xs font-medium text-gray-500 dark:border-gray-800 dark:bg-white/5 dark:text-gray-400">
-                      <th className="px-2 py-2">Finance head</th>
-                      <th className="px-2 py-2 w-28">Amount</th>
-                      <th className="w-8 px-1 py-2" aria-hidden />
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {payHeadRows.length === 0 ? (
-                      <tr>
-                        <td colSpan={3} className="px-2 py-4 text-center text-xs text-gray-500 dark:text-gray-400">
-                          No lines yet. Click Add new to record a fee.
-                        </td>
-                      </tr>
-                    ) : (
-                      payHeadRows.map((row) => (
-                        <tr key={row.id} className="border-b border-gray-100 last:border-0 dark:border-gray-800">
-                          <td className="px-2 py-1.5">
-                            <select
-                              value={row.financeHead}
-                              onChange={(e) =>
-                                updateHeadRow(row.id, {
-                                  financeHead: e.target.value as FinanceHead | "",
-                                })
-                              }
-                              className={tableInputClass}
-                            >
-                              <option value="">Select head</option>
-                              {FINANCE_HEADS.map((h) => (
-                                <option
-                                  key={h.value}
-                                  value={h.value}
-                                  disabled={usedHeads.has(h.value) && row.financeHead !== h.value}
-                                >
-                                  {h.label}
-                                </option>
-                              ))}
-                            </select>
-                            {row.financeHead === "semester_fee" && selectedStudent && (
-                              <div className="mt-1 flex gap-1">
-                                <button
-                                  type="button"
-                                  onClick={() => applySemesterQuickAmount(row.id, "full")}
-                                  className="rounded border border-gray-200 px-1.5 py-0.5 text-[10px] font-medium text-gray-600 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-400"
-                                >
-                                  {remainingForSemester > 0 && semesterPaid > 0 ? "Rem." : "Full"}
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => applySemesterQuickAmount(row.id, "half")}
-                                  className="rounded border border-gray-200 px-1.5 py-0.5 text-[10px] font-medium text-gray-600 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-400"
-                                >
-                                  Half
-                                </button>
-                              </div>
-                            )}
-                          </td>
-                          <td className="px-2 py-1.5">
-                            <input
-                              type="number"
-                              min="0"
-                              step="0.01"
-                              value={row.amount}
-                              onChange={(e) => updateHeadRow(row.id, { amount: e.target.value })}
-                              placeholder="0.00"
-                              className={tableInputClass}
-                            />
-                          </td>
-                          <td className="px-1 py-1.5 text-center">
-                            <button
-                              type="button"
-                              onClick={() => removeHeadRow(row.id)}
-                              className="inline-flex h-7 w-7 items-center justify-center rounded text-gray-400 hover:bg-red-50 hover:text-red-500 dark:hover:bg-red-950/30"
-                              aria-label="Remove row"
-                            >
-                              <Trash2 className="h-3.5 w-3.5" />
-                            </button>
-                          </td>
-                        </tr>
-                      ))
-                    )}
-                  </tbody>
-                </table>
-              </div>
-
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="mt-3"
-                startIcon={<Plus className="h-3.5 w-3.5" />}
-                onClick={addHeadRow}
-                disabled={payHeadRows.length >= FINANCE_HEADS.length}
-              >
-                Add new
-              </Button>
+              <label className="mb-1 block text-xs text-gray-600 dark:text-gray-400">
+                Amount <span className="text-red-600 dark:text-red-400">*</span>
+              </label>
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                value={payAmount}
+                onChange={(e) => setPayAmount(e.target.value)}
+                placeholder="0.00"
+                className={inputClass}
+              />
+              {selectedStudent && (
+                <div className="mt-2 flex gap-1">
+                  <button
+                    type="button"
+                    onClick={() => applySemesterQuickAmount("full")}
+                    className="rounded border border-gray-200 px-2 py-1 text-xs font-medium text-gray-600 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-400"
+                  >
+                    {remainingForSemester > 0 && semesterPaid > 0 ? "Remaining" : "Full"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => applySemesterQuickAmount("half")}
+                    className="rounded border border-gray-200 px-2 py-1 text-xs font-medium text-gray-600 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-400"
+                  >
+                    Half
+                  </button>
+                </div>
+              )}
 
               <div className="mt-4 flex flex-col-reverse items-stretch gap-3 sm:flex-row sm:items-center sm:justify-end">
                 {!canRecordPayment ? (
@@ -1051,14 +931,14 @@ export default function FinancePage() {
                   type="submit"
                   disabled={
                     !selectedStudent ||
-                    activeLines.length === 0 ||
+                    !(feeAmount > 0) ||
                     (!payMethodId && !payBankId) ||
                     paySubmitting ||
                     !canRecordPayment
                   }
                   className="rounded-lg px-6 py-2 text-sm font-semibold sm:min-w-36"
                 >
-                  {paySubmitting ? "Saving…" : "Record payment"}
+                  {paySubmitting ? "Saving…" : "Record fee"}
                 </Button>
               </div>
             </div>

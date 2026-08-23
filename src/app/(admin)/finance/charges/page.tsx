@@ -25,6 +25,7 @@ type ChargeRow = {
   note: string | null;
   createdAt: string;
   student: {
+    id?: number;
     studentId: string;
     firstName: string;
     lastName: string;
@@ -67,6 +68,7 @@ const PAGE_SIZE = 25;
 export default function ChargeHistoryPage() {
   const { hasPermission } = useAuth();
   const canView = hasPermission("finance.view") || hasPermission("admission.edit");
+  const canDischarge = hasPermission("finance.charge") || hasPermission("admission.edit");
 
   const [charges, setCharges] = useState<ChargeRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -82,6 +84,11 @@ export default function ChargeHistoryPage() {
   const [filterClassId, setFilterClassId] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
   const [debouncedQ, setDebouncedQ] = useState("");
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+  const [minimizeBalance, setMinimizeBalance] = useState(true);
+  const [removeCharges, setRemoveCharges] = useState(true);
+  const [discharging, setDischarging] = useState(false);
+  const [dischargeMsg, setDischargeMsg] = useState("");
 
   useEffect(() => {
     const t = setTimeout(() => setDebouncedQ(searchQuery.trim()), 300);
@@ -120,6 +127,7 @@ export default function ChargeHistoryPage() {
       if (!res.ok) return;
       const data = await res.json();
       setCharges(Array.isArray(data.charges) ? data.charges : []);
+      setSelectedIds(new Set());
       setTotal(data.total ?? 0);
       setTotalPages(data.totalPages ?? 1);
       setPage(p);
@@ -132,6 +140,64 @@ export default function ChargeHistoryPage() {
 
   // summary totals
   const pageTotal = charges.reduce((s, c) => s + c.amount, 0);
+  const selectedCharges = charges.filter((c) => selectedIds.has(c.id));
+  const selectedTotal = selectedCharges.reduce((s, c) => s + c.amount, 0);
+
+  const toggleAll = (on: boolean) => {
+    setSelectedIds(on ? new Set(charges.map((c) => c.id)) : new Set());
+  };
+  const toggleOne = (id: number) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const handleDischargeSelected = async () => {
+    if (!canDischarge || selectedCharges.length === 0) return;
+    if (!minimizeBalance && !removeCharges) {
+      setDischargeMsg("Select Minimize the balance and/or Remove the charged students.");
+      return;
+    }
+    const ok = window.confirm(
+      [
+        `Discharge ${selectedCharges.length} charge record(s)?`,
+        minimizeBalance ? `Reduce balances by about $${fmtAmt(selectedTotal)}.` : null,
+        removeCharges ? "Delete the selected charge records." : null,
+      ]
+        .filter(Boolean)
+        .join(" ")
+    );
+    if (!ok) return;
+    setDischarging(true);
+    setDischargeMsg("");
+    try {
+      const res = await authFetch("/api/students/bulk-tuition-discharge", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          chargeIds: selectedCharges.map((c) => c.id),
+          minimizeBalance,
+          removeCharges,
+        }),
+      });
+      const data = await res.json().catch(() => null);
+      if (!res.ok) {
+        setDischargeMsg(data?.error ?? "Discharge failed.");
+        return;
+      }
+      setDischargeMsg(
+        `Discharged ${data.discharged} student(s). Reduced $${fmtAmt(data.reversedTotal ?? 0)}. Removed ${data.chargesRemoved ?? 0} charge(s).`
+      );
+      await loadCharges(page);
+    } catch {
+      setDischargeMsg("Discharge failed.");
+    } finally {
+      setDischarging(false);
+    }
+  };
 
   const handleExportCSV = () => {
     const header = "ID,Student ID,Name,Department,Class,Semester,Year,Amount,Note,Charged By,Date";
@@ -194,6 +260,11 @@ export default function ChargeHistoryPage() {
               </div>
             </div>
             <div className="flex items-center gap-2">
+              <Link href="/finance/discharge">
+                <Button size="sm" variant="outline">
+                  Discharge
+                </Button>
+              </Link>
               <Link href="/finance/charge">
                 <Button size="sm" variant="outline" startIcon={<FileText className="h-4 w-4" />}>
                   New Charge
@@ -276,6 +347,41 @@ export default function ChargeHistoryPage() {
             </span>
           </div>
 
+          <div className="flex flex-wrap items-center justify-between gap-3 border-t border-gray-100 px-5 py-3 dark:border-gray-800">
+            <div className="flex flex-wrap items-center gap-4 text-sm text-gray-700 dark:text-gray-300">
+              <label className="inline-flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={minimizeBalance}
+                  onChange={(e) => setMinimizeBalance(e.target.checked)}
+                />
+                Minimize the balance
+              </label>
+              <label className="inline-flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={removeCharges}
+                  onChange={(e) => setRemoveCharges(e.target.checked)}
+                />
+                Remove the charged students
+              </label>
+              <span className="text-xs text-gray-500">
+                {selectedCharges.length} selected
+                {selectedCharges.length > 0 ? ` · $${fmtAmt(selectedTotal)}` : ""}
+              </span>
+            </div>
+            <Button
+              size="sm"
+              disabled={!canDischarge || discharging || selectedCharges.length === 0 || (!minimizeBalance && !removeCharges)}
+              onClick={() => void handleDischargeSelected()}
+            >
+              {discharging ? "Discharging…" : "Discharge selected"}
+            </Button>
+          </div>
+          {dischargeMsg && (
+            <p className="px-5 pb-2 text-sm text-gray-600 dark:text-gray-400">{dischargeMsg}</p>
+          )}
+
           {/* Table */}
           <div className="overflow-x-auto">
             {loading ? (
@@ -290,6 +396,14 @@ export default function ChargeHistoryPage() {
               <Table>
                 <TableHeader>
                   <TableRow className="bg-transparent! hover:bg-transparent!">
+                    <TableCell isHeader>
+                      <input
+                        type="checkbox"
+                        checked={charges.length > 0 && selectedIds.size === charges.length}
+                        onChange={(e) => toggleAll(e.target.checked)}
+                        aria-label="Select all on this page"
+                      />
+                    </TableCell>
                     <TableCell isHeader>#</TableCell>
                     <TableCell isHeader>Student</TableCell>
                     <TableCell isHeader>Department</TableCell>
@@ -305,6 +419,14 @@ export default function ChargeHistoryPage() {
                 <TableBody>
                   {charges.map((c) => (
                     <TableRow key={c.id}>
+                      <TableCell>
+                        <input
+                          type="checkbox"
+                          checked={selectedIds.has(c.id)}
+                          onChange={() => toggleOne(c.id)}
+                          aria-label={`Select charge ${c.id}`}
+                        />
+                      </TableCell>
                       <TableCell className="font-mono text-xs text-gray-400">{c.id}</TableCell>
                       <TableCell>
                         <p className="font-medium text-gray-800 dark:text-white/90">
