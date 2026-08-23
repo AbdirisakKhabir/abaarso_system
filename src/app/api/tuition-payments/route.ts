@@ -425,7 +425,10 @@ export async function POST(req: NextRequest) {
               : null,
           paymentDate: paymentDateVal,
           recordedById: auth.userId,
-          note: note || null,
+          note: (() => {
+            const text = note == null ? "" : String(note).trim();
+            return text ? text.slice(0, 8000) : null;
+          })(),
         },
       });
       // Only Semester Fee reduces the student's tuition balance; other heads are

@@ -398,7 +398,7 @@ model TuitionPayment {
   paidAt        DateTime @default(now()) // When recorded in system
   recordedById  Int?
   recordedBy    User?    @relation(fields: [recordedById], references: [id], onDelete: SetNull)
-  note          String?
+  note          String?  @db.Text
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 

@@ -577,29 +577,17 @@ export default function FinanceHeadsFormPage() {
                   </select>
                 </div>
               </div>
-              <div className="mt-3 grid gap-3 sm:grid-cols-2">
-                <div>
-                  <label className="mb-1 block text-xs text-gray-600 dark:text-gray-400">
-                    Receipt / reference # <span className="text-red-600 dark:text-red-400">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    value={receiptNumber}
-                    onChange={(e) => setReceiptNumber(e.target.value)}
-                    placeholder="Slip or transfer reference"
-                    className={inputClass}
-                  />
-                </div>
-                <div>
-                  <label className="mb-1 block text-xs text-gray-600 dark:text-gray-400">Staff note</label>
-                  <input
-                    type="text"
-                    value={payNote}
-                    onChange={(e) => setPayNote(e.target.value)}
-                    placeholder="Optional"
-                    className={inputClass}
-                  />
-                </div>
+              <div className="mt-3">
+                <label className="mb-1 block text-xs text-gray-600 dark:text-gray-400">
+                  Receipt / reference # <span className="text-red-600 dark:text-red-400">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={receiptNumber}
+                  onChange={(e) => setReceiptNumber(e.target.value)}
+                  placeholder="Slip or transfer reference"
+                  className={inputClass}
+                />
               </div>
             </div>
 
@@ -692,8 +680,32 @@ export default function FinanceHeadsFormPage() {
               >
                 Add head
               </Button>
+            </div>
 
-              <div className="mt-4 flex flex-col-reverse items-stretch gap-3 sm:flex-row sm:items-center sm:justify-end">
+            <div className="p-4">
+              <label htmlFor="heads-staff-note" className="flex items-center gap-2 text-sm font-semibold text-gray-900 dark:text-white">
+                <FileText className="h-4 w-4 text-gray-500" strokeWidth={2} />
+                Staff note
+              </label>
+              <p className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
+                Optional. Use this for a longer description of the payment.
+              </p>
+              <textarea
+                id="heads-staff-note"
+                value={payNote}
+                onChange={(e) => setPayNote(e.target.value)}
+                rows={6}
+                maxLength={8000}
+                placeholder="Write a detailed note…"
+                className="mt-3 min-h-[8.5rem] w-full resize-y rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-sm leading-relaxed text-gray-800 outline-none transition-all placeholder:text-gray-400 focus:border-brand-400 focus:ring-2 focus:ring-brand-500/15 dark:border-gray-600 dark:bg-gray-900/80 dark:text-white dark:placeholder:text-gray-500 dark:focus:border-brand-500 dark:focus:ring-brand-500/20"
+              />
+              <p className="mt-1.5 text-right text-xs tabular-nums text-gray-400">
+                {payNote.length.toLocaleString()} / 8,000
+              </p>
+            </div>
+
+            <div className="p-4">
+              <div className="flex flex-col-reverse items-stretch gap-3 sm:flex-row sm:items-center sm:justify-end">
                 {!canRecord ? (
                   <p className="text-center text-xs text-gray-500 sm:mr-auto sm:text-left dark:text-gray-400">
                     Needs <code className="rounded bg-gray-100 px-1 dark:bg-gray-800">finance.create</code> to submit.
