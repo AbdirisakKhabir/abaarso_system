@@ -50,6 +50,8 @@ export default function ClassesPage() {
   const [search, setSearch] = useState("");
   const [filterSemester, setFilterSemester] = useState<string>("all");
   const [filterProgram, setFilterProgram] = useState<Program | "all">(DEFAULT_PROGRAM);
+  const [filterDepartmentId, setFilterDepartmentId] = useState<string>("all");
+  const [filterAcademicYearId, setFilterAcademicYearId] = useState<string>("all");
   const [modal, setModal] = useState<"add" | "edit" | null>(null);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [form, setForm] = useState({
@@ -75,7 +77,7 @@ export default function ClassesPage() {
     totalPages,
     from,
     to,
-  } = useServerPagination([search, filterSemester, filterProgram]);
+  } = useServerPagination([search, filterSemester, filterProgram, filterDepartmentId, filterAcademicYearId]);
 
   const canCreate = hasPermission("classes.create");
   const canEdit = hasPermission("classes.edit");
@@ -88,6 +90,10 @@ export default function ClassesPage() {
     filterProgram === "all"
       ? semesters
       : semesters.filter((s) => !s.program || s.program === filterProgram);
+  const filterDepartmentOptions =
+    filterProgram === "all"
+      ? departments
+      : departments.filter((d) => !d.program || d.program === filterProgram);
 
   const loadClasses = useCallback(async () => {
     setLoading(true);
@@ -97,6 +103,8 @@ export default function ClassesPage() {
       params.set("pageSize", String(pageSize));
       if (search.trim()) params.set("q", search.trim());
       if (filterSemester !== "all") params.set("semester", filterSemester);
+      if (filterDepartmentId !== "all") params.set("departmentId", filterDepartmentId);
+      if (filterAcademicYearId !== "all") params.set("academicYearId", filterAcademicYearId);
       params.set("program", filterProgram);
       const res = await authFetch(`/api/classes?${params.toString()}`);
       if (res.ok) {
@@ -110,7 +118,7 @@ export default function ClassesPage() {
     } finally {
       setLoading(false);
     }
-  }, [page, pageSize, search, filterSemester, filterProgram, setTotal]);
+  }, [page, pageSize, search, filterSemester, filterProgram, filterDepartmentId, filterAcademicYearId, setTotal]);
 
   async function loadDepartments() {
     const res = await authFetch("/api/departments?program=all");
@@ -277,15 +285,43 @@ export default function ClassesPage() {
               {total}
             </span>
           </div>
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+          <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-end">
             <select
               value={filterProgram}
-              onChange={(e) => setFilterProgram(e.target.value as Program | "all")}
+              onChange={(e) => {
+                const next = e.target.value as Program | "all";
+                setFilterProgram(next);
+                setFilterDepartmentId("all");
+              }}
               className="h-10 rounded-lg border border-gray-200 bg-transparent px-3 text-sm text-gray-700 outline-none focus:border-brand-300 focus:ring-2 focus:ring-brand-500/20 dark:border-gray-700 dark:text-gray-300 dark:focus:border-brand-500/40"
             >
               <option value="Bachelor">Bachelor Degree</option>
               <option value="Masters">Masters Degree</option>
               <option value="all">All Programs</option>
+            </select>
+            <select
+              value={filterDepartmentId}
+              onChange={(e) => setFilterDepartmentId(e.target.value)}
+              className="h-10 max-w-full rounded-lg border border-gray-200 bg-transparent px-3 text-sm text-gray-700 outline-none focus:border-brand-300 focus:ring-2 focus:ring-brand-500/20 dark:border-gray-700 dark:text-gray-300 dark:focus:border-brand-500/40 sm:max-w-52"
+            >
+              <option value="all">All Departments</option>
+              {filterDepartmentOptions.map((d) => (
+                <option key={d.id} value={String(d.id)}>
+                  {d.code} — {d.name}
+                </option>
+              ))}
+            </select>
+            <select
+              value={filterAcademicYearId}
+              onChange={(e) => setFilterAcademicYearId(e.target.value)}
+              className="h-10 rounded-lg border border-gray-200 bg-transparent px-3 text-sm text-gray-700 outline-none focus:border-brand-300 focus:ring-2 focus:ring-brand-500/20 dark:border-gray-700 dark:text-gray-300 dark:focus:border-brand-500/40"
+            >
+              <option value="all">All Academic Years</option>
+              {[...academicYears].reverse().map((ay) => (
+                <option key={ay.id} value={String(ay.id)}>
+                  {ay.name}
+                </option>
+              ))}
             </select>
             <select
               value={filterSemester}
@@ -325,7 +361,7 @@ export default function ClassesPage() {
               </svg>
             </div>
             <p className="text-sm font-medium text-gray-500 dark:text-gray-400">
-              {search || filterSemester !== "all" || filterProgram !== "all"
+              {search || filterSemester !== "all" || filterProgram !== "all" || filterDepartmentId !== "all" || filterAcademicYearId !== "all"
                 ? "No classes match your filters."
                 : "No classes yet. Create one to get started."}
             </p>

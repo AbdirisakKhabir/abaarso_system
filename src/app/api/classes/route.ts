@@ -18,6 +18,7 @@ export async function GET(req: NextRequest) {
     const q = searchParams.get("q")?.trim();
     const departmentId = searchParams.get("departmentId");
     const semester = searchParams.get("semester");
+    const academicYearId = searchParams.get("academicYearId");
     const activeOnly = searchParams.get("active") === "true";
     const programFilter = parseProgram(searchParams.get("program"), { allowAll: true });
     const where: Prisma.ClassWhereInput = {};
@@ -41,6 +42,18 @@ export async function GET(req: NextRequest) {
     }
     if (semester && semester !== "all") {
       where.semester = semester;
+    }
+    if (academicYearId && academicYearId !== "all") {
+      const ayId = Number(academicYearId);
+      if (Number.isInteger(ayId) && ayId > 0) {
+        const ay = await prisma.academicYear.findUnique({
+          where: { id: ayId },
+          select: { startYear: true, endYear: true },
+        });
+        if (ay) {
+          where.year = { gte: ay.startYear, lte: ay.endYear };
+        }
+      }
     }
 
     const include = {

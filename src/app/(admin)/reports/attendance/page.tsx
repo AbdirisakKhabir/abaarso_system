@@ -95,6 +95,7 @@ export default function AttendanceReportPage() {
   const [departments, setDepartments] = useState<Department[]>([]);
   const [classes, setClasses] = useState<ClassItem[]>([]);
   const [courses, setCourses] = useState<CourseItem[]>([]);
+  const [scheduledCourses, setScheduledCourses] = useState<CourseItem[]>([]);
   const [sessions, setSessions] = useState<Session[]>([]);
   const [courseSessions, setCourseSessions] = useState<CourseSessionCount[]>([]);
   const [attendanceCourses, setAttendanceCourses] = useState<CourseSessionCount[]>([]);
@@ -270,9 +271,49 @@ export default function AttendanceReportPage() {
     authFetch(`/api/departments?program=${encodeURIComponent(program)}`).then((r) => { if (r.ok) r.json().then((d: Department[]) => setDepartments(d)); });
     authFetch(`/api/classes?program=${encodeURIComponent(program)}`).then((r) => { if (r.ok) r.json().then((d: ClassItem[]) => setClasses(d)); });
     authFetch(`/api/courses?program=${encodeURIComponent(program)}`).then((r) => {
-      if (r.ok) r.json().then((d: CourseItem[]) => setCourses(d));
+      if (!r.ok) return;
+      r.json().then((d: CourseItem[] | { items?: CourseItem[] }) => {
+        setCourses(Array.isArray(d) ? d : Array.isArray(d.items) ? d.items : []);
+      });
     });
   }, [program]);
+
+  useEffect(() => {
+    if (!filterClass) {
+      setScheduledCourses([]);
+      return;
+    }
+    let cancelled = false;
+    authFetch(`/api/classes/${filterClass}/scheduled-courses`)
+      .then(async (r) => {
+        if (!r.ok) {
+          if (!cancelled) setScheduledCourses([]);
+          return;
+        }
+        const data = await r.json();
+        const rows = Array.isArray(data?.courses) ? data.courses : [];
+        const list: CourseItem[] = [];
+        const seen = new Set<number>();
+        for (const row of rows) {
+          const c = row?.course as CourseItem | undefined;
+          if (!c?.id || seen.has(c.id)) continue;
+          seen.add(c.id);
+          list.push({
+            id: c.id,
+            code: c.code,
+            name: c.name,
+            departmentId: c.departmentId ?? 0,
+          });
+        }
+        if (!cancelled) setScheduledCourses(list);
+      })
+      .catch(() => {
+        if (!cancelled) setScheduledCourses([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [filterClass]);
 
   useEffect(() => {
     setDateMode("all");
@@ -286,16 +327,6 @@ export default function AttendanceReportPage() {
       setFilterClass("");
     }
   }, [classes, filterClass]);
-
-  useEffect(() => {
-    if (
-      filterCourse &&
-      !attendanceCourses.some((c) => String(c.courseId) === filterCourse) &&
-      !courses.some((c) => String(c.id) === filterCourse)
-    ) {
-      setFilterCourse("");
-    }
-  }, [courses, attendanceCourses, filterCourse]);
 
   useEffect(() => {
     if (dateFrom && dateTo && dateFrom > dateTo) setDateTo(dateFrom);
@@ -327,29 +358,41 @@ export default function AttendanceReportPage() {
   );
 
   const filteredCourses = useMemo(() => {
-    if (attendanceCourses.length > 0) {
-      return attendanceCourses.map((c) => ({
-        id: c.courseId,
-        code: c.code,
-        name: c.name,
-        sessionCount: c.sessionCount as number | undefined,
-      }));
+    const byId = new Map<
+      number,
+      { id: number; code: string; name: string; sessionCount?: number }
+    >();
+    const add = (id: number, code: string, name: string, sessionCount?: number) => {
+      const existing = byId.get(id);
+      if (!existing) {
+        byId.set(id, { id, code, name, sessionCount });
+        return;
+      }
+      if (sessionCount != null) existing.sessionCount = sessionCount;
+    };
+    for (const c of scheduledCourses) add(c.id, c.code, c.name);
+    for (const c of attendanceCourses) add(c.courseId, c.code, c.name, c.sessionCount);
+    if (byId.size === 0) {
+      let list = courses;
+      if (filterClass) {
+        const cls = classes.find((c) => String(c.id) === filterClass);
+        if (cls) list = courses.filter((c) => c.departmentId === cls.department.id);
+      } else if (filterDept) {
+        list = courses.filter((c) => c.departmentId === Number(filterDept));
+      }
+      for (const c of list) add(c.id, c.code, c.name);
     }
-    let list = courses;
-    if (filterClass) {
-      const cls = classes.find((c) => String(c.id) === filterClass);
-      if (!cls) return [];
-      list = courses.filter((c) => c.departmentId === cls.department.id);
-    } else if (filterDept) {
-      list = courses.filter((c) => c.departmentId === Number(filterDept));
+    return [...byId.values()].sort((a, b) => a.code.localeCompare(b.code));
+  }, [courses, classes, filterDept, filterClass, attendanceCourses, scheduledCourses]);
+
+  const selectedCourse = filteredCourses.find((c) => String(c.id) === filterCourse);
+
+  useEffect(() => {
+    if (!filterCourse || filteredCourses.length === 0) return;
+    if (!filteredCourses.some((c) => String(c.id) === filterCourse)) {
+      setFilterCourse("");
     }
-    return list.map((c) => ({
-      id: c.id,
-      code: c.code,
-      name: c.name,
-      sessionCount: undefined as number | undefined,
-    }));
-  }, [courses, classes, filterDept, filterClass, attendanceCourses]);
+  }, [filteredCourses, filterCourse]);
 
   const selectedDept = departments.find((d) => String(d.id) === filterDept);
   const showCourseBreakdown = !filterCourse && courseSessions.length > 0;
@@ -483,6 +526,9 @@ export default function AttendanceReportPage() {
             <span><strong>Semester:</strong> {selectedClassInfo.semester} {selectedClassInfo.year}</span>
           </>
         )}
+        {selectedCourse && (
+          <span><strong>Course:</strong> {selectedCourse.code} — {selectedCourse.name}</span>
+        )}
         {selectedDept && (
           <span><strong>Department:</strong> {selectedDept.code} — {selectedDept.name}</span>
         )}
@@ -599,6 +645,7 @@ export default function AttendanceReportPage() {
                 value={filterClass}
                 onChange={(e) => {
                   setFilterClass(e.target.value);
+                  setFilterCourse("");
                 }}
                 className={`${selectClassName} disabled:opacity-50`}
               >
@@ -629,6 +676,13 @@ export default function AttendanceReportPage() {
                   </option>
                 ))}
               </select>
+              {viewMode === "students" && (
+                <p className="mt-1 max-w-[220px] text-xs text-gray-400">
+                  {filterClass
+                    ? "Limit student totals to one course."
+                    : "Select a class to list that class’s courses."}
+                </p>
+              )}
             </div>
             <div>
               <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400">
@@ -806,6 +860,11 @@ export default function AttendanceReportPage() {
               {selectedClassInfo && (
                 <span className="font-medium text-gray-800 dark:text-white/90">
                   {selectedClassInfo.name} · {selectedClassInfo.semester} {selectedClassInfo.year}
+                </span>
+              )}
+              {selectedCourse && (
+                <span className="font-medium text-gray-800 dark:text-white/90">
+                  {selectedCourse.code} · {selectedCourse.name}
                 </span>
               )}
               <span className="text-gray-500 dark:text-gray-400">{dateRangeText}</span>
