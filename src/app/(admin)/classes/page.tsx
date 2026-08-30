@@ -52,6 +52,7 @@ export default function ClassesPage() {
   const [filterProgram, setFilterProgram] = useState<Program | "all">(DEFAULT_PROGRAM);
   const [filterDepartmentId, setFilterDepartmentId] = useState<string>("all");
   const [filterAcademicYearId, setFilterAcademicYearId] = useState<string>("all");
+  const [filterStatus, setFilterStatus] = useState<"all" | "active" | "inactive">("all");
   const [modal, setModal] = useState<"add" | "edit" | null>(null);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [form, setForm] = useState({
@@ -63,6 +64,7 @@ export default function ClassesPage() {
     schedule: "",
     capacity: "40",
     program: DEFAULT_PROGRAM as string,
+    isActive: true,
   });
   const [submitError, setSubmitError] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -77,7 +79,7 @@ export default function ClassesPage() {
     totalPages,
     from,
     to,
-  } = useServerPagination([search, filterSemester, filterProgram, filterDepartmentId, filterAcademicYearId]);
+  } = useServerPagination([search, filterSemester, filterProgram, filterDepartmentId, filterAcademicYearId, filterStatus]);
 
   const canCreate = hasPermission("classes.create");
   const canEdit = hasPermission("classes.edit");
@@ -105,6 +107,7 @@ export default function ClassesPage() {
       if (filterSemester !== "all") params.set("semester", filterSemester);
       if (filterDepartmentId !== "all") params.set("departmentId", filterDepartmentId);
       if (filterAcademicYearId !== "all") params.set("academicYearId", filterAcademicYearId);
+      if (filterStatus !== "all") params.set("active", filterStatus === "active" ? "true" : "false");
       params.set("program", filterProgram);
       const res = await authFetch(`/api/classes?${params.toString()}`);
       if (res.ok) {
@@ -118,7 +121,7 @@ export default function ClassesPage() {
     } finally {
       setLoading(false);
     }
-  }, [page, pageSize, search, filterSemester, filterProgram, filterDepartmentId, filterAcademicYearId, setTotal]);
+  }, [page, pageSize, search, filterSemester, filterProgram, filterDepartmentId, filterAcademicYearId, filterStatus, setTotal]);
 
   async function loadDepartments() {
     const res = await authFetch("/api/departments?program=all");
@@ -164,6 +167,7 @@ export default function ClassesPage() {
       schedule: "",
       capacity: "40",
       program: firstDept?.program || DEFAULT_PROGRAM,
+      isActive: true,
     });
     setSubmitError("");
   }
@@ -181,6 +185,7 @@ export default function ClassesPage() {
       schedule: c.schedule ?? "",
       capacity: String(c.capacity),
       program: c.program || DEFAULT_PROGRAM,
+      isActive: c.isActive !== false,
     });
     setSubmitError("");
   }
@@ -201,6 +206,7 @@ export default function ClassesPage() {
         schedule: form.schedule || undefined,
         capacity: Number(form.capacity),
         program: form.program || DEFAULT_PROGRAM,
+        isActive: form.isActive,
       };
 
       if (modal === "add") {
@@ -333,6 +339,15 @@ export default function ClassesPage() {
                 <option key={s.id} value={s.name}>{s.name}</option>
               ))}
             </select>
+            <select
+              value={filterStatus}
+              onChange={(e) => setFilterStatus(e.target.value as "all" | "active" | "inactive")}
+              className="h-10 rounded-lg border border-gray-200 bg-transparent px-3 text-sm text-gray-700 outline-none focus:border-brand-300 focus:ring-2 focus:ring-brand-500/20 dark:border-gray-700 dark:text-gray-300 dark:focus:border-brand-500/40"
+            >
+              <option value="all">All Statuses</option>
+              <option value="active">Active</option>
+              <option value="inactive">Inactive</option>
+            </select>
             <div className="relative w-full sm:w-56">
               <svg className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
@@ -361,7 +376,7 @@ export default function ClassesPage() {
               </svg>
             </div>
             <p className="text-sm font-medium text-gray-500 dark:text-gray-400">
-              {search || filterSemester !== "all" || filterProgram !== "all" || filterDepartmentId !== "all" || filterAcademicYearId !== "all"
+              {search || filterSemester !== "all" || filterProgram !== "all" || filterDepartmentId !== "all" || filterAcademicYearId !== "all" || filterStatus !== "all"
                 ? "No classes match your filters."
                 : "No classes yet. Create one to get started."}
             </p>
@@ -606,6 +621,22 @@ export default function ClassesPage() {
                   </div>
                   <div>
                     <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">
+                      Status <span className="text-error-500">*</span>
+                    </label>
+                    <select
+                      required
+                      value={form.isActive ? "active" : "inactive"}
+                      onChange={(e) => setForm((f) => ({ ...f, isActive: e.target.value === "active" }))}
+                      className="h-11 w-full appearance-none rounded-lg border border-gray-200 bg-transparent px-4 py-2.5 text-sm text-gray-800 outline-none focus:border-brand-300 focus:ring-2 focus:ring-brand-500/20 dark:border-gray-700 dark:text-white dark:focus:border-brand-500/40"
+                    >
+                      <option value="active">Active</option>
+                      <option value="inactive">Inactive</option>
+                    </select>
+                  </div>
+                </div>
+                <div className="grid grid-cols-3 gap-4">
+                  <div>
+                    <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">
                       Capacity
                     </label>
                     <input
@@ -616,8 +647,6 @@ export default function ClassesPage() {
                       className="h-11 w-full rounded-lg border border-gray-200 bg-transparent px-4 py-2.5 text-sm text-gray-800 outline-none focus:border-brand-300 focus:ring-2 focus:ring-brand-500/20 dark:border-gray-700 dark:text-white dark:focus:border-brand-500/40"
                     />
                   </div>
-                </div>
-                <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">
                       Room

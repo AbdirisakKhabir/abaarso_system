@@ -30,6 +30,7 @@ model User {
   payrollsApproved   Payroll[]            @relation("PayrollApprovedBy")
   activityLogs            ActivityLog[]
   attendanceTakersAssigned AttendanceTaker[] @relation("AttendanceTakerAssignedBy")
+  studentLeaves            StudentLeave[]
   createdAt               DateTime             @default(now())
   updatedAt               DateTime             @updatedAt
 
@@ -282,7 +283,8 @@ model Student {
   class              Class?               @relation(fields: [classId], references: [id], onDelete: SetNull)
   program            String               @default("Bachelor") // "Bachelor", "Masters"
   admissionDate      DateTime             @default(now())
-  status             String               @default("Admitted") // "Pending", "Admitted", "Rejected", "Graduated"
+  status             String               @default("Admitted") // "Pending", "Admitted", "Leave", "Rejected", "Graduated"
+  leaves             StudentLeave[]
   paymentStatus      String               @default("Fully Paid") // "Full Scholarship", "Half Scholar", "Fully Paid"
   customSemesterFee  Float? // Optional custom fee per semester for this student
   balance            Float                @default(0) // Amount owed; charged at registration, reduced by payments
@@ -296,6 +298,24 @@ model Student {
   updatedAt          DateTime             @updatedAt
 
   @@map("students")
+}
+
+/// Periods a student is on leave. Open rows have endDate = null.
+model StudentLeave {
+  id           Int       @id @default(autoincrement())
+  studentId    Int
+  student      Student   @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  startDate    DateTime
+  endDate      DateTime?
+  reason       String?   @db.Text
+  recordedById Int?
+  recordedBy   User?     @relation(fields: [recordedById], references: [id], onDelete: SetNull)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  @@index([studentId])
+  @@index([endDate])
+  @@map("student_leaves")
 }
 
 /// Historical record of which class/semester/year a student was enrolled in.

@@ -98,7 +98,9 @@ export async function PATCH(req: NextRequest, ctx: RouteContext) {
     if (body.program !== undefined) {
       data.program = parseProgram(body.program) ?? DEFAULT_PROGRAM;
     }
-    if (body.isActive !== undefined) data.isActive = Boolean(body.isActive);
+    if (body.isActive !== undefined) {
+      data.isActive = !(body.isActive === false || body.isActive === "false" || body.isActive === "inactive");
+    }
 
     const cls = await prisma.class.update({
       where: { id },

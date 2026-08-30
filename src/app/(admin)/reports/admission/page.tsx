@@ -67,6 +67,7 @@ type GenderBreakdown = {
 const STATUS_COLOR: Record<string, "success" | "warning" | "error" | "info"> = {
   Admitted: "success",
   Pending: "warning",
+  Leave: "warning",
   Rejected: "error",
   Graduated: "info",
 };
@@ -331,6 +332,7 @@ export default function AdmissionReportPage() {
                 <option value="all">All Statuses</option>
                 <option value="Admitted">Admitted</option>
                 <option value="Pending">Pending</option>
+                <option value="Leave">Leave</option>
                 <option value="Rejected">Rejected</option>
                 <option value="Graduated">Graduated</option>
               </select>

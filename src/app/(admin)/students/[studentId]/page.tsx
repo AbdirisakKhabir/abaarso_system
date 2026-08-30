@@ -40,6 +40,7 @@ type StudentProfile = {
   tuitionPayments: { id: number; semester: string; year: number; amount: number; paidAt: string; financeHead?: string }[];
   tuitionCharges?: { id: number; semester: string; year: number; amount: number; note: string | null; createdAt: string }[];
   enrollments?: { id: number; semester: string; year: number; class: { id: number; name: string } | null }[];
+  leaves?: { id: number; startDate: string; endDate: string | null; reason: string | null }[];
   examRecords?: {
     id: number;
     semester: string;
@@ -315,6 +316,34 @@ export default function StudentProfilePage() {
               <InfoRow icon={UserIcon} label="Address" value={student.address || "—"} />
             </div>
           </div>
+
+          {(student.leaves ?? []).length > 0 && (
+            <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm dark:border-gray-800 dark:bg-white/[0.03]">
+              <h3 className="mb-5 text-lg font-semibold text-gray-800 dark:text-white/90">Leave history</h3>
+              <div className="space-y-2">
+                {student.leaves!.map((lv) => (
+                  <div
+                    key={lv.id}
+                    className="flex flex-col gap-1 rounded-xl border border-gray-100 px-4 py-3 dark:border-gray-800 sm:flex-row sm:items-center sm:justify-between"
+                  >
+                    <div>
+                      <p className="text-sm font-medium text-gray-800 dark:text-white/90">
+                        {new Date(lv.startDate).toLocaleDateString()}
+                        {" – "}
+                        {lv.endDate ? new Date(lv.endDate).toLocaleDateString() : "Present"}
+                      </p>
+                      {lv.reason && (
+                        <p className="text-xs text-gray-500 dark:text-gray-400">{lv.reason}</p>
+                      )}
+                    </div>
+                    <span className="text-xs font-medium text-gray-500">
+                      {lv.endDate ? "Returned" : "On leave"}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* Academic history by semester */}
           <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm dark:border-gray-800 dark:bg-white/[0.03]">

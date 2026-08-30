@@ -22,6 +22,7 @@ import { useAuth } from "@/context/AuthContext";
 import { buildTermSequence } from "@/lib/semester-term-sequence";
 import { perSemesterTuition } from "@/lib/tuition-amount";
 import { programLabel, type Program } from "@/lib/program";
+import { STUDENT_STATUSES } from "@/lib/student-status";
 import {
   ArrowUpIcon,
   DollarLineIcon,
@@ -78,11 +79,12 @@ type StudentRow = {
   createdAt: string;
 };
 
-const STATUSES = ["Pending", "Admitted", "Rejected", "Graduated"];
+const STATUSES = [...STUDENT_STATUSES];
 
 const STATUS_COLOR: Record<string, "warning" | "success" | "error" | "info" | "primary"> = {
   Pending: "warning",
   Admitted: "success",
+  Leave: "warning",
   Rejected: "error",
   Graduated: "info",
 };
@@ -651,6 +653,11 @@ export default function StudentListPage({ program }: { program: Program }) {
       <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <PageBreadCrumb pageTitle={title} />
         <div className="flex items-center gap-2">
+          <Link href="/admission/leave">
+            <Button variant="outline" size="sm">
+              Leave students
+            </Button>
+          </Link>
           {canCreate && (
             <>
               <Button
@@ -686,7 +693,7 @@ export default function StudentListPage({ program }: { program: Program }) {
       </div>
 
       {/* Stats */}
-      <div className="mb-6 grid grid-cols-2 gap-4 sm:grid-cols-4">
+      <div className="mb-6 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
         {STATUSES.map((st) => {
           const count = statusCounts[st] ?? 0;
           return (

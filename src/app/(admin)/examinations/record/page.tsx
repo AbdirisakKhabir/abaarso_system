@@ -29,6 +29,23 @@ type ClassInfo = {
 };
 
 type CourseInfo = { id: number; name: string; code: string; departmentId?: number };
+type AcademicYearOption = { id: number; startYear: number; endYear: number; name: string; isActive?: boolean };
+
+function asList<T>(data: unknown): T[] {
+  if (Array.isArray(data)) return data as T[];
+  if (data && typeof data === "object") {
+    const o = data as Record<string, unknown>;
+    for (const key of ["items", "classes", "departments", "courses", "faculties"]) {
+      if (Array.isArray(o[key])) return o[key] as T[];
+    }
+  }
+  return [];
+}
+
+function classMatchesAcademicYear(c: ClassInfo, ay: AcademicYearOption | undefined): boolean {
+  if (!ay) return true;
+  return c.year >= ay.startYear && c.year <= ay.endYear;
+}
 
 export default function RecordExamsPage() {
   const { hasPermission } = useAuth();
@@ -42,9 +59,12 @@ export default function RecordExamsPage() {
   const [templateCourseId, setTemplateCourseId] = useState("");
   const [templateLoading, setTemplateLoading] = useState(false);
 
+  const [importDepartmentId, setImportDepartmentId] = useState("");
+  const [importAcademicYearId, setImportAcademicYearId] = useState("");
   const [importClassId, setImportClassId] = useState("");
   const [importCourseId, setImportCourseId] = useState("");
   const [importFile, setImportFile] = useState<File | null>(null);
+  const [academicYears, setAcademicYears] = useState<AcademicYearOption[]>([]);
   const [importLoading, setImportLoading] = useState(false);
   const [importResult, setImportResult] = useState<{ created: number; updated: number; errors?: string[] } | null>(null);
 
@@ -90,10 +110,11 @@ export default function RecordExamsPage() {
   } = usePagination(recordRows, [recordClassId, recordCourseId]);
 
   useEffect(() => {
-    authFetch("/api/faculties").then((r) => { if (r.ok) r.json().then(setFaculties); });
-    authFetch("/api/departments").then((r) => { if (r.ok) r.json().then(setDepartments); });
-    authFetch("/api/classes").then((r) => { if (r.ok) r.json().then(setClasses); });
-    authFetch("/api/courses").then((r) => { if (r.ok) r.json().then(setCourses); });
+    authFetch("/api/faculties").then((r) => { if (r.ok) r.json().then((d) => setFaculties(asList<FacultyInfo>(d))); });
+    authFetch("/api/departments").then((r) => { if (r.ok) r.json().then((d) => setDepartments(asList<DepartmentInfo>(d))); });
+    authFetch("/api/classes").then((r) => { if (r.ok) r.json().then((d) => setClasses(asList<ClassInfo>(d))); });
+    authFetch("/api/courses").then((r) => { if (r.ok) r.json().then((d) => setCourses(asList<CourseInfo>(d))); });
+    authFetch("/api/academic-years").then((r) => { if (r.ok) r.json().then((d) => setAcademicYears(asList<AcademicYearOption>(d))); });
   }, []);
 
   useEffect(() => {
@@ -125,12 +146,24 @@ export default function RecordExamsPage() {
   const templateCourses = templateDepartmentId
     ? courses.filter((c) => c.departmentId === Number(templateDepartmentId))
     : courses;
-  const importCourses = importClassId
-    ? (() => {
-        const cls = classes.find((c) => String(c.id) === importClassId);
-        return cls ? courses.filter((c) => c.departmentId === cls.departmentId) : [];
-      })()
-    : [];
+  const importAcademicYear = academicYears.find((y) => String(y.id) === importAcademicYearId);
+  const importClasses = classes.filter((c) => {
+    if (importDepartmentId && c.department?.id !== Number(importDepartmentId) && c.departmentId !== Number(importDepartmentId)) {
+      return false;
+    }
+    if (!classMatchesAcademicYear(c, importAcademicYear)) return false;
+    return true;
+  });
+  const importCourses = (() => {
+    if (importClassId) {
+      const cls = classes.find((c) => String(c.id) === importClassId);
+      return cls ? courses.filter((c) => c.departmentId === cls.departmentId) : [];
+    }
+    if (importDepartmentId) {
+      return courses.filter((c) => c.departmentId === Number(importDepartmentId));
+    }
+    return [];
+  })();
 
   const updateRecordRow = (
     idx: number,
@@ -358,12 +391,46 @@ export default function RecordExamsPage() {
               <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-brand-100 text-xs font-bold text-brand-600 dark:bg-brand-500/20 dark:text-brand-400">2</span>
               <span className="font-medium text-gray-800 dark:text-white/90">Import from Excel</span>
             </div>
-            <div className="grid gap-3 sm:grid-cols-3">
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              <div>
+                <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400">Department</label>
+                <select
+                  value={importDepartmentId}
+                  onChange={(e) => {
+                    setImportDepartmentId(e.target.value);
+                    setImportClassId("");
+                    setImportCourseId("");
+                  }}
+                  className="h-10 w-full rounded-lg border border-gray-200 bg-white px-3 text-sm outline-none focus:border-brand-400 focus:ring-1 focus:ring-brand-400 dark:border-gray-600 dark:bg-gray-800 dark:text-white/90"
+                >
+                  <option value="">All Departments</option>
+                  {departments.map((d) => (
+                    <option key={d.id} value={d.id}>{d.code} - {d.name}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400">Academic Year</label>
+                <select
+                  value={importAcademicYearId}
+                  onChange={(e) => {
+                    setImportAcademicYearId(e.target.value);
+                    setImportClassId("");
+                    setImportCourseId("");
+                  }}
+                  className="h-10 w-full rounded-lg border border-gray-200 bg-white px-3 text-sm outline-none focus:border-brand-400 focus:ring-1 focus:ring-brand-400 dark:border-gray-600 dark:bg-gray-800 dark:text-white/90"
+                >
+                  <option value="">All Academic Years</option>
+                  {[...academicYears].reverse().map((ay) => (
+                    <option key={ay.id} value={String(ay.id)}>{ay.name}</option>
+                  ))}
+                </select>
+              </div>
               <div>
                 <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400">Class</label>
                 <select value={importClassId} onChange={(e) => { setImportClassId(e.target.value); setImportCourseId(""); }} className="h-10 w-full rounded-lg border border-gray-200 bg-white px-3 text-sm outline-none focus:border-brand-400 focus:ring-1 focus:ring-brand-400 dark:border-gray-600 dark:bg-gray-800 dark:text-white/90">
                   <option value="">Select Class</option>
-                  {classes.map((c) => <option key={c.id} value={c.id}>{c.department?.code} - {c.name} ({c.semester} {c.year})</option>)}
+                  {importClasses.map((c) => <option key={c.id} value={c.id}>{c.department?.code} - {c.name} ({c.semester} {c.year})</option>)}
                 </select>
               </div>
               <div>

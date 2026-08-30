@@ -8,6 +8,8 @@ import { DEFAULT_PROGRAM, parseProgram } from "@/lib/program";
 import { recordEnrollmentForClass } from "@/lib/enrollment";
 import { recordTuitionChargeForClass } from "@/lib/tuition-charge";
 import { findClassRosterStudentIds } from "@/lib/class-roster";
+import { parseStudentStatus } from "@/lib/student-status";
+import { syncLeaveOnStatusChange } from "@/lib/student-leave";
 
 // Generate a unique student ID like STD-2026-0001
 async function generateStudentId(): Promise<string> {
@@ -307,7 +309,7 @@ export async function POST(req: NextRequest) {
         program: parseProgram(program) ?? DEFAULT_PROGRAM,
         imageUrl: imageUrl || null,
         imagePublicId: imagePublicId || null,
-        status: status || "Admitted",
+        status: parseStudentStatus(status),
         paymentStatus: ps,
         customSemesterFee: parsedCustomSemesterFee,
         balance: finalBalance,
@@ -325,6 +327,15 @@ export async function POST(req: NextRequest) {
     });
 
     await recordEnrollmentForClass(prisma, student.id, student.classId);
+    if (student.status === "Leave") {
+      await syncLeaveOnStatusChange(prisma, {
+        studentId: student.id,
+        previousStatus: "",
+        nextStatus: "Leave",
+        reason: body.leaveReason,
+        recordedById: auth.userId,
+      });
+    }
     if (finalBalance > 0) {
       await recordTuitionChargeForClass(prisma, {
         studentId: student.id,

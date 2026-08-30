@@ -4,6 +4,8 @@ import { prisma } from "@/lib/prisma";
 import { deleteImage } from "@/lib/cloudinary";
 import { DEFAULT_PROGRAM, parseProgram } from "@/lib/program";
 import { recordEnrollmentForClass } from "@/lib/enrollment";
+import { parseStudentStatus } from "@/lib/student-status";
+import { syncLeaveOnStatusChange } from "@/lib/student-leave";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -104,7 +106,7 @@ export async function PATCH(req: NextRequest, ctx: RouteContext) {
       data.classId = body.classId ? Number(body.classId) : null;
     }
     if (body.program !== undefined) data.program = parseProgram(body.program) ?? DEFAULT_PROGRAM;
-    if (body.status !== undefined) data.status = body.status;
+    if (body.status !== undefined) data.status = parseStudentStatus(body.status);
     if (body.paymentStatus !== undefined) {
       data.paymentStatus = ["Full Scholarship", "Half Scholar", "Fully Paid"].includes(body.paymentStatus)
         ? body.paymentStatus
@@ -144,7 +146,7 @@ export async function PATCH(req: NextRequest, ctx: RouteContext) {
     }
     const existing = await prisma.student.findUnique({
       where: { id },
-      select: { classId: true, imagePublicId: true },
+      select: { classId: true, imagePublicId: true, status: true },
     });
     if (!existing) {
       return NextResponse.json({ error: "Student not found" }, { status: 404 });
@@ -182,6 +184,18 @@ export async function PATCH(req: NextRequest, ctx: RouteContext) {
       if (student.classId) {
         await recordEnrollmentForClass(prisma, student.id, student.classId);
       }
+    }
+
+    if (body.status !== undefined && existing.status !== student.status) {
+      await syncLeaveOnStatusChange(prisma, {
+        studentId: student.id,
+        previousStatus: existing.status,
+        nextStatus: student.status,
+        startDate: body.leaveStartDate,
+        endDate: body.leaveEndDate,
+        reason: body.leaveReason,
+        recordedById: auth.userId,
+      });
     }
 
     return NextResponse.json(student);

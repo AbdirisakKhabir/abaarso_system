@@ -5,6 +5,8 @@ import { readWorkbookAoa } from "@/lib/excel";
 import { DEFAULT_PROGRAM, parseProgram } from "@/lib/program";
 import { recordEnrollmentForClass } from "@/lib/enrollment";
 import { recordTuitionChargeForClass } from "@/lib/tuition-charge";
+import { parseStudentStatus } from "@/lib/student-status";
+import { syncLeaveOnStatusChange } from "@/lib/student-leave";
 
 function findCol(headerRow: string[], patterns: RegExp[]): number {
   for (const p of patterns) {
@@ -392,12 +394,20 @@ export async function POST(req: NextRequest) {
           program: parseProgram(
             programIdx >= 0 ? String(row[programIdx] ?? "").trim() : ""
           ) ?? DEFAULT_PROGRAM,
-          status: ["Pending", "Admitted", "Rejected", "Graduated"].includes(status) ? status : "Admitted",
+          status: parseStudentStatus(status),
           paymentStatus,
           balance: initialBalance,
         },
       });
       created.push(student.id);
+      if (student.status === "Leave") {
+        await syncLeaveOnStatusChange(prisma, {
+          studentId: student.id,
+          previousStatus: "",
+          nextStatus: "Leave",
+          recordedById: auth.userId,
+        });
+      }
       if (resolvedClassId) {
         await recordEnrollmentForClass(prisma, student.id, resolvedClassId);
       }

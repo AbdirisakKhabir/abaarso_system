@@ -7,6 +7,7 @@ import Button from "@/components/ui/button/Button";
 import { DateInput } from "@/components/form/DateInput";
 import { authFetch } from "@/lib/api";
 import { DEFAULT_PROGRAM, PROGRAMS, programLabel, type Program } from "@/lib/program";
+import { STUDENT_STATUSES } from "@/lib/student-status";
 import { ChevronLeftIcon, UserCircleIcon, MailIcon, GroupIcon, UserIcon } from "@/icons";
 
 type Department = { id: number; name: string; code: string; program?: string };
@@ -46,7 +47,7 @@ export type StudentFormData = {
   imagePublicId: string;
 };
 
-const STATUSES = ["Pending", "Admitted", "Rejected", "Graduated"];
+const STATUSES = [...STUDENT_STATUSES];
 const PAYMENT_STATUSES = ["Full Scholarship", "Half Scholar", "Fully Paid"] as const;
 
 const MONTHS = [

@@ -19,11 +19,13 @@ export async function GET(req: NextRequest) {
     const departmentId = searchParams.get("departmentId");
     const semester = searchParams.get("semester");
     const academicYearId = searchParams.get("academicYearId");
-    const activeOnly = searchParams.get("active") === "true";
+    const activeParam = searchParams.get("active") ?? searchParams.get("status");
     const programFilter = parseProgram(searchParams.get("program"), { allowAll: true });
     const where: Prisma.ClassWhereInput = {};
-    if (activeOnly) {
+    if (activeParam === "true" || activeParam === "active") {
       where.isActive = true;
+    } else if (activeParam === "false" || activeParam === "inactive") {
+      where.isActive = false;
     }
     if (programFilter && programFilter !== "all") {
       where.program = programFilter;
@@ -100,7 +102,7 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json();
-    const { name, departmentId, semester, year, room, schedule, capacity, program } = body;
+    const { name, departmentId, semester, year, room, schedule, capacity, program, isActive } = body;
     const parsedDepartmentId = Number(departmentId);
     const parsedYear = Number(year);
 
@@ -137,6 +139,7 @@ export async function POST(req: NextRequest) {
         schedule: schedule || null,
         capacity: Number(capacity) > 0 ? Number(capacity) : 40,
         program: resolvedProgram,
+        isActive: isActive === false || isActive === "false" || isActive === "inactive" ? false : true,
       },
       include: {
         department: { select: { id: true, name: true, code: true, program: true } },

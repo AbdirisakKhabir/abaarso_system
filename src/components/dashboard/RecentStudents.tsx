@@ -52,7 +52,13 @@ export default function RecentStudents() {
   } = usePagination(students, []);
 
   const statusColor = (s: string) =>
-    s === "Admitted" ? "success" : s === "Pending" ? "warning" : s === "Rejected" ? "error" : "info";
+    s === "Admitted"
+      ? "success"
+      : s === "Pending" || s === "Leave"
+        ? "warning"
+        : s === "Rejected"
+          ? "error"
+          : "info";
 
   return (
     <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white px-4 pb-4 shadow-sm dark:border-gray-800 dark:bg-white/5 sm:px-6 sm:pb-6">
