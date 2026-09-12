@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getAuthUser } from "@/lib/auth";
+import { requirePermission } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { parsePaginationParams } from "@/lib/pagination";
 import {
@@ -9,10 +9,8 @@ import {
 
 export async function GET(req: NextRequest) {
   try {
-    const auth = await getAuthUser(req);
-    if (!auth) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    const check = await requirePermission(req, "roles.view");
+    if ("error" in check) return check.error;
 
     const { searchParams } = new URL(req.url);
     const { paginate, page, pageSize, skip } = parsePaginationParams(searchParams);
@@ -71,10 +69,8 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
-    const auth = await getAuthUser(req);
-    if (!auth) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    const check = await requirePermission(req, "roles.create");
+    if ("error" in check) return check.error;
 
     const body = await req.json();
     const { name, description, permissionIds } = body;

@@ -10,25 +10,7 @@ import { recordTuitionChargeForClass } from "@/lib/tuition-charge";
 import { findClassRosterStudentIds } from "@/lib/class-roster";
 import { parseStudentStatus } from "@/lib/student-status";
 import { syncLeaveOnStatusChange } from "@/lib/student-leave";
-
-// Generate a unique student ID like STD-2026-0001
-async function generateStudentId(): Promise<string> {
-  const year = new Date().getFullYear();
-  const prefix = `STD-${year}-`;
-
-  const lastStudent = await prisma.student.findFirst({
-    where: { studentId: { startsWith: prefix } },
-    orderBy: { studentId: "desc" },
-  });
-
-  let nextNum = 1;
-  if (lastStudent) {
-    const lastNum = parseInt(lastStudent.studentId.split("-").pop() || "0", 10);
-    nextNum = lastNum + 1;
-  }
-
-  return `${prefix}${String(nextNum).padStart(4, "0")}`;
-}
+import { generateStudentId } from "@/lib/student-id";
 
 const studentListInclude = {
   department: {

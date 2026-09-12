@@ -3,6 +3,10 @@ import {
   buildStudentAcademicReport,
   resolveStudentInternalId,
 } from "@/lib/studentAcademicReport";
+import { getClientIp, rateLimit } from "@/lib/rate-limit";
+
+const MAX_LOOKUPS = 20;
+const WINDOW_MS = 10 * 60 * 1000;
 
 function corsHeaders(): HeadersInit {
   return {
@@ -24,6 +28,14 @@ export async function OPTIONS() {
 
 export async function GET(req: NextRequest) {
   try {
+    const rl = rateLimit(`academic-report:${getClientIp(req)}`, MAX_LOOKUPS, WINDOW_MS);
+    if (rl.limited) {
+      return NextResponse.json(
+        { error: "Too many requests. Please try again later." },
+        { status: 429, headers: { ...corsHeaders(), "Retry-After": String(rl.retryAfterSeconds) } }
+      );
+    }
+
     const { searchParams } = new URL(req.url);
     const raw =
       searchParams.get("studentId")?.trim() ||

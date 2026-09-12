@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import PageBreadCrumb from "@/components/common/PageBreadCrumb";
 import Button from "@/components/ui/button/Button";
@@ -12,22 +12,12 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { DateInput } from "@/components/form/DateInput";
 import { authFetch } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import { programLabel } from "@/lib/program";
-import { Search } from "lucide-react";
+import { confirmYesNo, notifyError, notifySuccess } from "@/lib/sweetalert";
 
 type Department = { id: number; name: string; code: string };
-type SearchStudent = {
-  id: number;
-  studentId: string;
-  firstName: string;
-  lastName: string;
-  status: string;
-  department?: { code: string; name: string };
-  class?: { name: string } | null;
-};
 type LeaveRow = {
   id: number;
   startDate: string;
@@ -71,17 +61,8 @@ export default function LeaveStudentsPage() {
   const [view, setView] = useState<"current" | "history">("current");
   const [filterDept, setFilterDept] = useState("");
   const [search, setSearch] = useState("");
-
-  const [picked, setPicked] = useState<SearchStudent | null>(null);
-  const [searchQuery, setSearchQuery] = useState("");
-  const [searchResults, setSearchResults] = useState<SearchStudent[]>([]);
-  const [searchLoading, setSearchLoading] = useState(false);
-  const [leaveReason, setLeaveReason] = useState("");
-  const [leaveStart, setLeaveStart] = useState(() => new Date().toISOString().slice(0, 10));
-  const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
-  const [message, setMessage] = useState("");
-  const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [recoveringId, setRecoveringId] = useState<number | null>(null);
 
   const loadLeaves = useCallback(async () => {
     setLoading(true);
@@ -116,65 +97,18 @@ export default function LeaveStudentsPage() {
     void loadLeaves();
   }, [loadLeaves]);
 
-  useEffect(() => {
-    const q = searchQuery.trim();
-    if (q.length < 2) {
-      setSearchResults([]);
-      return;
-    }
-    if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
-    searchDebounceRef.current = setTimeout(async () => {
-      setSearchLoading(true);
-      try {
-        const res = await authFetch(`/api/students/search?q=${encodeURIComponent(q)}&limit=15`);
-        setSearchResults(res.ok ? await res.json() : []);
-      } catch {
-        setSearchResults([]);
-      }
-      setSearchLoading(false);
-    }, 280);
-    return () => {
-      if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
-    };
-  }, [searchQuery]);
-
-  const putOnLeave = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!picked || !canEdit) return;
-    setSubmitting(true);
-    setError("");
-    setMessage("");
-    try {
-      const res = await authFetch("/api/students/leaves", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          studentId: picked.id,
-          startDate: leaveStart,
-          reason: leaveReason,
-        }),
-      });
-      const data = await res.json().catch(() => null);
-      if (!res.ok) {
-        setError(data?.error ?? "Could not put student on leave.");
-        return;
-      }
-      setMessage(`${picked.studentId} is now on leave.`);
-      setPicked(null);
-      setSearchQuery("");
-      setLeaveReason("");
-      await loadLeaves();
-    } catch {
-      setError("Could not put student on leave.");
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
   const returnFromLeave = async (row: LeaveRow) => {
     if (!canEdit) return;
-    if (!window.confirm(`Return ${row.student.studentId} from leave as Admitted?`)) return;
+    const ok = await confirmYesNo({
+      title: "Recover this student?",
+      text: `${row.student.firstName} ${row.student.lastName} (${row.student.studentId}) will be set back to Admitted and removed from the leave list.`,
+      confirmText: "Yes, recover",
+      cancelText: "No",
+      icon: "question",
+    });
+    if (!ok) return;
     setError("");
+    setRecoveringId(row.id);
     try {
       const res = await authFetch(`/api/students/leaves/${row.id}`, {
         method: "PATCH",
@@ -183,13 +117,18 @@ export default function LeaveStudentsPage() {
       });
       const data = await res.json().catch(() => null);
       if (!res.ok) {
-        setError(data?.error ?? "Could not return student.");
+        const msg = data?.error ?? "Could not recover student.";
+        setError(msg);
+        await notifyError("Could not recover student", msg);
         return;
       }
-      setMessage(`${row.student.studentId} returned from leave.`);
       await loadLeaves();
+      await notifySuccess("Student recovered", `${row.student.studentId} is now Admitted.`);
     } catch {
-      setError("Could not return student.");
+      setError("Could not recover student.");
+      await notifyError("Could not recover student");
+    } finally {
+      setRecoveringId(null);
     }
   };
 
@@ -213,87 +152,11 @@ export default function LeaveStudentsPage() {
         </p>
       </div>
 
-      {canEdit && (
-        <form
-          onSubmit={putOnLeave}
-          className="mb-6 overflow-hidden rounded-2xl border border-gray-200 bg-white dark:border-gray-800 dark:bg-white/3"
-        >
-          <div className="border-b border-gray-100 px-5 py-4 dark:border-gray-800">
-            <h2 className="text-base font-semibold text-gray-800 dark:text-white/90">Put a student on leave</h2>
-            <p className="mt-0.5 text-sm text-gray-500">
-              Status becomes Leave. They stay assigned to their class but are tracked here until they return.
-            </p>
-          </div>
-          <div className="grid gap-4 p-5 sm:grid-cols-2">
-            <div className="sm:col-span-2">
-              <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">Student</label>
-              <div className="relative">
-                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
-                <input
-                  type="text"
-                  value={picked ? `${picked.firstName} ${picked.lastName} (${picked.studentId})` : searchQuery}
-                  onChange={(e) => {
-                    setPicked(null);
-                    setSearchQuery(e.target.value);
-                  }}
-                  placeholder="Search name or student ID"
-                  className={`${inputCls} pl-9`}
-                />
-              </div>
-              {searchLoading && <p className="mt-1 text-xs text-gray-400">Searching…</p>}
-              {!picked && searchResults.length > 0 && (
-                <ul className="mt-2 max-h-48 overflow-auto rounded-lg border border-gray-200 dark:border-gray-700">
-                  {searchResults.map((s) => (
-                    <li key={s.id}>
-                      <button
-                        type="button"
-                        className="flex w-full items-center justify-between px-3 py-2 text-left text-sm hover:bg-gray-50 dark:hover:bg-white/5"
-                        onClick={() => {
-                          setPicked(s);
-                          setSearchResults([]);
-                        }}
-                      >
-                        <span>
-                          {s.firstName} {s.lastName}{" "}
-                          <span className="font-mono text-xs text-gray-500">{s.studentId}</span>
-                        </span>
-                        <span className="text-xs text-gray-500">{s.status}</span>
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
-            <DateInput
-              id="leave-start"
-              label={<span className="text-sm font-medium text-gray-700 dark:text-gray-300">Leave start</span>}
-              value={leaveStart}
-              onChange={setLeaveStart}
-              inputClassName={inputCls}
-            />
-            <div className="sm:col-span-2">
-              <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">Reason</label>
-              <textarea
-                value={leaveReason}
-                onChange={(e) => setLeaveReason(e.target.value)}
-                rows={3}
-                placeholder="Why is this student on leave?"
-                className="min-h-[5rem] w-full resize-y rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:border-brand-400 dark:border-gray-600 dark:bg-gray-800 dark:text-white/90"
-              />
-            </div>
-          </div>
-          <div className="flex flex-wrap items-center justify-between gap-3 border-t border-gray-100 px-5 py-4 dark:border-gray-800">
-            <p className="text-sm text-error-600">{error}</p>
-            <Button type="submit" size="sm" disabled={!picked || submitting}>
-              {submitting ? "Saving…" : "Put on leave"}
-            </Button>
-          </div>
-        </form>
-      )}
+      <p className="mb-4 text-sm text-gray-500 dark:text-gray-400">
+        Students on leave. To put a student on leave, use the <strong>Leave</strong> action on the student list page.
+      </p>
 
-      {message && (
-        <p className="mb-4 text-sm text-emerald-700 dark:text-emerald-400">{message}</p>
-      )}
+      {error && <p className="mb-4 text-sm text-error-600">{error}</p>}
 
       <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white dark:border-gray-800 dark:bg-white/3">
         <div className="flex flex-col gap-3 border-b border-gray-200 px-5 py-4 dark:border-gray-800 sm:flex-row sm:items-center sm:justify-between">
@@ -390,8 +253,13 @@ export default function LeaveStudentsPage() {
                   </TableCell>
                   {canEdit && view === "current" && (
                     <TableCell className="text-right">
-                      <Button size="sm" variant="outline" onClick={() => void returnFromLeave(row)}>
-                        Return
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => void returnFromLeave(row)}
+                        disabled={recoveringId === row.id}
+                      >
+                        {recoveringId === row.id ? "Recovering…" : "Recover"}
                       </Button>
                     </TableCell>
                   )}

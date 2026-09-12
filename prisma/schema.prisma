@@ -11,28 +11,29 @@ datasource db {
 }
 
 model User {
-  id                 Int                  @id @default(autoincrement())
-  email              String               @unique
-  password           String
-  name               String?
-  roleId             Int
-  role               Role                 @relation(fields: [roleId], references: [id], onDelete: Restrict)
-  isActive           Boolean              @default(true)
-  attendanceSessions AttendanceSession[]
-  tuitionPayments    TuitionPayment[]
-  tuitionCharges     TuitionCharge[]
-  bankWithdrawals    BankWithdrawal[]
-  bankTransfers      BankTransfer[]
-  transactionHistory TransactionHistory[]
-  expensesRequested  Expense[]            @relation("ExpenseRequestedBy")
-  expensesApproved   Expense[]            @relation("ExpenseApprovedBy")
-  payrollsRequested  Payroll[]            @relation("PayrollRequestedBy")
-  payrollsApproved   Payroll[]            @relation("PayrollApprovedBy")
-  activityLogs            ActivityLog[]
-  attendanceTakersAssigned AttendanceTaker[] @relation("AttendanceTakerAssignedBy")
-  studentLeaves            StudentLeave[]
-  createdAt               DateTime             @default(now())
-  updatedAt               DateTime             @updatedAt
+  id                          Int                  @id @default(autoincrement())
+  email                       String               @unique
+  password                    String
+  name                        String?
+  roleId                      Int
+  role                        Role                 @relation(fields: [roleId], references: [id], onDelete: Restrict)
+  isActive                    Boolean              @default(true)
+  attendanceSessions          AttendanceSession[]
+  tuitionPayments             TuitionPayment[]
+  tuitionCharges              TuitionCharge[]
+  bankWithdrawals             BankWithdrawal[]
+  bankTransfers               BankTransfer[]
+  transactionHistory          TransactionHistory[]
+  expensesRequested           Expense[]            @relation("ExpenseRequestedBy")
+  expensesApproved            Expense[]            @relation("ExpenseApprovedBy")
+  payrollsRequested           Payroll[]            @relation("PayrollRequestedBy")
+  payrollsApproved            Payroll[]            @relation("PayrollApprovedBy")
+  activityLogs                ActivityLog[]
+  attendanceTakersAssigned    AttendanceTaker[]    @relation("AttendanceTakerAssignedBy")
+  studentLeaves               StudentLeave[]
+  reviewedOnlineRegistrations OnlineRegistration[]
+  createdAt                   DateTime             @default(now())
+  updatedAt                   DateTime             @updatedAt
 
   @@map("users")
 }
@@ -78,7 +79,9 @@ model Permission {
 model RolePermission {
   roleId       Int
   permissionId Int
-  /** Explicit DB names avoid `db push` trying to add duplicate FK constraint names on MySQL. */
+  /**
+   * Explicit DB names avoid `db push` trying to add duplicate FK constraint names on MySQL.
+   */
   role         Role       @relation(fields: [roleId], references: [id], onDelete: Cascade, map: "role_permissions_roleId_fkey")
   permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade, map: "role_permissions_permissionId_fkey")
 
@@ -103,23 +106,23 @@ model Faculty {
 }
 
 model Lecturer {
-  id             Int                  @id @default(autoincrement())
-  name           String
-  email          String               @unique
-  phone          String?
-  degree         String?
-  program        String               @default("Bachelor") // "Bachelor", "Masters"
-  imageUrl       String? // Cloudinary URL
-  imagePublicId  String?
-  cvUrl          String? // Cloudinary URL for CV PDF
-  cvPublicId     String?
-  isActive       Boolean              @default(true)
-  departments    LecturerDepartment[]
-  courses        LecturerCourse[]
-  classSchedules     ClassSchedule[]
-  attendanceTakers   AttendanceTaker[]
-  createdAt          DateTime             @default(now())
-  updatedAt          DateTime             @updatedAt
+  id               Int                  @id @default(autoincrement())
+  name             String
+  email            String               @unique
+  phone            String?
+  degree           String?
+  program          String               @default("Bachelor") // "Bachelor", "Masters"
+  imageUrl         String? // Cloudinary URL
+  imagePublicId    String?
+  cvUrl            String? // Cloudinary URL for CV PDF
+  cvPublicId       String?
+  isActive         Boolean              @default(true)
+  departments      LecturerDepartment[]
+  courses          LecturerCourse[]
+  classSchedules   ClassSchedule[]
+  attendanceTakers AttendanceTaker[]
+  createdAt        DateTime             @default(now())
+  updatedAt        DateTime             @updatedAt
 
   @@map("lecturers")
 }
@@ -145,22 +148,23 @@ model LecturerCourse {
 }
 
 model Department {
-  id          Int                  @id @default(autoincrement())
-  name        String
-  code        String // e.g. "CS", "EE", "ACC"
-  description String?
-  program     String               @default("Bachelor") // "Bachelor", "Masters"
-  facultyId   Int
-  faculty     Faculty              @relation(fields: [facultyId], references: [id], onDelete: Restrict)
-  tuitionFee  Float?               @default(0)
-  isActive    Boolean              @default(true)
-  courses     Course[]
-  classes     Class[]
-  students    Student[]
-  enrollments StudentEnrollment[]
-  lecturers   LecturerDepartment[]
-  createdAt   DateTime             @default(now())
-  updatedAt   DateTime             @updatedAt
+  id                  Int                  @id @default(autoincrement())
+  name                String
+  code                String // e.g. "CS", "EE", "ACC"
+  description         String?
+  program             String               @default("Bachelor") // "Bachelor", "Masters"
+  facultyId           Int
+  faculty             Faculty              @relation(fields: [facultyId], references: [id], onDelete: Restrict)
+  tuitionFee          Float?               @default(0)
+  isActive            Boolean              @default(true)
+  courses             Course[]
+  classes             Class[]
+  students            Student[]
+  enrollments         StudentEnrollment[]
+  lecturers           LecturerDepartment[]
+  onlineRegistrations OnlineRegistration[]
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
 
   @@unique([name, program])
   @@unique([code, program])
@@ -168,21 +172,21 @@ model Department {
 }
 
 model Course {
-  id             Int             @id @default(autoincrement())
-  name           String
-  code           String          // e.g. "CS101", "ENG201" - unique per department
-  description    String?
-  creditHours    Int             @default(3)
-  program        String          @default("Bachelor") // "Bachelor", "Masters"
-  departmentId   Int
-  department     Department      @relation(fields: [departmentId], references: [id], onDelete: Restrict)
-  isActive       Boolean         @default(true)
-  examRecords    ExamRecord[]
-  lecturers      LecturerCourse[]
+  id                 Int                 @id @default(autoincrement())
+  name               String
+  code               String // e.g. "CS101", "ENG201" - unique per department
+  description        String?
+  creditHours        Int                 @default(3)
+  program            String              @default("Bachelor") // "Bachelor", "Masters"
+  departmentId       Int
+  department         Department          @relation(fields: [departmentId], references: [id], onDelete: Restrict)
+  isActive           Boolean             @default(true)
+  examRecords        ExamRecord[]
+  lecturers          LecturerCourse[]
   classSchedules     ClassSchedule[]
   attendanceSessions AttendanceSession[]
-  createdAt          DateTime        @default(now())
-  updatedAt          DateTime        @updatedAt
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
 
   @@unique([code, departmentId])
   @@unique([name, departmentId])
@@ -203,37 +207,38 @@ model Semester {
 }
 
 model AcademicYear {
-  id        Int      @id @default(autoincrement())
-  startYear Int      // e.g. 2024
-  endYear   Int      // e.g. 2025
-  name      String   @unique // e.g. "2024-2025"
-  isActive  Boolean  @default(true)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id        Int       @id @default(autoincrement())
+  startYear Int // e.g. 2024
+  endYear   Int // e.g. 2025
+  name      String    @unique // e.g. "2024-2025"
+  isActive  Boolean   @default(true)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
   students  Student[]
 
   @@map("academic_years")
 }
 
 model Class {
-  id                 Int                 @id @default(autoincrement())
-  name               String // e.g. "Level 1-A", "Section B"
-  departmentId       Int
-  department         Department          @relation(fields: [departmentId], references: [id], onDelete: Restrict)
-  program            String              @default("Bachelor") // "Bachelor", "Masters"
-  semester           String // e.g. "Fall", "Spring", "Summer"
-  year               Int // e.g. 2026 (from academic year)
-  room               String? // e.g. "Room 201"
-  schedule           String? // e.g. "Mon/Wed 9:00-10:30"
-  capacity           Int                 @default(40)
-  isActive           Boolean             @default(true)
-  attendanceSessions AttendanceSession[]
-  attendanceTakers   AttendanceTaker[]
-  students           Student[]
-  enrollments        StudentEnrollment[]
-  classSchedules     ClassSchedule[]
-  createdAt          DateTime            @default(now())
-  updatedAt          DateTime            @updatedAt
+  id                  Int                  @id @default(autoincrement())
+  name                String // e.g. "Level 1-A", "Section B"
+  departmentId        Int
+  department          Department           @relation(fields: [departmentId], references: [id], onDelete: Restrict)
+  program             String               @default("Bachelor") // "Bachelor", "Masters"
+  semester            String // e.g. "Fall", "Spring", "Summer"
+  year                Int // e.g. 2026 (from academic year)
+  room                String? // e.g. "Room 201"
+  schedule            String? // e.g. "Mon/Wed 9:00-10:30"
+  capacity            Int                  @default(40)
+  isActive            Boolean              @default(true)
+  attendanceSessions  AttendanceSession[]
+  attendanceTakers    AttendanceTaker[]
+  students            Student[]
+  enrollments         StudentEnrollment[]
+  classSchedules      ClassSchedule[]
+  onlineRegistrations OnlineRegistration[]
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
 
   @@unique([name, semester, year, program])
   @@map("classes")
@@ -262,42 +267,85 @@ model ClassSchedule {
 }
 
 model Student {
-  id                 Int                  @id @default(autoincrement())
-  studentId          String               @unique // e.g. "STD-2026-0001"
-  firstName          String
-  lastName           String
-  motherName         String?
-  parentPhone        String?
-  email              String?              @unique
-  phone              String?
-  dateOfBirth        DateTime?
-  gender             String? // "Male", "Female"
-  address            String?
-  imageUrl           String? // Cloudinary URL (optional)
-  imagePublicId      String? // Cloudinary public_id for deletion
-  departmentId       Int
-  department         Department           @relation(fields: [departmentId], references: [id], onDelete: Restrict)
+  id                      Int                  @id @default(autoincrement())
+  studentId               String               @unique // e.g. "STD-2026-0001"
+  firstName               String
+  lastName                String
+  motherName              String?
+  parentPhone             String?
+  email                   String?              @unique
+  phone                   String?
+  dateOfBirth             DateTime?
+  gender                  String? // "Male", "Female"
+  address                 String?
+  imageUrl                String? // Cloudinary URL (optional)
+  imagePublicId           String? // Cloudinary public_id for deletion
+  departmentId            Int
+  department              Department           @relation(fields: [departmentId], references: [id], onDelete: Restrict)
   admissionAcademicYearId Int?
-  admissionAcademicYear   AcademicYear?   @relation(fields: [admissionAcademicYearId], references: [id], onDelete: SetNull)
-  classId            Int?
-  class              Class?               @relation(fields: [classId], references: [id], onDelete: SetNull)
-  program            String               @default("Bachelor") // "Bachelor", "Masters"
-  admissionDate      DateTime             @default(now())
-  status             String               @default("Admitted") // "Pending", "Admitted", "Leave", "Rejected", "Graduated"
-  leaves             StudentLeave[]
-  paymentStatus      String               @default("Fully Paid") // "Full Scholarship", "Half Scholar", "Fully Paid"
-  customSemesterFee  Float? // Optional custom fee per semester for this student
-  balance            Float                @default(0) // Amount owed; charged at registration, reduced by payments
-  attendanceRecords  AttendanceRecord[]
-  examRecords        ExamRecord[]
-  tuitionPayments    TuitionPayment[]
-  tuitionCharges     TuitionCharge[]
-  transactionHistory TransactionHistory[]
-  enrollments        StudentEnrollment[]
-  createdAt          DateTime             @default(now())
-  updatedAt          DateTime             @updatedAt
+  admissionAcademicYear   AcademicYear?        @relation(fields: [admissionAcademicYearId], references: [id], onDelete: SetNull)
+  classId                 Int?
+  class                   Class?               @relation(fields: [classId], references: [id], onDelete: SetNull)
+  program                 String               @default("Bachelor") // "Bachelor", "Masters"
+  admissionDate           DateTime             @default(now())
+  status                  String               @default("Admitted") // "Pending", "Admitted", "Leave", "Rejected", "Graduated"
+  leaves                  StudentLeave[]
+  paymentStatus           String               @default("Fully Paid") // "Full Scholarship", "Half Scholar", "Fully Paid"
+  customSemesterFee       Float? // Optional custom fee per semester for this student
+  balance                 Float                @default(0) // Amount owed; charged at registration, reduced by payments
+  isDisabled              Boolean              @default(false) // Has a disability (HEMIS "is_disabled")
+  learningMode            String? // "Full-time", "Part-time", "Distance", "Online"
+  educationLevel          String? // Prior education level before admission
+  institutionName         String? // Prior institution attended
+  grade                   String? // Prior grade/result achieved
+  graduationYear          Int? // Year of prior graduation
+  certificateNumber       String? // Prior certificate/credential number
+  verified                Boolean              @default(false) // Prior certificate/record verified
+  attendanceRecords       AttendanceRecord[]
+  examRecords             ExamRecord[]
+  tuitionPayments         TuitionPayment[]
+  tuitionCharges          TuitionCharge[]
+  transactionHistory      TransactionHistory[]
+  enrollments             StudentEnrollment[]
+  onlineRegistration      OnlineRegistration?
+  createdAt               DateTime             @default(now())
+  updatedAt               DateTime             @updatedAt
 
   @@map("students")
+}
+
+/// Public "apply online" submissions from the university website. An admin
+/// reviews each one and either approves it (creating a Student) or rejects it.
+model OnlineRegistration {
+  id                Int        @id @default(autoincrement())
+  firstName         String
+  lastName          String
+  email             String?
+  phone             String?
+  dateOfBirth       DateTime?
+  gender            String?
+  address           String?
+  departmentId      Int
+  department        Department @relation(fields: [departmentId], references: [id], onDelete: Restrict)
+  program           String     @default("Bachelor") // "Bachelor", "Masters"
+  status            String     @default("Pending") // "Pending", "Approved", "Rejected"
+  // Set at approval time
+  paymentStatus     String? // "Full Scholarship", "Half Scholar", "Fully Paid"
+  customSemesterFee Float?
+  classId           Int?
+  class             Class?     @relation(fields: [classId], references: [id], onDelete: SetNull)
+  studentId         Int?       @unique
+  student           Student?   @relation(fields: [studentId], references: [id], onDelete: SetNull)
+  reviewedById      Int?
+  reviewedBy        User?      @relation(fields: [reviewedById], references: [id], onDelete: SetNull)
+  reviewedAt        DateTime?
+  rejectionReason   String?    @db.Text
+  createdAt         DateTime   @default(now())
+  updatedAt         DateTime   @updatedAt
+
+  @@index([status])
+  @@index([departmentId])
+  @@map("online_registrations")
 }
 
 /// Periods a student is on leave. Open rows have endDate = null.
@@ -349,7 +397,7 @@ model Bank {
   balance            Float                @default(0)
   isActive           Boolean              @default(true)
   tuitionPayments    TuitionPayment[] // Payments deposited to this bank
-  paymentMethods     PaymentMethod[]  // Named payment methods that deposit here
+  paymentMethods     PaymentMethod[] // Named payment methods that deposit here
   withdrawals        BankWithdrawal[]     @relation("WithdrawFromBank")
   transfersOut       BankTransfer[]       @relation("TransferFromBank")
   transfersIn        BankTransfer[]       @relation("TransferToBank")
@@ -400,27 +448,27 @@ model TransactionHistory {
 }
 
 model TuitionPayment {
-  id            Int      @id @default(autoincrement())
-  studentId     Int
-  student       Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
-  bankId        Int? // Optional for legacy payments; required for new deposits
-  bank          Bank?    @relation(fields: [bankId], references: [id], onDelete: SetNull)
+  id              Int            @id @default(autoincrement())
+  studentId       Int
+  student         Student        @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  bankId          Int? // Optional for legacy payments; required for new deposits
+  bank            Bank?          @relation(fields: [bankId], references: [id], onDelete: SetNull)
   paymentMethodId Int? // Optional link to a configured PaymentMethod
-  method        PaymentMethod? @relation(fields: [paymentMethodId], references: [id], onDelete: SetNull)
-  amount        Float    @default(0)
-  semester      String // "Fall", "Spring", "Summer"
-  year          Int // e.g. 2026
-  financeHead   String   @default("semester_fee") // fee category: semester_fee | re_exam_fee | graduation_fee | registration_fee | card_activation_fee | others
-  paymentMethod String   @default("bank_receipt") // legacy type: "bank_receipt" | "electronic" | "cash_on_hand"
-  receiptNumber String? // Bank receipt number
-  transactionId String? // Electronic transaction ID
-  paymentDate   DateTime @default(now()) // Date student actually paid
-  paidAt        DateTime @default(now()) // When recorded in system
-  recordedById  Int?
-  recordedBy    User?    @relation(fields: [recordedById], references: [id], onDelete: SetNull)
-  note          String?  @db.Text
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  method          PaymentMethod? @relation(fields: [paymentMethodId], references: [id], onDelete: SetNull)
+  amount          Float          @default(0)
+  semester        String // "Fall", "Spring", "Summer"
+  year            Int // e.g. 2026
+  financeHead     String         @default("semester_fee") // fee category: semester_fee | re_exam_fee | graduation_fee | registration_fee | card_activation_fee | others
+  paymentMethod   String         @default("bank_receipt") // legacy type: "bank_receipt" | "electronic" | "cash_on_hand"
+  receiptNumber   String? // Bank receipt number
+  transactionId   String? // Electronic transaction ID
+  paymentDate     DateTime       @default(now()) // Date student actually paid
+  paidAt          DateTime       @default(now()) // When recorded in system
+  recordedById    Int?
+  recordedBy      User?          @relation(fields: [recordedById], references: [id], onDelete: SetNull)
+  note            String?        @db.Text
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
 
   @@index([studentId, semester, year])
   @@index([financeHead])
@@ -482,16 +530,16 @@ model Expense {
   categoryId      Int?
   expenseCategory ExpenseCategory? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
   bankId          Int? // Bank to withdraw from when approved
-  bank            Bank?     @relation(fields: [bankId], references: [id], onDelete: SetNull)
-  status          String    @default("pending") // "pending" | "approved" | "rejected"
+  bank            Bank?            @relation(fields: [bankId], references: [id], onDelete: SetNull)
+  status          String           @default("pending") // "pending" | "approved" | "rejected"
   requestedById   Int
-  requestedBy     User      @relation("ExpenseRequestedBy", fields: [requestedById], references: [id], onDelete: Restrict)
+  requestedBy     User             @relation("ExpenseRequestedBy", fields: [requestedById], references: [id], onDelete: Restrict)
   approvedById    Int?
-  approvedBy      User?     @relation("ExpenseApprovedBy", fields: [approvedById], references: [id], onDelete: SetNull)
+  approvedBy      User?            @relation("ExpenseApprovedBy", fields: [approvedById], references: [id], onDelete: SetNull)
   approvedAt      DateTime?
   rejectionReason String?
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
 
   @@map("expenses")
 }

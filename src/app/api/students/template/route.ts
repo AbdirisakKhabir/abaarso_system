@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAuthUser } from "@/lib/auth";
-import { prisma } from "@/lib/prisma";
 import { workbookBufferFromAoa } from "@/lib/excel";
 
 export async function GET(req: NextRequest) {
@@ -10,56 +9,50 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const departments = await prisma.department.findMany({
-      select: { id: true, name: true, code: true },
-      orderBy: { name: "asc" },
-    });
-
     const headers = [
-      "Student ID",
-      "Full Name",
-      "Mother Name",
-      "Parent Phone",
-      "Email",
-      "Phone",
-      "Date of Birth",
-      "Gender",
-      "Address",
-      "Department Code",
-      "Admission Academic Year",
-      "Class",
-      "Program",
-      "Status",
-      "Payment Status",
+      "students_full_name",
+      "gender",
+      "date_of_birth",
+      "email",
+      "phone",
+      "address",
+      "enrollment_date",
+      "is_disabled",
+      "learning_mode",
+      "student_status",
+      "scholarship",
+      "education_level",
+      "institution_name",
+      "grade",
+      "graduation_year",
+      "certificate_number",
+      "verified",
     ];
 
     const sampleRow = [
-      "",
-      "Ahmed Hassan",
-      "Fatima Hassan",
-      "+252 61 1234567",
+      "Ahmed Hassan Ali",
+      "Male",
+      "2005-01-15",
       "ahmed@example.com",
       "+252 61 7654321",
-      "2005-01-15",
-      "Male",
       "Hargeisa, Somaliland",
-      departments[0]?.code ?? "CS",
-      "2024-2025",
-      "Level 1-A",
-      "Bachelor",
+      "2024-09-01",
+      "No",
+      "Full-time",
       "Admitted",
-      "Fully Paid",
+      "No",
+      "Secondary School",
+      "Hargeisa Secondary School",
+      "A",
+      "2023",
+      "CERT-2023-0456",
+      "Yes",
     ];
 
-    const columnWidths = headers.map((_, i) => {
-      if (i === 9) return 18;
-      if (i === 10) return 22;
-      if (i === 11) return 20;
-      return 14;
-    });
+    const columnWidths = headers.map((h) => Math.max(h.length + 2, 14));
 
     const buf = await workbookBufferFromAoa({
-      sheetName: "Students",
+      sheetName: "ActiveStudentsTemplate",
       rows: [headers, sampleRow],
       columnWidths,
     });

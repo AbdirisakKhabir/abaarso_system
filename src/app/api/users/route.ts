@@ -1,17 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import type { Prisma } from "@prisma/client";
 import bcrypt from "bcryptjs";
-import { getAuthUser } from "@/lib/auth";
+import { requirePermission } from "@/lib/auth";
 import { logActivity } from "@/lib/activity-log";
 import { prisma } from "@/lib/prisma";
 import { parsePaginationParams } from "@/lib/pagination";
 
 export async function GET(req: NextRequest) {
   try {
-    const auth = await getAuthUser(req);
-    if (!auth) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    const check = await requirePermission(req, "users.view");
+    if ("error" in check) return check.error;
 
     const { searchParams } = new URL(req.url);
     const { paginate, page, pageSize, skip } = parsePaginationParams(searchParams);
@@ -68,10 +66,9 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
-    const auth = await getAuthUser(req);
-    if (!auth) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    const check = await requirePermission(req, "users.create");
+    if ("error" in check) return check.error;
+    const { auth } = check;
 
     const body = await req.json();
     const { email, password, name, roleId } = body;

@@ -16,6 +16,48 @@ function findCol(headerRow: string[], patterns: RegExp[]): number {
   return -1;
 }
 
+/** Tolerant boolean parser for Yes/No, True/False, 1/0. Defaults to false. */
+function parseBooleanFlag(raw: string): boolean {
+  const s = raw.trim().toLowerCase();
+  return s === "yes" || s === "true" || s === "1" || s === "y";
+}
+
+/** Maps free-text status values (e.g. HEMIS "student_status") onto our fixed status set. */
+function mapStudentStatusValue(raw: string): ReturnType<typeof parseStudentStatus> {
+  const s = raw.trim();
+  if (!s) return "Admitted";
+  const synonyms: Record<string, ReturnType<typeof parseStudentStatus>> = {
+    active: "Admitted",
+    enrolled: "Admitted",
+    "on leave": "Leave",
+    suspended: "Leave",
+    withdrawn: "Rejected",
+    dropped: "Rejected",
+    "dropped out": "Rejected",
+    completed: "Graduated",
+  };
+  return synonyms[s.toLowerCase()] ?? parseStudentStatus(s, "Admitted");
+}
+
+/** Maps free-text scholarship values (e.g. HEMIS "scholarship") onto our paymentStatus set. */
+function mapScholarshipValue(raw: string): string {
+  const s = raw.trim().toLowerCase();
+  if (!s) return "Fully Paid";
+  const map: Record<string, string> = {
+    yes: "Full Scholarship",
+    full: "Full Scholarship",
+    "full scholarship": "Full Scholarship",
+    half: "Half Scholar",
+    partial: "Half Scholar",
+    "half scholarship": "Half Scholar",
+    "half scholar": "Half Scholar",
+    no: "Fully Paid",
+    none: "Fully Paid",
+    "n/a": "Fully Paid",
+  };
+  return map[s] ?? "Fully Paid";
+}
+
 type AcademicYearRow = { id: number; name: string; startYear: number; endYear: number };
 
 function resolveAdmissionYear(
@@ -136,8 +178,13 @@ export async function POST(req: NextRequest) {
     let headerRow = (data[0] ?? []).map((h) => String(h ?? "").trim());
     let dataStartRow = 1;
     const hasNameCol = (row: string[]) =>
-      findCol(row, [/^full\s*name$/i, /^fullname$/i, /^name$/i, /^student\s*name$/i]) >= 0 ||
-      (findCol(row, [/^first\s*name$/i]) >= 0 && findCol(row, [/^last\s*name$/i]) >= 0);
+      findCol(row, [
+        /^full[\s_]*name$/i,
+        /^fullname$/i,
+        /^name$/i,
+        /^students?[\s_]*(full)?[\s_]*name$/i,
+      ]) >= 0 ||
+      (findCol(row, [/^first[\s_]*name$/i]) >= 0 && findCol(row, [/^last[\s_]*name$/i]) >= 0);
     if (!hasNameCol(headerRow) && data.length > 2) {
       const row1 = (data[1] ?? []).map((h) => String(h ?? "").trim());
       if (hasNameCol(row1)) {
@@ -157,13 +204,13 @@ export async function POST(req: NextRequest) {
       /^id$/i,
     ]);
     const fullNameIdx = findCol(headerRow, [
-      /^full\s*name$/i,
+      /^full[\s_]*name$/i,
       /^fullname$/i,
       /^name$/i,
-      /^student\s*name$/i,
+      /^students?[\s_]*(full)?[\s_]*name$/i,
     ]);
-    const firstNameIdx = findCol(headerRow, [/^first\s*name$/i, /^firstname$/i]);
-    const lastNameIdx = findCol(headerRow, [/^last\s*name$/i, /^lastname$/i]);
+    const firstNameIdx = findCol(headerRow, [/^first[\s_]*name$/i, /^firstname$/i]);
+    const lastNameIdx = findCol(headerRow, [/^last[\s_]*name$/i, /^lastname$/i]);
 
     const hasFullName = fullNameIdx >= 0;
     const hasFirstLast = firstNameIdx >= 0 && lastNameIdx >= 0;
@@ -176,29 +223,39 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const motherNameIdx = findCol(headerRow, [/^mother\s*name$/i, /^mothername$/i]);
-    const parentPhoneIdx = findCol(headerRow, [/^parent\s*phone$/i, /^parentphone$/i]);
+    const motherNameIdx = findCol(headerRow, [/^mother[\s_]*name$/i, /^mothername$/i]);
+    const parentPhoneIdx = findCol(headerRow, [/^parent[\s_]*phone$/i, /^parentphone$/i]);
     const emailIdx = findCol(headerRow, [/^email$/i]);
     const phoneIdx = findCol(headerRow, [/^phone$/i]);
-    const dobIdx = findCol(headerRow, [/^date\s*of\s*birth$/i, /^dob$/i, /^birth/i]);
+    const dobIdx = findCol(headerRow, [/^date[\s_]*of[\s_]*birth$/i, /^dob$/i, /^birth/i]);
     const genderIdx = findCol(headerRow, [/^gender$/i]);
     const addressIdx = findCol(headerRow, [/^address$/i]);
     const deptCodeIdx = findCol(headerRow, [
-      /^department\s*code$/i,
+      /^department[\s_]*code$/i,
       /^department$/i,
-      /^dept\s*code$/i,
+      /^dept[\s_]*code$/i,
       /^dept$/i,
-      /^department\s*name$/i,
+      /^department[\s_]*name$/i,
     ]);
     const programIdx = findCol(headerRow, [/^program$/i]);
-    const statusIdx = findCol(headerRow, [/^status$/i]);
-    const paymentStatusIdx = findCol(headerRow, [/^payment\s*status$/i, /^paymentstatus$/i]);
+    const statusIdx = findCol(headerRow, [/^status$/i, /^students?[\s_]*status$/i]);
+    const paymentStatusIdx = findCol(headerRow, [/^payment[\s_]*status$/i, /^paymentstatus$/i]);
+    const scholarshipIdx = findCol(headerRow, [/^scholarship$/i]);
     const admissionYearIdx = findCol(headerRow, [
-      /^admission\s*academic\s*year$/i,
-      /^admission\s*year$/i,
-      /^academic\s*year$/i,
+      /^admission[\s_]*academic[\s_]*year$/i,
+      /^admission[\s_]*year$/i,
+      /^academic[\s_]*year$/i,
     ]);
-    const classIdx = findCol(headerRow, [/^class$/i, /^class\s*name$/i]);
+    const classIdx = findCol(headerRow, [/^class$/i, /^class[\s_]*name$/i]);
+    const enrollmentDateIdx = findCol(headerRow, [/^enrollment[\s_]*date$/i, /^admission[\s_]*date$/i]);
+    const isDisabledIdx = findCol(headerRow, [/^is[\s_]*disabled$/i, /^disabled$/i, /^disability$/i]);
+    const learningModeIdx = findCol(headerRow, [/^learning[\s_]*mode$/i]);
+    const educationLevelIdx = findCol(headerRow, [/^education[\s_]*level$/i]);
+    const institutionNameIdx = findCol(headerRow, [/^institution[\s_]*name$/i, /^institution$/i]);
+    const priorGradeIdx = findCol(headerRow, [/^grade$/i]);
+    const graduationYearIdx = findCol(headerRow, [/^graduation[\s_]*year$/i]);
+    const certificateNumberIdx = findCol(headerRow, [/^certificate[\s_]*number$/i, /^certificate[\s_]*no$/i]);
+    const verifiedIdx = findCol(headerRow, [/^verified$/i]);
 
     const departments = await prisma.department.findMany({
       select: { id: true, code: true, tuitionFee: true },
@@ -327,8 +384,8 @@ export async function POST(req: NextRequest) {
       const dateOfBirth = dobIdx >= 0 && row[dobIdx]
         ? parseDate(String(row[dobIdx]))
         : null;
-      const status = statusIdx >= 0 ? String(row[statusIdx] ?? "Admitted").trim() || "Admitted" : "Admitted";
-      const paymentStatusRaw = paymentStatusIdx >= 0 ? String(row[paymentStatusIdx] ?? "Fully Paid").trim() : "Fully Paid";
+      const statusRaw = statusIdx >= 0 ? String(row[statusIdx] ?? "").trim() : "";
+      const status = mapStudentStatusValue(statusRaw);
       const paymentStatusMap: Record<string, string> = {
         "full scholarship": "Full Scholarship",
         "half scholar": "Half Scholar",
@@ -338,9 +395,17 @@ export async function POST(req: NextRequest) {
         half: "Half Scholar",
         full: "Full Scholarship",
       };
-      const paymentStatus =
-        paymentStatusMap[paymentStatusRaw.toLowerCase()] ??
-        (["Full Scholarship", "Half Scholar", "Fully Paid"].includes(paymentStatusRaw) ? paymentStatusRaw : "Fully Paid");
+      let paymentStatus: string;
+      if (paymentStatusIdx >= 0) {
+        const paymentStatusRaw = String(row[paymentStatusIdx] ?? "Fully Paid").trim();
+        paymentStatus =
+          paymentStatusMap[paymentStatusRaw.toLowerCase()] ??
+          (["Full Scholarship", "Half Scholar", "Fully Paid"].includes(paymentStatusRaw) ? paymentStatusRaw : "Fully Paid");
+      } else if (scholarshipIdx >= 0) {
+        paymentStatus = mapScholarshipValue(String(row[scholarshipIdx] ?? ""));
+      } else {
+        paymentStatus = "Fully Paid";
+      }
 
       const tuitionFee = (dept ?? departments.find((d) => d.id === departmentId))?.tuitionFee ?? 0;
       const initialBalance =
@@ -376,6 +441,12 @@ export async function POST(req: NextRequest) {
         }
       }
 
+      const enrollmentDate = enrollmentDateIdx >= 0 && row[enrollmentDateIdx]
+        ? parseDate(String(row[enrollmentDateIdx]))
+        : null;
+      const graduationYearRaw = graduationYearIdx >= 0 ? String(row[graduationYearIdx] ?? "").trim() : "";
+      const graduationYearVal = graduationYearRaw ? parseInt(graduationYearRaw, 10) : NaN;
+
       const student = await prisma.student.create({
         data: {
           studentId,
@@ -394,9 +465,18 @@ export async function POST(req: NextRequest) {
           program: parseProgram(
             programIdx >= 0 ? String(row[programIdx] ?? "").trim() : ""
           ) ?? DEFAULT_PROGRAM,
-          status: parseStudentStatus(status),
+          admissionDate: enrollmentDate ?? undefined,
+          status,
           paymentStatus,
           balance: initialBalance,
+          isDisabled: isDisabledIdx >= 0 ? parseBooleanFlag(String(row[isDisabledIdx] ?? "")) : false,
+          learningMode: learningModeIdx >= 0 ? String(row[learningModeIdx] ?? "").trim() || null : null,
+          educationLevel: educationLevelIdx >= 0 ? String(row[educationLevelIdx] ?? "").trim() || null : null,
+          institutionName: institutionNameIdx >= 0 ? String(row[institutionNameIdx] ?? "").trim() || null : null,
+          grade: priorGradeIdx >= 0 ? String(row[priorGradeIdx] ?? "").trim() || null : null,
+          graduationYear: Number.isFinite(graduationYearVal) ? graduationYearVal : null,
+          certificateNumber: certificateNumberIdx >= 0 ? String(row[certificateNumberIdx] ?? "").trim() || null : null,
+          verified: verifiedIdx >= 0 ? parseBooleanFlag(String(row[verifiedIdx] ?? "")) : false,
         },
       });
       created.push(student.id);

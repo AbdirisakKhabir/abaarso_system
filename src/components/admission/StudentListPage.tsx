@@ -23,6 +23,8 @@ import { buildTermSequence } from "@/lib/semester-term-sequence";
 import { perSemesterTuition } from "@/lib/tuition-amount";
 import { programLabel, type Program } from "@/lib/program";
 import { STUDENT_STATUSES } from "@/lib/student-status";
+import { confirmYesNo, notifyError, notifySuccess } from "@/lib/sweetalert";
+import { LogOut } from "lucide-react";
 import {
   ArrowUpIcon,
   DollarLineIcon,
@@ -119,6 +121,7 @@ export default function StudentListPage({ program }: { program: Program }) {
   const [importLoading, setImportLoading] = useState(false);
   const [importResult, setImportResult] = useState<{ created: number; errors?: string[] } | null>(null);
   const [statusCounts, setStatusCounts] = useState<Record<string, number>>({});
+  const [leavingId, setLeavingId] = useState<number | null>(null);
   const [chargeModalOpen, setChargeModalOpen] = useState(false);
   const [semestersForCharge, setSemestersForCharge] = useState<{ id: number; name: string; sortOrder: number }[]>(
     []
@@ -386,6 +389,37 @@ export default function StudentListPage({ program }: { program: Program }) {
     } else {
       const data = await res.json();
       alert(data.error || "Failed to delete");
+    }
+  }
+
+  async function handlePutOnLeave(s: StudentRow) {
+    const ok = await confirmYesNo({
+      title: "Put this student on leave?",
+      text: `${s.firstName} ${s.lastName} (${s.studentId}) will be marked as Leave and tracked on the leave students page until recovered.`,
+      confirmText: "Yes, put on leave",
+      cancelText: "No",
+      icon: "warning",
+    });
+    if (!ok) return;
+    setLeavingId(s.id);
+    try {
+      const res = await authFetch("/api/students/leaves", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ studentId: s.id }),
+      });
+      const data = await res.json().catch(() => null);
+      if (!res.ok) {
+        await notifyError("Could not put student on leave", data?.error || "Something went wrong.");
+        return;
+      }
+      await loadStudents();
+      void refreshStatusStats();
+      await notifySuccess("Student put on leave", `${s.studentId} is now on leave.`);
+    } catch {
+      await notifyError("Could not put student on leave");
+    } finally {
+      setLeavingId(null);
     }
   }
 
@@ -1022,6 +1056,18 @@ export default function StudentListPage({ program }: { program: Program }) {
                         >
                           <PencilIcon className="h-4 w-4" />
                         </Link>
+                      )}
+                      {canEdit && s.status !== "Leave" && (
+                        <button
+                          type="button"
+                          onClick={() => void handlePutOnLeave(s)}
+                          disabled={leavingId === s.id}
+                          className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-gray-400 transition-colors hover:bg-warning-50 hover:text-warning-500 disabled:opacity-50 dark:hover:bg-warning-500/10"
+                          aria-label="Put on leave"
+                          title="Put on leave"
+                        >
+                          <LogOut className="h-4 w-4" />
+                        </button>
                       )}
                       {canDelete && (
                         <button

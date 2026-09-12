@@ -102,6 +102,7 @@ const academicsItems: NavItem[] = [
     subItems: [
       { name: "Bachelor Degree", path: "/admission/bachelor", permission: "admission.view" },
       { name: "Masters Degree", path: "/admission/masters", permission: "admission.view" },
+      { name: "Online Registration", path: "/admission/online-registration", permission: "admission.view" },
       { name: "Leave Students", path: "/admission/leave", permission: "admission.view" },
       { name: "Upgrade Students", path: "/admission/upgrade", permission: "admission.edit" },
       { name: "Transfer Student", path: "/admission/transfer", permission: "admission.edit" },
@@ -460,7 +461,7 @@ const AppSidebar: React.FC = () => {
 
   return (
     <aside
-      className={`app-sidebar no-print fixed left-0 top-0 z-50 flex h-screen min-h-0 flex-col border-r border-brand-800 bg-brand-700 text-white transition-all duration-300 ease-in-out dark:border-brand-900 dark:bg-brand-800
+      className={`app-sidebar no-print fixed left-0 top-0 z-50 flex h-screen min-h-0 flex-col border-r border-black bg-gradient-to-b from-black via-brand-900 to-brand-700 text-white transition-all duration-300 ease-in-out dark:border-black dark:from-black dark:via-brand-950 dark:to-brand-900
         ${isExpanded || isMobileOpen || isHovered ? "w-[290px]" : "w-[90px]"}
         ${isMobileOpen ? "translate-x-0" : "-translate-x-full"}
         mt-16 lg:mt-0 lg:translate-x-0`}

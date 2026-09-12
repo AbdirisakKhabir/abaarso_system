@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
-import { getAuthUser } from "@/lib/auth";
+import { requirePermission } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
 export async function GET(
@@ -8,10 +8,8 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const auth = await getAuthUser(req);
-    if (!auth) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    const check = await requirePermission(req, "users.view");
+    if ("error" in check) return check.error;
     const { id } = await params;
     const parsedId = Number(id);
     if (!Number.isInteger(parsedId)) {
@@ -48,10 +46,8 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const auth = await getAuthUser(req);
-    if (!auth) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    const check = await requirePermission(req, "users.edit");
+    if ("error" in check) return check.error;
     const { id } = await params;
     const parsedId = Number(id);
     if (!Number.isInteger(parsedId)) {
@@ -110,10 +106,9 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const auth = await getAuthUser(req);
-    if (!auth) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    const check = await requirePermission(req, "users.delete");
+    if ("error" in check) return check.error;
+    const { auth } = check;
     const { id } = await params;
     const parsedId = Number(id);
     if (!Number.isInteger(parsedId)) {

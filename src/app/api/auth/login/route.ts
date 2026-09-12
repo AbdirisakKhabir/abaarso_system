@@ -3,6 +3,10 @@ import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/prisma";
 import { signToken } from "@/lib/jwt";
 import { logActivity } from "@/lib/activity-log";
+import { getClientIp, rateLimit } from "@/lib/rate-limit";
+
+const LOGIN_MAX_ATTEMPTS = 10;
+const LOGIN_WINDOW_MS = 10 * 60 * 1000;
 
 export async function POST(req: NextRequest) {
   try {
@@ -13,6 +17,18 @@ export async function POST(req: NextRequest) {
       return NextResponse.json(
         { error: "Email and password are required" },
         { status: 400 }
+      );
+    }
+
+    const rl = rateLimit(
+      `login:${getClientIp(req)}:${String(email).toLowerCase().trim()}`,
+      LOGIN_MAX_ATTEMPTS,
+      LOGIN_WINDOW_MS
+    );
+    if (rl.limited) {
+      return NextResponse.json(
+        { error: "Too many login attempts. Please try again later." },
+        { status: 429, headers: { "Retry-After": String(rl.retryAfterSeconds) } }
       );
     }
 
