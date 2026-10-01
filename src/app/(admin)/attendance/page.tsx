@@ -75,6 +75,8 @@ type SessionDetail = {
     status: string;
     note: string | null;
     student: StudentOption;
+    /** Ongoing leave on the session date — status is locked to Present. */
+    onLeave?: boolean;
   }[];
 };
 
@@ -653,9 +655,14 @@ export default function AttendancePage() {
                                 {r.student.lastName.charAt(0)}
                               </div>
                             )}
-                            <span className="text-sm font-medium text-gray-800 dark:text-white/90">
-                              {r.student.firstName} {r.student.lastName}
-                            </span>
+                            <div className="min-w-0">
+                              <span className="text-sm font-medium text-gray-800 dark:text-white/90">
+                                {r.student.firstName} {r.student.lastName}
+                              </span>
+                              {r.onLeave && (
+                                <p className="text-xs text-warning-600 dark:text-warning-400">On leave</p>
+                              )}
+                            </div>
                           </div>
                         </td>
                         <td className="px-5 py-3 font-mono text-xs text-gray-500 dark:text-gray-400">
@@ -666,6 +673,12 @@ export default function AttendancePage() {
                             <div className="space-y-2">
                               <select
                                 value={statusValue}
+                                disabled={r.onLeave}
+                                title={
+                                  r.onLeave
+                                    ? "Student is on leave — attendance is locked to Present"
+                                    : undefined
+                                }
                                 onChange={(e) =>
                                   setDraftRecords((prev) =>
                                     prev.map((item) =>
@@ -675,7 +688,7 @@ export default function AttendancePage() {
                                     )
                                   )
                                 }
-                                className="h-8 min-w-[120px] rounded-md border border-gray-200 bg-transparent px-2 text-xs text-gray-700 outline-none focus:border-brand-300 dark:border-gray-700 dark:text-gray-300"
+                                className="h-8 min-w-[120px] rounded-md border border-gray-200 bg-transparent px-2 text-xs disabled:cursor-not-allowed disabled:opacity-60 text-gray-700 outline-none focus:border-brand-300 dark:border-gray-700 dark:text-gray-300"
                               >
                                 {ATTENDANCE_STATUSES.map((status) => (
                                   <option key={status} value={status}>

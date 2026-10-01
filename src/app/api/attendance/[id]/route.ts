@@ -6,8 +6,34 @@ import {
   assertUserCanManageAttendanceSession,
   userCanManageAttendanceSession,
 } from "@/lib/attendanceTaker";
+import {
+  enforceLeaveAttendanceForSession,
+  findStudentsOnLeave,
+} from "@/lib/student-leave";
 
 type RouteContext = { params: Promise<{ id: string }> };
+
+/** Flag records whose student has an ongoing leave on the session date (locked to Present). */
+async function withLeaveFlags<
+  T extends { date: Date; records: { student: { id: number } }[] },
+>(session: T) {
+  const onLeave = await findStudentsOnLeave(
+    prisma,
+    session.records.map((r) => r.student.id),
+    session.date
+  );
+  return {
+    ...session,
+    records: session.records.map((r) => {
+      const leave = onLeave.get(r.student.id);
+      return {
+        ...r,
+        onLeave: Boolean(leave),
+        leaveExpectedEndDate: leave?.expectedEndDate ?? null,
+      };
+    }),
+  };
+}
 
 export async function GET(req: NextRequest, ctx: RouteContext) {
   try {
@@ -60,7 +86,7 @@ export async function GET(req: NextRequest, ctx: RouteContext) {
       session.classId
     );
 
-    return NextResponse.json({ ...session, canManage });
+    return NextResponse.json({ ...(await withLeaveFlags(session)), canManage });
   } catch (e) {
     console.error("Get attendance error:", e);
     return NextResponse.json(
@@ -182,6 +208,9 @@ export async function PATCH(req: NextRequest, ctx: RouteContext) {
       }
     }
 
+    // Students on leave for the (possibly new) date stay Present.
+    await enforceLeaveAttendanceForSession(prisma, id);
+
     // Return updated session
     const session = await prisma.attendanceSession.findUnique({
       where: { id },
@@ -212,7 +241,11 @@ export async function PATCH(req: NextRequest, ctx: RouteContext) {
       },
     });
 
-    return NextResponse.json({ ...session, canManage: true });
+    if (!session) {
+      return NextResponse.json({ error: "Session not found" }, { status: 404 });
+    }
+
+    return NextResponse.json({ ...(await withLeaveFlags(session)), canManage: true });
   } catch (e: unknown) {
     if (
       typeof e === "object" &&

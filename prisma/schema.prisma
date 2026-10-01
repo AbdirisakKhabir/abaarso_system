@@ -350,16 +350,28 @@ model OnlineRegistration {
 
 /// Periods a student is on leave. Open rows have endDate = null.
 model StudentLeave {
-  id           Int       @id @default(autoincrement())
-  studentId    Int
-  student      Student   @relation(fields: [studentId], references: [id], onDelete: Cascade)
-  startDate    DateTime
-  endDate      DateTime?
-  reason       String?   @db.Text
-  recordedById Int?
-  recordedBy   User?     @relation(fields: [recordedById], references: [id], onDelete: SetNull)
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
+  id                Int       @id @default(autoincrement())
+  studentId         Int
+  student           Student   @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  startDate         DateTime
+  endDate           DateTime? // actual return date (null while the leave is open)
+  expectedEndDate   DateTime? // planned "End Date of Leave" from the leave form
+  leaveType         String? // "Medical", "Personal", "Academic", "Military Service", "Maternity/Paternity", "Other"
+  leaveTypeOther    String?
+  reason            String?   @db.Text
+  contactEmail      String?
+  contactPhone      String?
+  parentPhone       String?
+  documentUrl       String?   @db.Text // supporting documentation (Cloudinary)
+  documentPublicId  String?
+  declarationSigned Boolean   @default(false)
+  approvalStatus    String    @default("Approved") // "Approved", "Rejected"
+  approvedByName    String?
+  approvalDate      DateTime?
+  recordedById      Int?
+  recordedBy        User?     @relation(fields: [recordedById], references: [id], onDelete: SetNull)
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
 
   @@index([studentId])
   @@index([endDate])

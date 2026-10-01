@@ -3,7 +3,11 @@ import type { Prisma } from "@prisma/client";
 import { getAuthUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { parseProgram } from "@/lib/program";
-import { syncLeaveOnStatusChange } from "@/lib/student-leave";
+import {
+  parseLeaveFormBody,
+  syncAttendanceForLeave,
+  syncLeaveOnStatusChange,
+} from "@/lib/student-leave";
 import { logActivity } from "@/lib/activity-log";
 
 const leaveInclude = {
@@ -14,6 +18,8 @@ const leaveInclude = {
       firstName: true,
       lastName: true,
       phone: true,
+      email: true,
+      parentPhone: true,
       status: true,
       program: true,
       department: { select: { id: true, name: true, code: true } },
@@ -54,7 +60,7 @@ export async function GET(req: NextRequest) {
     }
 
     const where: Prisma.StudentLeaveWhereInput = {
-      ...(current ? { endDate: null } : {}),
+      ...(current ? { endDate: null, approvalStatus: "Approved" } : {}),
       ...(Object.keys(studentWhere).length > 0 ? { student: studentWhere } : {}),
     };
 
@@ -80,8 +86,12 @@ export async function GET(req: NextRequest) {
 }
 
 /**
- * POST — put a student on leave
- * { studentId (internal or STD-…), startDate?, reason? }
+ * POST — record a Student Leave Form
+ * { studentId (internal or STD-…), leaveType?, leaveTypeOther?, startDate?, expectedEndDate?,
+ *   reason?, contactEmail?, contactPhone?, parentPhone?, documentUrl?, documentPublicId?,
+ *   declarationSigned?, approved? (default true), approvedByName?, approvalDate? }
+ * Approved → student status becomes Leave and attendance inside the period is set to Present.
+ * Not approved → kept in history as Rejected; the student's status is unchanged.
  */
 export async function POST(req: NextRequest) {
   try {
@@ -90,11 +100,13 @@ export async function POST(req: NextRequest) {
 
     const body = await req.json();
     const rawId = body.studentId;
-    const reason = body.reason != null ? String(body.reason).trim() : "";
-    const startDate = body.startDate ? new Date(body.startDate) : new Date();
-    if (body.startDate && Number.isNaN(startDate.getTime())) {
-      return NextResponse.json({ error: "Invalid start date" }, { status: 400 });
+    const parsed = parseLeaveFormBody(body);
+    if ("error" in parsed) {
+      return NextResponse.json({ error: parsed.error }, { status: 400 });
     }
+    const form = parsed.data;
+    const approved = body.approved !== false;
+    const startDate = form.startDate ?? new Date();
 
     const student =
       typeof rawId === "number" || (typeof rawId === "string" && /^\d+$/.test(rawId))
@@ -108,37 +120,87 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "This student is already on leave." }, { status: 400 });
     }
 
-    const updated = await prisma.$transaction(async (tx) => {
-      const row = await tx.student.update({
+    const details = {
+      leaveType: form.leaveType,
+      leaveTypeOther: form.leaveTypeOther,
+      expectedEndDate: form.expectedEndDate,
+      contactEmail: form.contactEmail,
+      contactPhone: form.contactPhone,
+      parentPhone: form.parentPhone,
+      documentUrl: form.documentUrl,
+      documentPublicId: form.documentPublicId,
+      declarationSigned: form.declarationSigned,
+      approvedByName: form.approvedByName,
+      approvalDate: form.approvalDate,
+    };
+
+    const { leaveId, backfilled } = await prisma.$transaction(async (tx) => {
+      if (!approved) {
+        // Rejected requests are closed immediately so they never count as an open leave.
+        const row = await tx.studentLeave.create({
+          data: {
+            studentId: student.id,
+            startDate,
+            endDate: new Date(),
+            reason: form.reason,
+            recordedById: auth.userId,
+            approvalStatus: "Rejected",
+            ...details,
+          },
+        });
+        return { leaveId: row.id, backfilled: 0 };
+      }
+
+      await tx.student.update({
         where: { id: student.id },
-        data: { status: "Leave" },
+        data: {
+          status: "Leave",
+          ...(!student.parentPhone && form.parentPhone ? { parentPhone: form.parentPhone } : {}),
+        },
       });
       await syncLeaveOnStatusChange(tx, {
         studentId: student.id,
         previousStatus: student.status,
         nextStatus: "Leave",
         startDate,
-        reason,
+        reason: form.reason,
         recordedById: auth.userId,
       });
-      return row;
+      const open = await tx.studentLeave.findFirstOrThrow({
+        where: { studentId: student.id, endDate: null },
+        select: { id: true },
+      });
+      await tx.studentLeave.update({
+        where: { id: open.id },
+        data: { ...details, approvalStatus: "Approved" },
+      });
+      const count = await syncAttendanceForLeave(tx, open.id);
+      return { leaveId: open.id, backfilled: count };
     });
 
     await logActivity({
       userId: auth.userId,
-      action: "student.leave",
+      action: approved ? "student.leave" : "student.leave.rejected",
       module: "admission",
-      summary: `Put ${student.studentId} on leave`,
-      metadata: { studentId: student.id, reason },
+      summary: approved
+        ? `Put ${student.studentId} on leave`
+        : `Recorded rejected leave request for ${student.studentId}`,
+      metadata: {
+        studentId: student.id,
+        leaveId,
+        leaveType: form.leaveType,
+        reason: form.reason,
+        attendanceSetPresent: backfilled,
+      },
       req,
     });
 
-    const leave = await prisma.studentLeave.findFirst({
-      where: { studentId: updated.id, endDate: null },
+    const leave = await prisma.studentLeave.findUnique({
+      where: { id: leaveId },
       include: leaveInclude,
     });
 
-    return NextResponse.json({ student: updated, leave });
+    return NextResponse.json({ leave, attendanceSetPresent: backfilled });
   } catch (e) {
     console.error("student leaves POST error:", e);
     return NextResponse.json({ error: "Something went wrong" }, { status: 500 });

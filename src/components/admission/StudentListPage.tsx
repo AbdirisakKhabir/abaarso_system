@@ -16,6 +16,7 @@ import { globalRowIndex } from "@/hooks/usePagination";
 import { useServerPagination } from "@/hooks/useServerPagination";
 import Badge from "@/components/ui/badge/Badge";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { authFetch } from "@/lib/api";
 import { ModalOverlayGate } from "@/context/ModalOverlayContext";
 import { useAuth } from "@/context/AuthContext";
@@ -121,7 +122,7 @@ export default function StudentListPage({ program }: { program: Program }) {
   const [importLoading, setImportLoading] = useState(false);
   const [importResult, setImportResult] = useState<{ created: number; errors?: string[] } | null>(null);
   const [statusCounts, setStatusCounts] = useState<Record<string, number>>({});
-  const [leavingId, setLeavingId] = useState<number | null>(null);
+  const router = useRouter();
   const [chargeModalOpen, setChargeModalOpen] = useState(false);
   const [semestersForCharge, setSemestersForCharge] = useState<{ id: number; name: string; sortOrder: number }[]>(
     []
@@ -392,35 +393,9 @@ export default function StudentListPage({ program }: { program: Program }) {
     }
   }
 
-  async function handlePutOnLeave(s: StudentRow) {
-    const ok = await confirmYesNo({
-      title: "Put this student on leave?",
-      text: `${s.firstName} ${s.lastName} (${s.studentId}) will be marked as Leave and tracked on the leave students page until recovered.`,
-      confirmText: "Yes, put on leave",
-      cancelText: "No",
-      icon: "warning",
-    });
-    if (!ok) return;
-    setLeavingId(s.id);
-    try {
-      const res = await authFetch("/api/students/leaves", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ studentId: s.id }),
-      });
-      const data = await res.json().catch(() => null);
-      if (!res.ok) {
-        await notifyError("Could not put student on leave", data?.error || "Something went wrong.");
-        return;
-      }
-      await loadStudents();
-      void refreshStatusStats();
-      await notifySuccess("Student put on leave", `${s.studentId} is now on leave.`);
-    } catch {
-      await notifyError("Could not put student on leave");
-    } finally {
-      setLeavingId(null);
-    }
+  /** Open the Student Leave Form prefilled with this student. */
+  function handlePutOnLeave(s: StudentRow) {
+    router.push(`/admission/leave?student=${encodeURIComponent(s.studentId)}`);
   }
 
   function toggleSelect(id: number) {
@@ -1061,7 +1036,6 @@ export default function StudentListPage({ program }: { program: Program }) {
                         <button
                           type="button"
                           onClick={() => void handlePutOnLeave(s)}
-                          disabled={leavingId === s.id}
                           className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-gray-400 transition-colors hover:bg-warning-50 hover:text-warning-500 disabled:opacity-50 dark:hover:bg-warning-500/10"
                           aria-label="Put on leave"
                           title="Put on leave"

@@ -43,6 +43,18 @@ type RecordEntry = {
   note: string;
 };
 
+type OnLeaveInfo = { leaveType: string | null; expectedEndDate: string | null };
+
+function fmtLeaveEnd(iso: string | null) {
+  if (!iso) return "until recovered";
+  return `until ${new Date(iso).toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    timeZone: "UTC",
+  })}`;
+}
+
 type MyAssignment = {
   classId: number;
   class: ClassOption & { departmentId?: number };
@@ -99,6 +111,43 @@ export default function TakeAttendanceForm({ onSuccess }: TakeAttendanceFormProp
   const [loadingAssignments, setLoadingAssignments] = useState(true);
   const [isAssignmentAdmin, setIsAssignmentAdmin] = useState(false);
   const [myAssignments, setMyAssignments] = useState<MyAssignment[]>([]);
+  const [onLeave, setOnLeave] = useState<Record<number, OnLeaveInfo>>({});
+
+  const studentIdsKey = useMemo(() => students.map((r) => r.studentId).join(","), [students]);
+
+  // Students with an ongoing leave on the selected date are locked to Present.
+  useEffect(() => {
+    if (!studentIdsKey || !takeForm.date) {
+      setOnLeave({});
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await authFetch(
+          `/api/students/leaves/on-date?date=${encodeURIComponent(takeForm.date)}&studentIds=${studentIdsKey}`
+        );
+        if (!res.ok || cancelled) return;
+        const data = await res.json();
+        const map: Record<number, OnLeaveInfo> = {};
+        for (const l of (data.leaves ?? []) as (OnLeaveInfo & { studentId: number })[]) {
+          map[l.studentId] = { leaveType: l.leaveType, expectedEndDate: l.expectedEndDate };
+        }
+        if (cancelled) return;
+        setOnLeave(map);
+        setStudents((prev) =>
+          prev.some((r) => map[r.studentId] && r.status !== "Present")
+            ? prev.map((r) => (map[r.studentId] ? { ...r, status: "Present" } : r))
+            : prev
+        );
+      } catch {
+        if (!cancelled) setOnLeave({});
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [studentIdsKey, takeForm.date]);
 
   const visibleDepartments = useMemo(() => {
     if (isAssignmentAdmin) return departments;
@@ -260,13 +309,16 @@ export default function TakeAttendanceForm({ onSuccess }: TakeAttendanceFormProp
   }, [hasAttendanceDraft, takeForm.departmentId, takeForm.classId]);
 
   function updateStudentStatus(studentId: number, status: string) {
+    if (onLeave[studentId]) return;
     setStudents((prev) =>
       prev.map((r) => (r.studentId === studentId ? { ...r, status } : r))
     );
   }
 
   function markAll(status: string) {
-    setStudents((prev) => prev.map((r) => ({ ...r, status })));
+    setStudents((prev) =>
+      prev.map((r) => (onLeave[r.studentId] ? { ...r, status: "Present" } : { ...r, status }))
+    );
   }
 
   const semesterSelectOptions = useMemo(() => {
@@ -695,9 +747,17 @@ export default function TakeAttendanceForm({ onSuccess }: TakeAttendanceFormProp
                               {r.student.lastName.charAt(0)}
                             </div>
                           )}
-                          <span className="text-sm font-medium text-gray-800 dark:text-white/90">
-                            {r.student.firstName} {r.student.lastName}
-                          </span>
+                          <div className="min-w-0">
+                            <span className="text-sm font-medium text-gray-800 dark:text-white/90">
+                              {r.student.firstName} {r.student.lastName}
+                            </span>
+                            {onLeave[r.studentId] && (
+                              <p className="text-xs text-warning-600 dark:text-warning-400">
+                                On leave {fmtLeaveEnd(onLeave[r.studentId].expectedEndDate)} — marked
+                                Present
+                              </p>
+                            )}
+                          </div>
                         </div>
                       </td>
                       <td className="px-4 py-3">
@@ -712,7 +772,13 @@ export default function TakeAttendanceForm({ onSuccess }: TakeAttendanceFormProp
                               key={st}
                               type="button"
                               onClick={() => updateStudentStatus(r.studentId, st)}
-                              className={`rounded-lg px-2.5 py-1.5 text-xs font-semibold transition-all ${
+                              disabled={Boolean(onLeave[r.studentId]) && st !== "Present"}
+                              title={
+                                onLeave[r.studentId]
+                                  ? "Student is on leave — attendance is locked to Present"
+                                  : undefined
+                              }
+                              className={`rounded-lg px-2.5 py-1.5 text-xs font-semibold transition-all disabled:cursor-not-allowed disabled:opacity-40 ${
                                 r.status === st
                                   ? st === "Present"
                                     ? "bg-success-500 text-white shadow-sm"
@@ -748,6 +814,11 @@ export default function TakeAttendanceForm({ onSuccess }: TakeAttendanceFormProp
               <span className="text-blue-light-600 dark:text-blue-light-400">
                 Excused: {students.filter((r) => r.status === "Excused").length}
               </span>
+              {Object.keys(onLeave).length > 0 && (
+                <span className="text-warning-600 dark:text-warning-400">
+                  On leave (Present): {students.filter((r) => onLeave[r.studentId]).length}
+                </span>
+              )}
             </div>
           )}
         </div>

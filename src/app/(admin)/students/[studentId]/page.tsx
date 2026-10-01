@@ -40,7 +40,16 @@ type StudentProfile = {
   tuitionPayments: { id: number; semester: string; year: number; amount: number; paidAt: string; financeHead?: string }[];
   tuitionCharges?: { id: number; semester: string; year: number; amount: number; note: string | null; createdAt: string }[];
   enrollments?: { id: number; semester: string; year: number; class: { id: number; name: string } | null }[];
-  leaves?: { id: number; startDate: string; endDate: string | null; reason: string | null }[];
+  leaves?: {
+    id: number;
+    startDate: string;
+    endDate: string | null;
+    expectedEndDate: string | null;
+    leaveType: string | null;
+    leaveTypeOther: string | null;
+    approvalStatus: string;
+    reason: string | null;
+  }[];
   examRecords?: {
     id: number;
     semester: string;
@@ -328,16 +337,29 @@ export default function StudentProfilePage() {
                   >
                     <div>
                       <p className="text-sm font-medium text-gray-800 dark:text-white/90">
-                        {new Date(lv.startDate).toLocaleDateString()}
+                        {lv.leaveType && (
+                          <span className="mr-2">
+                            {lv.leaveType === "Other" && lv.leaveTypeOther ? lv.leaveTypeOther : lv.leaveType} leave ·
+                          </span>
+                        )}
+                        {new Date(lv.startDate).toLocaleDateString(undefined, { timeZone: "UTC" })}
                         {" – "}
-                        {lv.endDate ? new Date(lv.endDate).toLocaleDateString() : "Present"}
+                        {lv.expectedEndDate
+                          ? new Date(lv.expectedEndDate).toLocaleDateString(undefined, { timeZone: "UTC" })
+                          : lv.endDate
+                            ? new Date(lv.endDate).toLocaleDateString()
+                            : "Present"}
                       </p>
                       {lv.reason && (
                         <p className="text-xs text-gray-500 dark:text-gray-400">{lv.reason}</p>
                       )}
                     </div>
                     <span className="text-xs font-medium text-gray-500">
-                      {lv.endDate ? "Returned" : "On leave"}
+                      {lv.approvalStatus === "Rejected"
+                        ? "Not approved"
+                        : lv.endDate
+                          ? `Returned ${new Date(lv.endDate).toLocaleDateString()}`
+                          : "On leave"}
                     </span>
                   </div>
                 ))}

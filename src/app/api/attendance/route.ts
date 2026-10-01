@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { isAllowedAttendanceStatus } from "@/lib/attendanceConstants";
 import { assertUserCanManageAttendanceSession } from "@/lib/attendanceTaker";
 import { recordEnrollmentsForClass } from "@/lib/enrollment";
+import { findStudentsOnLeave, ON_LEAVE_ATTENDANCE_NOTE } from "@/lib/student-leave";
 
 export async function GET(req: NextRequest) {
   try {
@@ -186,6 +187,13 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // Students with an ongoing approved leave on this date are always Present.
+    const onLeave = await findStudentsOnLeave(
+      prisma,
+      (records as { studentId: number }[]).map((r) => Number(r.studentId)),
+      new Date(date)
+    );
+
     const session = await prisma.attendanceSession.create({
       data: {
         classId: parsedClassId,
@@ -196,11 +204,18 @@ export async function POST(req: NextRequest) {
         note: note || null,
         records: {
           create: records.map(
-            (r: { studentId: number; status: string; note?: string }) => ({
-              studentId: Number(r.studentId),
-              status: r.status,
-              note: r.note || null,
-            })
+            (r: { studentId: number; status: string; note?: string }) =>
+              onLeave.has(Number(r.studentId))
+                ? {
+                    studentId: Number(r.studentId),
+                    status: "Present",
+                    note: r.note || ON_LEAVE_ATTENDANCE_NOTE,
+                  }
+                : {
+                    studentId: Number(r.studentId),
+                    status: r.status,
+                    note: r.note || null,
+                  }
           ),
         },
       },

@@ -39,7 +39,16 @@ export async function GET(req: NextRequest, ctx: RouteContext) {
         },
         leaves: {
           orderBy: [{ startDate: "desc" }],
-          select: { id: true, startDate: true, endDate: true, reason: true },
+          select: {
+            id: true,
+            startDate: true,
+            endDate: true,
+            expectedEndDate: true,
+            leaveType: true,
+            leaveTypeOther: true,
+            approvalStatus: true,
+            reason: true,
+          },
         },
         enrollments: {
           orderBy: [{ year: "desc" }, { semester: "asc" }],

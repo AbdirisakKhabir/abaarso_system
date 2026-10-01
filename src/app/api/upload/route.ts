@@ -20,6 +20,26 @@ export async function POST(req: NextRequest) {
 
     const buffer = Buffer.from(await file.arrayBuffer());
 
+    if (type === "document") {
+      // Supporting documents (e.g. leave medical certificates) — PDF or scanned image, uncropped
+      const allowedTypes = ["application/pdf", "image/jpeg", "image/png", "image/webp"];
+      if (!allowedTypes.includes(file.type)) {
+        return NextResponse.json(
+          { error: "Invalid file type. Only PDF, JPEG, PNG and WebP are allowed." },
+          { status: 400 }
+        );
+      }
+      if (file.size > 10 * 1024 * 1024) {
+        return NextResponse.json(
+          { error: "File too large. Maximum size is 10MB." },
+          { status: 400 }
+        );
+      }
+      const docFolder = folder === "university/students" ? "university/students/documents" : folder;
+      const result = await uploadRaw(buffer, docFolder, "auto");
+      return NextResponse.json(result);
+    }
+
     if (type === "raw") {
       // PDF / raw files for lecturer CV
       const allowedTypes = ["application/pdf"];
