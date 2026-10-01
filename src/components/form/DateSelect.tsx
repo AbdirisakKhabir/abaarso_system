@@ -43,12 +43,12 @@ export function DateSelect({
   useEffect(() => {
     if (!inputRef.current) return;
     const fp = flatpickr(inputRef.current, {
-      dateFormat: "Y-m-d",
-      altInput: true,
-      altFormat: "M j, Y",
+      // Single input (no altInput, which adds a second field) showing a readable date
+      dateFormat: "M j, Y",
       monthSelectorType: "static",
       disableMobile: true,
-      onChange: (_dates, dateStr) => onChangeRef.current(dateStr),
+      onChange: (dates, _str, instance) =>
+        onChangeRef.current(dates[0] ? instance.formatDate(dates[0], "Y-m-d") : ""),
     });
     fpRef.current = fp;
     return () => {
@@ -61,16 +61,12 @@ export function DateSelect({
     const fp = fpRef.current;
     if (!fp) return;
     const current = fp.selectedDates[0] ? fp.formatDate(fp.selectedDates[0], "Y-m-d") : "";
-    if (current !== value) fp.setDate(value || [], false);
+    if (current !== value) fp.setDate(value || [], false, "Y-m-d");
   }, [value]);
 
   useEffect(() => {
     fpRef.current?.set("minDate", minDate || undefined);
   }, [minDate]);
-
-  useEffect(() => {
-    fpRef.current?.altInput?.toggleAttribute("disabled", Boolean(disabled));
-  }, [disabled]);
 
   return (
     <div>
