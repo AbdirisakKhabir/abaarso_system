@@ -1,9 +1,10 @@
 "use client";
 
 import React, { useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import Button from "@/components/ui/button/Button";
-import { DateInput } from "@/components/form/DateInput";
-import { ModalOverlayGate } from "@/context/ModalOverlayContext";
+import { DateSelect } from "@/components/form/DateSelect";
+import DocumentPreview from "@/components/common/DocumentPreview";
 import { authFetch } from "@/lib/api";
 import { programLabel } from "@/lib/program";
 import { notifyError, notifySuccess } from "@/lib/sweetalert";
@@ -131,11 +132,12 @@ type Props = {
   leave?: LeaveFormRecord | null;
   /** Student ID (e.g. STD-2026-0001) to preselect for a new request. */
   initialStudentCode?: string | null;
-  onClose: () => void;
+  /** Where Cancel goes. */
+  cancelHref: string;
   onSaved: () => void;
 };
 
-export default function StudentLeaveForm({ leave, initialStudentCode, onClose, onSaved }: Props) {
+export default function StudentLeaveForm({ leave, initialStudentCode, cancelHref, onSaved }: Props) {
   const isEdit = Boolean(leave);
   const [form, setForm] = useState<FormState>(() => initialState(leave));
   const [student, setStudent] = useState<LeaveStudent | null>(leave?.student ?? null);
@@ -296,337 +298,328 @@ export default function StudentLeaveForm({ leave, initialStudentCode, onClose, o
   }
 
   return (
-    <ModalOverlayGate>
-      <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/60 p-4 backdrop-blur-sm sm:items-center">
-        <div className="my-8 w-full max-w-3xl rounded-2xl border border-gray-200 bg-white shadow-xl dark:border-gray-700 dark:bg-gray-900">
-          <div className="flex items-center justify-between border-b border-gray-200 px-6 py-4 dark:border-gray-700">
-            <div>
-              <h2 className="text-lg font-semibold text-gray-800 dark:text-white/90">
-                {isEdit ? "Edit Student Leave" : "Student Leave Form"}
-              </h2>
-              <p className="text-xs text-gray-500 dark:text-gray-400">Academic Office</p>
-            </div>
-            <button
-              type="button"
-              onClick={onClose}
-              aria-label="Close"
-              className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-gray-800 dark:hover:text-gray-300"
-            >
-              <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
-          </div>
+    <div className="rounded-2xl border border-gray-200 bg-white dark:border-gray-800 dark:bg-white/3">
+      <div className="border-b border-gray-200 px-6 py-4 dark:border-gray-800">
+        <h2 className="text-lg font-semibold text-gray-800 dark:text-white/90">
+          {isEdit ? "Edit Student Leave" : "Student Leave Form"}
+        </h2>
+        <p className="text-xs text-gray-500 dark:text-gray-400">
+          Abaarso Tech University Berbera — Academic Office
+        </p>
+      </div>
 
-          <form onSubmit={handleSubmit} className="px-6">
-            <Section n={1} title="Student Information">
-              {!isEdit && !student && (
-                <div className="relative mb-3">
-                  <label className={labelCls}>
-                    Find student <span className="text-error-500">*</span>
-                  </label>
-                  <input
-                    type="search"
-                    value={query}
-                    onChange={(e) => setQuery(e.target.value)}
-                    placeholder="Search by student ID, name, phone or email"
-                    className={inputCls}
-                    autoFocus
-                  />
-                  {(results.length > 0 || searching) && (
-                    <div className="absolute z-10 mt-1 max-h-64 w-full overflow-auto rounded-lg border border-gray-200 bg-white shadow-lg dark:border-gray-700 dark:bg-gray-900">
-                      {searching && results.length === 0 ? (
-                        <p className="px-3 py-2 text-sm text-gray-500">Searching…</p>
-                      ) : (
-                        results.map((s) => (
-                          <button
-                            key={s.id}
-                            type="button"
-                            onClick={() => pickStudent(s)}
-                            disabled={s.status === "Leave"}
-                            className="flex w-full items-center justify-between px-3 py-2 text-left text-sm hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50 dark:hover:bg-white/5"
-                          >
-                            <span className="text-gray-800 dark:text-white/90">
-                              {s.firstName} {s.lastName}
-                              <span className="ml-2 font-mono text-xs text-gray-500">{s.studentId}</span>
-                            </span>
-                            <span className="text-xs text-gray-400">
-                              {s.status === "Leave" ? "Already on leave" : s.department?.code}
-                            </span>
-                          </button>
-                        ))
-                      )}
-                    </div>
+      <form onSubmit={handleSubmit} className="px-6">
+        <Section n={1} title="Student Information">
+          {!isEdit && !student && (
+            <div className="relative mb-3">
+              <label className={labelCls}>
+                Find student <span className="text-error-500">*</span>
+              </label>
+              <input
+                type="search"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Search by student ID, name, phone or email"
+                className={inputCls}
+                autoFocus
+              />
+              {(results.length > 0 || searching) && (
+                <div className="absolute z-10 mt-1 max-h-64 w-full overflow-auto rounded-lg border border-gray-200 bg-white shadow-lg dark:border-gray-700 dark:bg-gray-900">
+                  {searching && results.length === 0 ? (
+                    <p className="px-3 py-2 text-sm text-gray-500">Searching…</p>
+                  ) : (
+                    results.map((s) => (
+                      <button
+                        key={s.id}
+                        type="button"
+                        onClick={() => pickStudent(s)}
+                        disabled={s.status === "Leave"}
+                        className="flex w-full items-center justify-between px-3 py-2 text-left text-sm hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50 dark:hover:bg-white/5"
+                      >
+                        <span className="text-gray-800 dark:text-white/90">
+                          {s.firstName} {s.lastName}
+                          <span className="ml-2 font-mono text-xs text-gray-500">{s.studentId}</span>
+                        </span>
+                        <span className="text-xs text-gray-400">
+                          {s.status === "Leave" ? "Already on leave" : s.department?.code}
+                        </span>
+                      </button>
+                    ))
                   )}
                 </div>
               )}
+            </div>
+          )}
 
-              {student && (
-                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                  <div>
-                    <label className={labelCls}>Full Name</label>
-                    <div className={readOnlyCls}>
-                      {student.firstName} {student.lastName}
-                    </div>
-                  </div>
-                  <div>
-                    <label className={labelCls}>Student ID</label>
-                    <div className={`${readOnlyCls} justify-between font-mono`}>
-                      {student.studentId}
-                      {!isEdit && (
-                        <button
-                          type="button"
-                          onClick={() => setStudent(null)}
-                          className="font-sans text-xs font-medium text-brand-600 hover:underline dark:text-brand-400"
-                        >
-                          Change
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                  <div className="sm:col-span-2">
-                    <label className={labelCls}>Program / Department</label>
-                    <div className={readOnlyCls}>
-                      {programLabel(student.program as "Bachelor" | "Masters")}
-                      {student.department ? ` — ${student.department.name}` : ""}
-                    </div>
-                  </div>
-                  <div className="sm:col-span-2">
-                    <label className={labelCls}>Contact Email</label>
-                    <input
-                      type="email"
-                      value={form.contactEmail}
-                      onChange={(e) => set("contactEmail", e.target.value)}
-                      className={inputCls}
-                    />
-                  </div>
-                  <div>
-                    <label className={labelCls}>Contact Phone Number</label>
-                    <input
-                      type="tel"
-                      value={form.contactPhone}
-                      onChange={(e) => set("contactPhone", e.target.value)}
-                      className={inputCls}
-                    />
-                  </div>
-                  <div>
-                    <label className={labelCls}>Parent Phone Number</label>
-                    <input
-                      type="tel"
-                      value={form.parentPhone}
-                      onChange={(e) => set("parentPhone", e.target.value)}
-                      className={inputCls}
-                    />
-                  </div>
-                </div>
-              )}
-            </Section>
-
-            <Section n={2} title="Type of Leave Requested">
-              <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
-                {LEAVE_TYPE_OPTIONS.map((t) => (
-                  <label
-                    key={t}
-                    className={`flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-2 text-sm transition-colors ${
-                      form.leaveType === t
-                        ? "border-brand-400 bg-brand-50 text-brand-700 dark:border-brand-500/50 dark:bg-brand-500/10 dark:text-brand-300"
-                        : "border-gray-200 text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-white/3"
-                    }`}
-                  >
-                    <input
-                      type="radio"
-                      name="leaveType"
-                      value={t}
-                      checked={form.leaveType === t}
-                      onChange={() => set("leaveType", t)}
-                      className="h-4 w-4 accent-brand-500"
-                    />
-                    {t === "Other" ? "Other (specify)" : `${t} Leave`}
-                  </label>
-                ))}
-              </div>
-              {form.leaveType === "Other" && (
-                <input
-                  type="text"
-                  value={form.leaveTypeOther}
-                  onChange={(e) => set("leaveTypeOther", e.target.value)}
-                  placeholder="Specify type of leave"
-                  className={`${inputCls} mt-3`}
-                />
-              )}
-            </Section>
-
-            <Section n={3} title="Leave Details">
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                <DateInput
-                  id="leave-start"
-                  label={
-                    <>
-                      Start Date of Leave <span className="text-error-500">*</span>
-                    </>
-                  }
-                  value={form.startDate}
-                  onChange={(v) => set("startDate", v)}
-                  required
-                />
-                <DateInput
-                  id="leave-end"
-                  label={
-                    <>
-                      End Date of Leave <span className="text-error-500">*</span>
-                    </>
-                  }
-                  value={form.expectedEndDate}
-                  min={form.startDate || undefined}
-                  onChange={(v) => set("expectedEndDate", v)}
-                  required
-                />
-                <div className="sm:col-span-2">
-                  <label className={labelCls}>
-                    Reason for Leave <span className="text-error-500">*</span>
-                  </label>
-                  <textarea
-                    rows={3}
-                    value={form.reason}
-                    onChange={(e) => set("reason", e.target.value)}
-                    className="w-full rounded-lg border border-gray-200 bg-transparent px-3 py-2 text-sm text-gray-800 outline-none focus:border-brand-300 focus:ring-2 focus:ring-brand-500/20 dark:border-gray-700 dark:text-white"
-                  />
+          {student && (
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <div>
+                <label className={labelCls}>Full Name</label>
+                <div className={readOnlyCls}>
+                  {student.firstName} {student.lastName}
                 </div>
               </div>
-              <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
-                While the leave is ongoing, the student&apos;s attendance is recorded as{" "}
-                <strong>Present</strong> until the end date.
-              </p>
-            </Section>
-
-            <Section n={4} title="Supporting Documentation">
-              <p className="mb-3 text-xs text-gray-500 dark:text-gray-400">
-                Attach medical certificates, legal documents, or other relevant paperwork (PDF or
-                image, max 10MB).
-              </p>
-              <div className="flex flex-wrap items-center gap-3">
-                <input
-                  ref={fileRef}
-                  type="file"
-                  accept="application/pdf,image/jpeg,image/png,image/webp"
-                  className="hidden"
-                  onChange={(e) => {
-                    const f = e.target.files?.[0];
-                    if (f) void handleUpload(f);
-                  }}
-                />
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="outline"
-                  onClick={() => fileRef.current?.click()}
-                  disabled={uploading}
-                >
-                  {uploading ? "Uploading…" : form.documentUrl ? "Replace document" : "Attach document"}
-                </Button>
-                {form.documentUrl && (
-                  <>
-                    <a
-                      href={form.documentUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-sm font-medium text-brand-600 hover:underline dark:text-brand-400"
-                    >
-                      View attached document
-                    </a>
+              <div>
+                <label className={labelCls}>Student ID</label>
+                <div className={`${readOnlyCls} justify-between font-mono`}>
+                  {student.studentId}
+                  {!isEdit && (
                     <button
                       type="button"
-                      onClick={() => setForm((f) => ({ ...f, documentUrl: "", documentPublicId: "" }))}
-                      className="text-xs text-error-600 hover:underline"
+                      onClick={() => setStudent(null)}
+                      className="font-sans text-xs font-medium text-brand-600 hover:underline dark:text-brand-400"
                     >
-                      Remove
+                      Change
                     </button>
-                  </>
-                )}
-              </div>
-            </Section>
-
-            <Section n={5} title="Declaration">
-              <p className="mb-3 text-sm italic text-gray-600 dark:text-gray-400">
-                &ldquo;I hereby declare that the information provided in this leave request form is
-                true and accurate. I understand that granting of the leave is subject to the
-                approval of the university and compliance with the University Leave Policy.&rdquo;
-              </p>
-              <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
-                <input
-                  type="checkbox"
-                  checked={form.declarationSigned}
-                  onChange={(e) => set("declarationSigned", e.target.checked)}
-                  className="h-4 w-4 accent-brand-500"
-                />
-                The student has signed the declaration <span className="text-error-500">*</span>
-              </label>
-            </Section>
-
-            <Section n={6} title="Leave Request Approval">
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-                <div>
-                  <span className={labelCls}>Approved</span>
-                  {isEdit ? (
-                    <div className={readOnlyCls}>{form.approved === "yes" ? "Yes" : "No"}</div>
-                  ) : (
-                    <div className="flex h-10 items-center gap-4">
-                      {(["yes", "no"] as const).map((v) => (
-                        <label key={v} className="flex items-center gap-1.5 text-sm text-gray-700 dark:text-gray-300">
-                          <input
-                            type="radio"
-                            name="approved"
-                            checked={form.approved === v}
-                            onChange={() => set("approved", v)}
-                            className="h-4 w-4 accent-brand-500"
-                          />
-                          {v === "yes" ? "Yes" : "No"}
-                        </label>
-                      ))}
-                    </div>
                   )}
                 </div>
-                <DateInput
-                  id="leave-approval-date"
-                  label="Date"
-                  value={form.approvalDate}
-                  onChange={(v) => set("approvalDate", v)}
-                />
-                <div>
-                  <label className={labelCls}>Approving Authority Name</label>
-                  <input
-                    type="text"
-                    value={form.approvedByName}
-                    onChange={(e) => set("approvedByName", e.target.value)}
-                    className={inputCls}
-                  />
+              </div>
+              <div className="sm:col-span-2">
+                <label className={labelCls}>Program / Department</label>
+                <div className={readOnlyCls}>
+                  {programLabel(student.program as "Bachelor" | "Masters")}
+                  {student.department ? ` — ${student.department.name}` : ""}
                 </div>
               </div>
-              {!isEdit && form.approved === "no" && (
-                <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
-                  A request that is not approved is kept in leave history only. The student&apos;s
-                  status and attendance are not changed.
-                </p>
-              )}
-            </Section>
-
-            {error && (
-              <div className="mb-4 rounded-lg bg-error-50 px-4 py-3 text-sm text-error-600 dark:bg-error-500/10 dark:text-error-400">
-                {error}
+              <div className="sm:col-span-2">
+                <label className={labelCls}>Contact Email</label>
+                <input
+                  type="email"
+                  value={form.contactEmail}
+                  onChange={(e) => set("contactEmail", e.target.value)}
+                  className={inputCls}
+                />
               </div>
-            )}
-
-            <div className="-mx-6 flex justify-end gap-3 border-t border-gray-200 px-6 py-4 dark:border-gray-700">
-              <Button type="button" size="sm" variant="outline" onClick={onClose}>
-                Cancel
-              </Button>
-              <Button type="submit" size="sm" disabled={saving || uploading || !student}>
-                {saving ? "Saving…" : isEdit ? "Save changes" : "Submit leave"}
-              </Button>
+              <div>
+                <label className={labelCls}>Contact Phone Number</label>
+                <input
+                  type="tel"
+                  value={form.contactPhone}
+                  onChange={(e) => set("contactPhone", e.target.value)}
+                  className={inputCls}
+                />
+              </div>
+              <div>
+                <label className={labelCls}>Parent Phone Number</label>
+                <input
+                  type="tel"
+                  value={form.parentPhone}
+                  onChange={(e) => set("parentPhone", e.target.value)}
+                  className={inputCls}
+                />
+              </div>
             </div>
-          </form>
+          )}
+        </Section>
+
+        <Section n={2} title="Type of Leave Requested">
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+            {LEAVE_TYPE_OPTIONS.map((t) => (
+              <label
+                key={t}
+                className={`flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-2 text-sm transition-colors ${
+                  form.leaveType === t
+                    ? "border-brand-400 bg-brand-50 text-brand-700 dark:border-brand-500/50 dark:bg-brand-500/10 dark:text-brand-300"
+                    : "border-gray-200 text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-white/3"
+                }`}
+              >
+                <input
+                  type="radio"
+                  name="leaveType"
+                  value={t}
+                  checked={form.leaveType === t}
+                  onChange={() => set("leaveType", t)}
+                  className="h-4 w-4 accent-brand-500"
+                />
+                {t === "Other" ? "Other (specify)" : `${t} Leave`}
+              </label>
+            ))}
+          </div>
+          {form.leaveType === "Other" && (
+            <input
+              type="text"
+              value={form.leaveTypeOther}
+              onChange={(e) => set("leaveTypeOther", e.target.value)}
+              placeholder="Specify type of leave"
+              className={`${inputCls} mt-3`}
+            />
+          )}
+        </Section>
+
+        <Section n={3} title="Leave Details">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <DateSelect
+              id="leave-start"
+              label={
+                <>
+                  Start Date of Leave <span className="text-error-500">*</span>
+                </>
+              }
+              value={form.startDate}
+              onChange={(v) =>
+                setForm((f) => ({
+                  ...f,
+                  startDate: v,
+                  // Keep the end date valid when the start moves past it
+                  expectedEndDate: f.expectedEndDate && v && f.expectedEndDate < v ? "" : f.expectedEndDate,
+                }))
+              }
+              required
+            />
+            <DateSelect
+              id="leave-end"
+              label={
+                <>
+                  End Date of Leave <span className="text-error-500">*</span>
+                </>
+              }
+              value={form.expectedEndDate}
+              minDate={form.startDate || undefined}
+              onChange={(v) => set("expectedEndDate", v)}
+              required
+            />
+            <div className="sm:col-span-2">
+              <label className={labelCls}>
+                Reason for Leave <span className="text-error-500">*</span>
+              </label>
+              <textarea
+                rows={3}
+                value={form.reason}
+                onChange={(e) => set("reason", e.target.value)}
+                className="w-full rounded-lg border border-gray-200 bg-transparent px-3 py-2 text-sm text-gray-800 outline-none focus:border-brand-300 focus:ring-2 focus:ring-brand-500/20 dark:border-gray-700 dark:text-white"
+              />
+            </div>
+          </div>
+          <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
+            While the leave is ongoing, the student&apos;s attendance is recorded as{" "}
+            <strong>Present</strong> until the end date.
+          </p>
+        </Section>
+
+        <Section n={4} title="Supporting Documentation">
+          <p className="mb-3 text-xs text-gray-500 dark:text-gray-400">
+            Attach medical certificates, legal documents, or other relevant paperwork (PDF or
+            image, max 10MB).
+          </p>
+          <div className="flex flex-wrap items-center gap-3">
+            <input
+              ref={fileRef}
+              type="file"
+              accept="application/pdf,image/jpeg,image/png,image/webp"
+              className="hidden"
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (f) void handleUpload(f);
+              }}
+            />
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={() => fileRef.current?.click()}
+              disabled={uploading}
+            >
+              {uploading ? "Uploading…" : form.documentUrl ? "Replace document" : "Attach document"}
+            </Button>
+            {form.documentUrl && (
+              <button
+                type="button"
+                onClick={() => setForm((f) => ({ ...f, documentUrl: "", documentPublicId: "" }))}
+                className="text-xs text-error-600 hover:underline"
+              >
+                Remove
+              </button>
+            )}
+          </div>
+          {form.documentUrl && (
+            <div className="mt-3">
+              <DocumentPreview key={form.documentUrl} url={form.documentUrl} />
+            </div>
+          )}
+        </Section>
+
+        <Section n={5} title="Declaration">
+          <p className="mb-3 text-sm italic text-gray-600 dark:text-gray-400">
+            &ldquo;I hereby declare that the information provided in this leave request form is
+            true and accurate. I understand that granting of the leave is subject to the
+            approval of the university and compliance with the University Leave Policy.&rdquo;
+          </p>
+          <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
+            <input
+              type="checkbox"
+              checked={form.declarationSigned}
+              onChange={(e) => set("declarationSigned", e.target.checked)}
+              className="h-4 w-4 accent-brand-500"
+            />
+            The student has signed the declaration <span className="text-error-500">*</span>
+          </label>
+        </Section>
+
+        <Section n={6} title="Leave Request Approval">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+            <div>
+              <span className={labelCls}>Approved</span>
+              {isEdit ? (
+                <div className={readOnlyCls}>{form.approved === "yes" ? "Yes" : "No"}</div>
+              ) : (
+                <div className="flex h-10 items-center gap-4">
+                  {(["yes", "no"] as const).map((v) => (
+                    <label key={v} className="flex items-center gap-1.5 text-sm text-gray-700 dark:text-gray-300">
+                      <input
+                        type="radio"
+                        name="approved"
+                        checked={form.approved === v}
+                        onChange={() => set("approved", v)}
+                        className="h-4 w-4 accent-brand-500"
+                      />
+                      {v === "yes" ? "Yes" : "No"}
+                    </label>
+                  ))}
+                </div>
+              )}
+            </div>
+            <DateSelect
+              id="leave-approval-date"
+              label="Date"
+              value={form.approvalDate}
+              onChange={(v) => set("approvalDate", v)}
+            />
+            <div>
+              <label className={labelCls}>Approving Authority Name</label>
+              <input
+                type="text"
+                value={form.approvedByName}
+                onChange={(e) => set("approvedByName", e.target.value)}
+                className={inputCls}
+              />
+            </div>
+          </div>
+          {!isEdit && form.approved === "no" && (
+            <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
+              A request that is not approved is kept in leave history only. The student&apos;s
+              status and attendance are not changed.
+            </p>
+          )}
+        </Section>
+
+        {error && (
+          <div className="mb-4 rounded-lg bg-error-50 px-4 py-3 text-sm text-error-600 dark:bg-error-500/10 dark:text-error-400">
+            {error}
+          </div>
+        )}
+
+        <div className="-mx-6 flex justify-end gap-3 border-t border-gray-200 px-6 py-4 dark:border-gray-700">
+          <Link
+            href={cancelHref}
+            className="inline-flex items-center justify-center rounded-lg bg-white px-4 py-3 text-sm font-medium text-gray-700 ring-1 ring-inset ring-gray-300 transition hover:bg-gray-50 dark:bg-gray-800 dark:text-gray-400 dark:ring-gray-700 dark:hover:bg-white/3"
+          >
+            Cancel
+          </Link>
+          <Button type="submit" size="sm" disabled={saving || uploading || !student}>
+            {saving ? "Saving…" : isEdit ? "Save changes" : "Submit leave"}
+          </Button>
         </div>
-      </div>
-    </ModalOverlayGate>
+      </form>
+    </div>
   );
 }

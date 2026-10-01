@@ -11,6 +11,45 @@ import { logActivity } from "@/lib/activity-log";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
+/** GET — one leave with its student (for the edit page). */
+export async function GET(req: NextRequest, ctx: RouteContext) {
+  try {
+    const auth = await getAuthUser(req);
+    if (!auth) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+    const { id: rawId } = await ctx.params;
+    const id = Number(rawId);
+    if (!Number.isInteger(id) || id <= 0) {
+      return NextResponse.json({ error: "Invalid leave ID" }, { status: 400 });
+    }
+
+    const leave = await prisma.studentLeave.findUnique({
+      where: { id },
+      include: {
+        student: {
+          select: {
+            id: true,
+            studentId: true,
+            firstName: true,
+            lastName: true,
+            email: true,
+            phone: true,
+            parentPhone: true,
+            status: true,
+            program: true,
+            department: { select: { id: true, name: true, code: true } },
+          },
+        },
+      },
+    });
+    if (!leave) return NextResponse.json({ error: "Leave record not found" }, { status: 404 });
+    return NextResponse.json({ leave });
+  } catch (e) {
+    console.error("student leave GET error:", e);
+    return NextResponse.json({ error: "Something went wrong" }, { status: 500 });
+  }
+}
+
 /**
  * PATCH — return from leave (sets endDate and status, default Admitted)
  * { endDate?, status? }

@@ -1,8 +1,7 @@
 "use client";
 
-import React, { Suspense, useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
 import PageBreadCrumb from "@/components/common/PageBreadCrumb";
 import Button from "@/components/ui/button/Button";
 import Badge from "@/components/ui/badge/Badge";
@@ -17,7 +16,9 @@ import { authFetch } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import { programLabel } from "@/lib/program";
 import { confirmYesNo, notifyError, notifySuccess } from "@/lib/sweetalert";
-import StudentLeaveForm, { type LeaveFormRecord } from "@/components/admission/StudentLeaveForm";
+import { type LeaveFormRecord } from "@/components/admission/StudentLeaveForm";
+import { DocumentFrame } from "@/components/common/DocumentPreview";
+import { ModalOverlayGate } from "@/context/ModalOverlayContext";
 
 type Department = { id: number; name: string; code: string };
 type LeaveRow = LeaveFormRecord & {
@@ -62,18 +63,7 @@ const inputCls =
   "h-10 w-full rounded-lg border border-gray-200 bg-white px-3 text-sm outline-none focus:border-brand-400 dark:border-gray-600 dark:bg-gray-800 dark:text-white/90";
 
 export default function LeaveStudentsPage() {
-  return (
-    <Suspense fallback={null}>
-      <LeaveStudentsContent />
-    </Suspense>
-  );
-}
-
-function LeaveStudentsContent() {
   const { hasPermission } = useAuth();
-  const router = useRouter();
-  const searchParams = useSearchParams();
-  const studentParam = searchParams.get("student");
   const canEdit = hasPermission("admission.edit");
   const [departments, setDepartments] = useState<Department[]>([]);
   const [leaves, setLeaves] = useState<LeaveRow[]>([]);
@@ -84,19 +74,7 @@ function LeaveStudentsContent() {
   const [search, setSearch] = useState("");
   const [error, setError] = useState("");
   const [recoveringId, setRecoveringId] = useState<number | null>(null);
-  const [formOpen, setFormOpen] = useState(false);
-  const [editing, setEditing] = useState<LeaveRow | null>(null);
-
-  // Opened from the student list "Put on leave" action (?student=STD-…)
-  useEffect(() => {
-    if (studentParam && canEdit) setFormOpen(true);
-  }, [studentParam, canEdit]);
-
-  const closeForm = () => {
-    setFormOpen(false);
-    setEditing(null);
-    if (studentParam) router.replace("/admission/leave");
-  };
+  const [viewingDoc, setViewingDoc] = useState<LeaveRow | null>(null);
 
   const loadLeaves = useCallback(async () => {
     setLoading(true);
@@ -186,9 +164,12 @@ function LeaveStudentsContent() {
             <strong className="text-gray-800 dark:text-white/90">{currentCount}</strong> currently on leave
           </p>
           {canEdit && (
-            <Button size="sm" onClick={() => setFormOpen(true)}>
+            <Link
+              href="/admission/leave/new"
+              className="inline-flex items-center justify-center rounded-lg bg-brand-500 px-4 py-3 text-sm font-medium text-white shadow-theme-xs transition hover:bg-brand-600"
+            >
               New leave request
-            </Button>
+            </Link>
           )}
         </div>
       </div>
@@ -198,16 +179,53 @@ function LeaveStudentsContent() {
         student&apos;s attendance is always marked <strong>Present</strong>.
       </p>
 
-      {(formOpen || editing) && (
-        <StudentLeaveForm
-          leave={editing}
-          initialStudentCode={editing ? null : studentParam}
-          onClose={closeForm}
-          onSaved={() => {
-            closeForm();
-            void loadLeaves();
-          }}
-        />
+      {viewingDoc?.documentUrl && (
+        <ModalOverlayGate>
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm"
+            onClick={() => setViewingDoc(null)}
+          >
+            <div
+              className="w-full max-w-4xl rounded-2xl border border-gray-200 bg-white shadow-xl dark:border-gray-700 dark:bg-gray-900"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between gap-3 border-b border-gray-200 px-6 py-4 dark:border-gray-700">
+                <div className="min-w-0">
+                  <h2 className="text-lg font-semibold text-gray-800 dark:text-white/90">
+                    Supporting document
+                  </h2>
+                  <p className="truncate text-xs text-gray-500 dark:text-gray-400">
+                    {viewingDoc.student.firstName} {viewingDoc.student.lastName} ·{" "}
+                    {viewingDoc.student.studentId}
+                  </p>
+                </div>
+                <div className="flex shrink-0 items-center gap-3">
+                  <a
+                    href={viewingDoc.documentUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-sm font-medium text-brand-600 hover:underline dark:text-brand-400"
+                  >
+                    Open in new tab
+                  </a>
+                  <button
+                    type="button"
+                    onClick={() => setViewingDoc(null)}
+                    aria-label="Close"
+                    className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-gray-800 dark:hover:text-gray-300"
+                  >
+                    <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                </div>
+              </div>
+              <div className="p-4">
+                <DocumentFrame url={viewingDoc.documentUrl} />
+              </div>
+            </div>
+          </div>
+        </ModalOverlayGate>
       )}
 
       {error && <p className="mb-4 text-sm text-error-600">{error}</p>}
@@ -314,22 +332,24 @@ function LeaveStudentsContent() {
                   <TableCell className="max-w-[16rem] text-sm text-gray-600 dark:text-gray-400">
                     {row.reason || "—"}
                     {row.documentUrl && (
-                      <a
-                        href={row.documentUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
+                      <button
+                        type="button"
+                        onClick={() => setViewingDoc(row)}
                         className="mt-0.5 block text-xs font-medium text-brand-600 hover:underline dark:text-brand-400"
                       >
-                        Supporting document
-                      </a>
+                        Show document
+                      </button>
                     )}
                   </TableCell>
                   {canEdit && (
                     <TableCell className="text-right">
                       <div className="flex justify-end gap-2">
-                        <Button size="sm" variant="outline" onClick={() => setEditing(row)}>
+                        <Link
+                          href={`/admission/leave/${row.id}/edit`}
+                          className="inline-flex items-center justify-center rounded-lg bg-white px-4 py-3 text-sm font-medium text-gray-700 ring-1 ring-inset ring-gray-300 transition hover:bg-gray-50 dark:bg-gray-800 dark:text-gray-400 dark:ring-gray-700 dark:hover:bg-white/3"
+                        >
                           Edit
-                        </Button>
+                        </Link>
                         {!row.endDate && row.approvalStatus !== "Rejected" && (
                           <Button
                             size="sm"

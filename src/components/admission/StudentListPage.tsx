@@ -395,7 +395,7 @@ export default function StudentListPage({ program }: { program: Program }) {
 
   /** Open the Student Leave Form prefilled with this student. */
   function handlePutOnLeave(s: StudentRow) {
-    router.push(`/admission/leave?student=${encodeURIComponent(s.studentId)}`);
+    router.push(`/admission/leave/new?student=${encodeURIComponent(s.studentId)}`);
   }
 
   function toggleSelect(id: number) {
