@@ -5,7 +5,6 @@ import {
   computeAttendanceMarks,
   computeAttendancePercent,
 } from "@/lib/attendance";
-import { getSemesterDateRange } from "@/lib/semester-dates";
 import { parseProgram } from "@/lib/program";
 import { classRosterStudentWhere, examBelongsToClassTerm } from "@/lib/class-roster";
 
@@ -66,15 +65,12 @@ export async function GET(req: NextRequest) {
 
     const studentIds = students.map((s) => s.id);
 
-    // Attendance (semester-filtered)
-    const { start, end } = getSemesterDateRange(cls.semester, cls.year);
+    // Attendance — the class already scopes sessions to its term
     const sessionWhere: {
       classId: number;
-      date: { gte: Date; lte: Date };
       courseId?: number;
     } = {
       classId: Number(classId),
-      date: { gte: start, lte: end },
     };
     if (courseId) {
       sessionWhere.courseId = Number(courseId);

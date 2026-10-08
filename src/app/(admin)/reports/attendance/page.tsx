@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
 import PageBreadCrumb from "@/components/common/PageBreadCrumb";
 import Badge from "@/components/ui/badge/Badge";
@@ -162,7 +162,12 @@ export default function AttendanceReportPage() {
     dateTo,
   ]);
 
+  // Filter changes fire overlapping requests — only the latest one may update the page.
+  const datesReqRef = useRef(0);
+  const reportReqRef = useRef(0);
+
   const loadAvailableDates = useCallback(async () => {
+    const reqId = ++datesReqRef.current;
     setLoadingDates(true);
     try {
       const params = new URLSearchParams();
@@ -172,8 +177,10 @@ export default function AttendanceReportPage() {
       if (filterCourse) params.set("courseId", filterCourse);
       if (filterSearch) params.set("search", filterSearch);
       const res = await authFetch(`/api/reports/attendance?${params.toString()}`);
+      if (reqId !== datesReqRef.current) return;
       if (res.ok) {
         const data = await res.json();
+        if (reqId !== datesReqRef.current) return;
         const dates = [
           ...new Set<string>(
             (data.sessions || []).map((s: Session) => toDateInputValue(s.date))
@@ -188,18 +195,21 @@ export default function AttendanceReportPage() {
         setAvailableDates([]);
       }
     } catch {
-      setAvailableDates([]);
+      if (reqId === datesReqRef.current) setAvailableDates([]);
     } finally {
-      setLoadingDates(false);
+      if (reqId === datesReqRef.current) setLoadingDates(false);
     }
   }, [program, filterDept, filterClass, filterCourse, filterSearch]);
 
   const fetchReport = useCallback(async () => {
+    const reqId = ++reportReqRef.current;
     setLoading(true);
     try {
       const res = await authFetch(`/api/reports/attendance?${buildParams().toString()}`);
+      if (reqId !== reportReqRef.current) return;
       if (res.ok) {
         const data = await res.json();
+        if (reqId !== reportReqRef.current) return;
         setSessions(data.sessions || []);
         setSummary(data.summary || { totalSessions: 0, totalPresent: 0, totalAbsent: 0, totalLate: 0, totalExcused: 0 });
         if (!filterCourse) {
@@ -210,10 +220,11 @@ export default function AttendanceReportPage() {
         }
       }
     } catch { /* empty */ }
-    setLoading(false);
+    if (reqId === reportReqRef.current) setLoading(false);
   }, [buildParams, filterCourse]);
 
   const fetchStudentAttendance = useCallback(async () => {
+    const reqId = ++reportReqRef.current;
     setLoading(true);
     try {
       const params = new URLSearchParams();
@@ -230,8 +241,10 @@ export default function AttendanceReportPage() {
         if (dateTo) params.set("dateTo", dateTo);
       }
       const res = await authFetch(`/api/reports/attendance-by-student?${params.toString()}`);
+      if (reqId !== reportReqRef.current) return;
       if (res.ok) {
         const data = await res.json();
+        if (reqId !== reportReqRef.current) return;
         setStudentAttendances(data.students || []);
         if (!filterCourse) {
           setCourseSessions(data.courseSessions || []);
@@ -250,11 +263,12 @@ export default function AttendanceReportPage() {
         setSelectedClassInfo(null);
       }
     } catch {
+      if (reqId !== reportReqRef.current) return;
       setStudentAttendances([]);
       setCourseSessions([]);
       setSelectedClassInfo(null);
     }
-    setLoading(false);
+    if (reqId === reportReqRef.current) setLoading(false);
   }, [
     program,
     filterDept,

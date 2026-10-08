@@ -79,8 +79,10 @@ export async function GET(req: NextRequest) {
     if (dateFrom || dateTo) {
       if (dateFrom) sessionDateWhere.gte = new Date(dateFrom);
       if (dateTo) sessionDateWhere.lte = new Date(dateTo);
-    } else if (semester) {
-      const { start, end } = getSemesterDateRange(semester, year);
+    } else if (semesterParam && !parsedClassId) {
+      // A class already scopes sessions to its own term, so only an explicit
+      // semester without a class falls back to a calendar range.
+      const { start, end } = getSemesterDateRange(semesterParam, year);
       sessionDateWhere.gte = start;
       sessionDateWhere.lte = end;
     }

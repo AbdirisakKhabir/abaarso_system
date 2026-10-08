@@ -3,7 +3,6 @@ import { getAuthUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { workbookBufferFromAoa } from "@/lib/excel";
 import { computeAttendanceMarks } from "@/lib/attendance";
-import { getSemesterDateRange } from "@/lib/semester-dates";
 import { classRosterStudentWhere } from "@/lib/class-roster";
 
 export async function GET(req: NextRequest) {
@@ -49,12 +48,11 @@ export async function GET(req: NextRequest) {
       orderBy: [{ studentId: "asc" }],
     });
 
-    const { start, end } = getSemesterDateRange(cls.semester, cls.year);
+    // The class already scopes sessions to its term
     const sessions = await prisma.attendanceSession.findMany({
       where: {
         classId: Number(classId),
         courseId: Number(courseId),
-        date: { gte: start, lte: end },
       },
       select: { id: true },
     });

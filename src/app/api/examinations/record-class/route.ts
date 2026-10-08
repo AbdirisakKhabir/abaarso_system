@@ -5,7 +5,6 @@ import {
   computeAttendanceMarks,
   computeAttendancePercent,
 } from "@/lib/attendance";
-import { getSemesterDateRange } from "@/lib/semester-dates";
 import { classRosterStudentWhere, examBelongsToClassTerm } from "@/lib/class-roster";
 
 /**
@@ -107,13 +106,11 @@ export async function GET(req: NextRequest) {
         .map((r) => [r.studentId, r])
     );
 
-    // Compute attendance for each student (semester-filtered)
-    const { start, end } = getSemesterDateRange(cls.semester, cls.year);
+    // Compute attendance for each student — the class already scopes sessions to its term
     const sessions = await prisma.attendanceSession.findMany({
       where: {
         classId: parsedClassId,
         courseId: parsedCourseId,
-        date: { gte: start, lte: end },
       },
       select: { id: true },
     });

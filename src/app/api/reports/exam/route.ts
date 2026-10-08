@@ -5,7 +5,6 @@ import {
   computeAttendanceMarks,
   computeAttendancePercent,
 } from "@/lib/attendance";
-import { getSemesterDateRange } from "@/lib/semester-dates";
 import { parseProgram } from "@/lib/program";
 import { classRosterStudentWhere, examBelongsToClassTerm } from "@/lib/class-roster";
 
@@ -95,14 +94,6 @@ export async function GET(req: NextRequest) {
     // When filtering by class, enrich with per-course attendance (sessions for that exam's course)
     let enrichedRecords = records;
     if (classId) {
-      const cls = await prisma.class.findUnique({
-        where: { id: Number(classId) },
-        select: { semester: true, year: true },
-      });
-      const { start, end } = cls
-        ? getSemesterDateRange(cls.semester, cls.year)
-        : { start: new Date(0), end: new Date() };
-
       const studentIds = [...new Set(records.map((r) => r.student.id))];
       const courseIds = [...new Set(records.map((r) => r.courseId))];
 
@@ -113,7 +104,6 @@ export async function GET(req: NextRequest) {
             where: {
               classId: Number(classId),
               courseId: cid,
-              date: { gte: start, lte: end },
             },
             select: { id: true },
           })
