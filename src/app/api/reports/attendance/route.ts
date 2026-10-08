@@ -26,7 +26,7 @@ export async function GET(req: NextRequest) {
     } else if (search) {
       const matched = await prisma.student.findMany({
         where: {
-          status: "Admitted",
+          status: { in: ["Admitted", "Graduated"] },
           program,
           OR: [
             { studentId: { contains: search } },
@@ -103,7 +103,11 @@ export async function GET(req: NextRequest) {
         },
         course: { select: { id: true, code: true, name: true } },
         takenBy: { select: { id: true, name: true, email: true } },
-        records: { select: { status: true } },
+        // With a student filter, count only that student's own records (not the whole class)
+        records: {
+          ...(matchedStudentIds ? { where: { studentId: { in: matchedStudentIds } } } : {}),
+          select: { status: true },
+        },
       },
       orderBy: [{ date: "desc" }, { shift: "asc" }],
     });
@@ -168,6 +172,7 @@ export async function GET(req: NextRequest) {
       sessions: enriched,
       summary,
       courseSessions,
+      filteredToStudents: Boolean(matchedStudentIds),
     });
   } catch (e) {
     console.error("Attendance report error:", e);

@@ -1014,6 +1014,11 @@ export default function AttendanceReportPage() {
                 </p>
               ) : (
                 <div className="overflow-x-auto">
+                  {filterSearch && (
+                    <p className="no-print mb-2 text-xs text-gray-500 dark:text-gray-400">
+                      Present / Absent / Excused show only the student(s) matching &ldquo;{filterSearch}&rdquo;.
+                    </p>
+                  )}
                   <table className="w-full border-collapse text-sm print:text-xs">
                     <thead>
                       <tr className="border-b-2 border-gray-300 print:border-black bg-gray-50 print:bg-transparent">
