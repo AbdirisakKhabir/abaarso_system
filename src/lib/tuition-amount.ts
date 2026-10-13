@@ -179,49 +179,46 @@ function normalizeLooseSemester(semester: string): string {
   return out.replace(/[^a-z0-9]/g, "");
 }
 
-export const MAX_PAYMENTS_PER_SEMESTER = 5;
-
 /** Sum of amounts already recorded for one student/term. */
 export function semesterAmountPaid(payments: { amount: number }[]): number {
   return payments.reduce((sum, p) => sum + Number(p.amount || 0), 0);
 }
 
-/** Whether another deposit can be posted for this term (up to 5 payments, not over expected fee). */
+/**
+ * Whether a Semester Fee deposit can be posted. Installments of any size and
+ * any number are allowed while the student still owes money:
+ *  - up to what remains for the selected term (charged − paid, from the term ledger), or
+ *  - up to the student's balance not tied to a charged term (e.g. charged at registration),
+ *    whichever is larger — never more than is actually owed.
+ */
 export function validateSemesterPayment(
-  existingPayments: { amount: number }[],
   newAmount: number,
-  expectedFee: number
+  ctx: {
+    termLabel: string;
+    termRemaining: number;
+    unknownBalance: number;
+    /** Other charged terms that still owe, e.g. "Semester 4 2026 ($50.00)". */
+    otherUnpaidTerms: string[];
+  }
 ): { ok: true } | { ok: false; error: string } {
-  if (newAmount <= 0) {
+  if (!(newAmount > 0)) {
     return { ok: false, error: "Amount must be greater than 0" };
   }
-  if (expectedFee <= 0) {
-    return { ok: false, error: "No tuition is due for this student" };
+  const collectable = Math.max(ctx.termRemaining, ctx.unknownBalance);
+  if (collectable <= 1e-6) {
+    if (ctx.otherUnpaidTerms.length > 0) {
+      return {
+        ok: false,
+        error: `${ctx.termLabel} is paid in full. The outstanding balance is for ${ctx.otherUnpaidTerms.join(", ")} — select that semester.`,
+      };
+    }
+    return { ok: false, error: `Tuition for ${ctx.termLabel} is already paid in full` };
   }
-
-  const totalPaid = semesterAmountPaid(existingPayments);
-
-  if (totalPaid >= expectedFee - 1e-6) {
+  if (newAmount > collectable + 1e-6) {
     return {
       ok: false,
-      error: "Tuition for this semester is already paid in full",
+      error: `Payment exceeds the remaining balance of $${collectable.toFixed(2)} for ${ctx.termLabel}`,
     };
   }
-
-  if (existingPayments.length >= MAX_PAYMENTS_PER_SEMESTER) {
-    return {
-      ok: false,
-      error: `Maximum of ${MAX_PAYMENTS_PER_SEMESTER} payments allowed per semester`,
-    };
-  }
-
-  const remaining = expectedFee - totalPaid;
-  if (newAmount > remaining + 1e-6) {
-    return {
-      ok: false,
-      error: `Payment exceeds remaining balance of $${remaining.toFixed(2)} for this semester`,
-    };
-  }
-
   return { ok: true };
 }

@@ -11,6 +11,7 @@ import {
   parseFinanceHead,
 } from "@/lib/finance-head";
 import { findClassRosterStudentIds } from "@/lib/class-roster";
+import { computeStudentOwing, findTerm } from "@/lib/student-term-ledger";
 import { ensureEnrollmentForTerm } from "@/lib/enrollment";
 
 export async function GET(req: NextRequest) {
@@ -331,47 +332,64 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const chargeAgg = tuitionHead
-      ? await prisma.tuitionCharge.aggregate({
-          where: {
-            studentId: student.id,
-            semester: resolvedSemester,
-            year: resolvedYear,
-          },
-          _sum: { amount: true },
-        })
-      : { _sum: { amount: null } };
-    const chargedForTerm = Number(chargeAgg._sum.amount) || 0;
-    const expectedFee =
-      chargedForTerm > 0
-        ? chargedForTerm
-        : perSemesterTuition(
-            student.department.tuitionFee ?? 0,
-            student.paymentStatus,
-            student.customSemesterFee
-          );
+    const expectedPerSemester = perSemesterTuition(
+      student.department.tuitionFee ?? 0,
+      student.paymentStatus,
+      student.customSemesterFee
+    );
+
+    // Same term ledger the Finance screen shows: charges and payments matched
+    // loosely by semester ("Semester 5" ≈ "Semester Five"), plus any balance not
+    // tied to a charged term. Partial installments of any amount are allowed
+    // until the student's balance is cleared.
+    let termRemaining = 0;
+    let unknownBalance = 0;
+    let otherUnpaidTerms: string[] = [];
+    if (tuitionHead) {
+      const [enrollments, charges, payments] = await Promise.all([
+        prisma.studentEnrollment.findMany({
+          where: { studentId: student.id },
+          select: { semester: true, year: true },
+        }),
+        prisma.tuitionCharge.findMany({
+          where: { studentId: student.id },
+          select: { semester: true, year: true, amount: true },
+        }),
+        prisma.tuitionPayment.findMany({
+          where: { studentId: student.id, financeHead: "semester_fee" },
+          select: { semester: true, year: true, amount: true },
+        }),
+      ]);
+      const owing = computeStudentOwing({
+        currentClass: student.class,
+        enrollments,
+        charges,
+        payments,
+        expectedPerSemester,
+        accountBalance: student.balance ?? 0,
+      });
+      const term = findTerm(owing.terms, resolvedSemester, resolvedYear);
+      termRemaining = term?.remaining ?? 0;
+      unknownBalance = owing.unknownBalance;
+      otherUnpaidTerms = owing.terms
+        .filter((t) => t !== term && t.alreadyCharged && t.remaining > 1e-6)
+        .map((t) => `${t.semester} ${t.year} ($${t.remaining.toFixed(2)})`);
+    }
 
     const amt =
       amount != null
         ? Number(amount)
         : tuitionHead
-          ? expectedFee
+          ? Math.max(termRemaining, unknownBalance)
           : 0;
 
     if (tuitionHead) {
-      // Semester Fee follows tuition rules: validated against the expected fee
-      // and limited to the outstanding tuition balance for the term.
-      const existingPayments = await prisma.tuitionPayment.findMany({
-        where: {
-          studentId: student.id,
-          semester: resolvedSemester,
-          year: resolvedYear,
-          financeHead: "semester_fee",
-        },
-        select: { amount: true },
+      const paymentCheck = validateSemesterPayment(amt, {
+        termLabel: `${resolvedSemester} ${resolvedYear}`,
+        termRemaining,
+        unknownBalance,
+        otherUnpaidTerms,
       });
-
-      const paymentCheck = validateSemesterPayment(existingPayments, amt, expectedFee);
       if (!paymentCheck.ok) {
         return NextResponse.json({ error: paymentCheck.error }, { status: 400 });
       }
