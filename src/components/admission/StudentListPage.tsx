@@ -26,6 +26,7 @@ import { programLabel, type Program } from "@/lib/program";
 import { STUDENT_STATUSES } from "@/lib/student-status";
 import { confirmYesNo, notifyError, notifySuccess } from "@/lib/sweetalert";
 import { LogOut } from "lucide-react";
+import TemplateExportModal from "@/components/admission/TemplateExportModal";
 import {
   ArrowUpIcon,
   DollarLineIcon,
@@ -119,6 +120,7 @@ export default function StudentListPage({ program }: { program: Program }) {
   const [modal, setModal] = useState<"import" | null>(null);
   const [importFile, setImportFile] = useState<File | null>(null);
   const [importDepartmentId, setImportDepartmentId] = useState("");
+  const [templateModalOpen, setTemplateModalOpen] = useState(false);
   const [importLoading, setImportLoading] = useState(false);
   const [importResult, setImportResult] = useState<{ created: number; errors?: string[] } | null>(null);
   const [statusCounts, setStatusCounts] = useState<Record<string, number>>({});
@@ -329,28 +331,9 @@ export default function StudentListPage({ program }: { program: Program }) {
     });
   }, [chargeModalOpen, semestersForCharge]);
 
-  async function handleDownloadTemplate() {
-    setImportLoading(true);
-    setImportResult(null);
-    try {
-      const res = await authFetch("/api/students/template");
-      if (!res.ok) {
-        const data = await res.json();
-        alert(data.error || "Failed to download template");
-        return;
-      }
-      const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = "Student_Import_Template.xlsx";
-      a.click();
-      URL.revokeObjectURL(url);
-    } catch {
-      alert("Failed to download template");
-    } finally {
-      setImportLoading(false);
-    }
+  /** Template export asks for a department and class first (see TemplateExportModal). */
+  function handleDownloadTemplate() {
+    setTemplateModalOpen(true);
   }
 
   async function handleImportExcel() {
@@ -1346,6 +1329,20 @@ export default function StudentListPage({ program }: { program: Program }) {
           </div>
         </div>
         </ModalOverlayGate>
+      )}
+
+      {templateModalOpen && (
+        <TemplateExportModal
+          program={program}
+          onClose={() => setTemplateModalOpen(false)}
+          onExported={(departmentId) => {
+            setTemplateModalOpen(false);
+            // Ready for the upload: same department, and any department/class created in the modal
+            setImportDepartmentId(String(departmentId));
+            void loadDepartments();
+            void loadClasses();
+          }}
+        />
       )}
     </>
   );

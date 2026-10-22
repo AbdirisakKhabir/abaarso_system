@@ -293,6 +293,9 @@ export async function POST(req: NextRequest) {
     for (let i = dataStartRow; i < data.length; i++) {
       const row = data[i] as (string | number)[];
       if (!row || row.length === 0) continue;
+      // Template rows come prefilled with department/program/class — skip ones the user left empty.
+      const prefilledCols = new Set([deptCodeIdx, programIdx, classIdx]);
+      if (row.every((cell, idx) => prefilledCols.has(idx) || String(cell ?? "").trim() === "")) continue;
 
       let firstName: string;
       let lastName: string;
