@@ -194,7 +194,7 @@ export async function POST(req: NextRequest) {
     }
 
     const studentIdIdx = findCol(headerRow, [
-      /^student\s*id$/i,
+      /^student[\s_]*id$/i,
       /^studentid$/i,
       /^id\s*card$/i,
       /^id\s*card\s*no/i,
@@ -224,6 +224,7 @@ export async function POST(req: NextRequest) {
     }
 
     const motherNameIdx = findCol(headerRow, [/^mother[\s_]*name$/i, /^mothername$/i]);
+    const parentNameIdx = findCol(headerRow, [/^parent[\s_]*name$/i, /^guardian[\s_]*name$/i]);
     const parentPhoneIdx = findCol(headerRow, [/^parent[\s_]*phone$/i, /^parentphone$/i]);
     const emailIdx = findCol(headerRow, [/^email$/i]);
     const phoneIdx = findCol(headerRow, [/^phone$/i]);
@@ -340,7 +341,10 @@ export async function POST(req: NextRequest) {
         }
         studentId = provided;
       } else {
-        studentId = `${prefix}${String(nextNum++).padStart(4, "0")}`;
+        // Skip numbers already taken, e.g. by IDs provided earlier in this file.
+        do {
+          studentId = `${prefix}${String(nextNum++).padStart(4, "0")}`;
+        } while (await prisma.student.findUnique({ where: { studentId }, select: { id: true } }));
       }
 
       let departmentId: number;
@@ -456,6 +460,7 @@ export async function POST(req: NextRequest) {
           firstName,
           lastName,
           motherName: motherNameIdx >= 0 ? String(row[motherNameIdx] ?? "").trim() || null : null,
+          parentName: parentNameIdx >= 0 ? String(row[parentNameIdx] ?? "").trim() || null : null,
           parentPhone: parentPhoneIdx >= 0 ? String(row[parentPhoneIdx] ?? "").trim() || null : null,
           email: emailVal,
           phone: phoneIdx >= 0 ? String(row[phoneIdx] ?? "").trim() || null : null,

@@ -67,6 +67,7 @@ function buildStudentWhere(searchParams: URLSearchParams): Prisma.StudentWhereIn
       { lastName: { contains: q } },
       { email: { contains: q } },
       { motherName: { contains: q } },
+      { parentName: { contains: q } },
       { phone: { contains: q } },
       { department: { name: { contains: q } } },
     ];
@@ -139,6 +140,7 @@ export async function POST(req: NextRequest) {
       firstName,
       lastName,
       motherName,
+      parentName,
       parentPhone,
       email,
       phone,
@@ -279,6 +281,7 @@ export async function POST(req: NextRequest) {
         firstName: String(firstName).trim(),
         lastName: String(lastName).trim(),
         motherName: motherName ? String(motherName).trim() : null,
+        parentName: parentName ? String(parentName).trim() : null,
         parentPhone: parentPhone ? String(parentPhone).trim() : null,
         email: emailVal,
         phone: phone || null,

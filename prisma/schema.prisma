@@ -272,6 +272,7 @@ model Student {
   firstName               String
   lastName                String
   motherName              String?
+  parentName              String?
   parentPhone             String?
   email                   String?              @unique
   phone                   String?

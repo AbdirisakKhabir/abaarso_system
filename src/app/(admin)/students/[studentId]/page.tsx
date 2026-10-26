@@ -23,6 +23,7 @@ type StudentProfile = {
   firstName: string;
   lastName: string;
   motherName: string | null;
+  parentName: string | null;
   parentPhone: string | null;
   email: string | null;
   phone: string | null;
@@ -321,6 +322,7 @@ export default function StudentProfilePage() {
               <InfoRow icon={MailIcon} label="Email" value={student.email || "—"} />
               <InfoRow icon={UserIcon} label="Phone" value={student.phone || "—"} />
               <InfoRow icon={UserIcon} label="Mother Name" value={student.motherName || "—"} />
+              <InfoRow icon={UserIcon} label="Parent Name" value={student.parentName || "—"} />
               <InfoRow icon={UserIcon} label="Parent Phone" value={student.parentPhone || "—"} />
               <InfoRow icon={UserIcon} label="Address" value={student.address || "—"} />
             </div>

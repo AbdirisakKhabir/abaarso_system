@@ -27,6 +27,7 @@ type Student = {
   firstName: string;
   lastName: string;
   motherName: string | null;
+  parentName: string | null;
   parentPhone: string | null;
   email: string | null;
   phone: string | null;
@@ -187,6 +188,7 @@ export default function EditStudentPage() {
     firstName: student.firstName,
     lastName: student.lastName,
     motherName: student.motherName ?? "",
+    parentName: student.parentName ?? "",
     parentPhone: student.parentPhone ?? "",
     email: student.email ?? "",
     phone: student.phone ?? "",

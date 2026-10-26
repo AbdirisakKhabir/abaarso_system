@@ -60,6 +60,7 @@ type StudentRow = {
   firstName: string;
   lastName: string;
   motherName: string | null;
+  parentName: string | null;
   parentPhone: string | null;
   email: string | null;
   phone: string | null;

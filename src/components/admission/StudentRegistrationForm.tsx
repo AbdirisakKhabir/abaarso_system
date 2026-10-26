@@ -26,6 +26,7 @@ export type StudentFormData = {
   firstName: string;
   lastName: string;
   motherName: string;
+  parentName: string;
   parentPhone: string;
   email: string;
   phone: string;
@@ -90,6 +91,7 @@ const defaultForm: StudentFormData = {
   firstName: "",
   lastName: "",
   motherName: "",
+  parentName: "",
   parentPhone: "",
   email: "",
   phone: "",
@@ -336,6 +338,7 @@ export default function StudentRegistrationForm({
         firstName: form.firstName,
         lastName: form.lastName,
         motherName: form.motherName || undefined,
+        parentName: form.parentName || undefined,
         parentPhone: form.parentPhone || undefined,
         email: form.email || undefined,
         phone: form.phone || undefined,
@@ -495,10 +498,14 @@ export default function StudentRegistrationForm({
         <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm dark:border-gray-700 dark:bg-gray-900">
           <SectionHeader icon={MailIcon} title="Contact & Family" subtitle="Contact details and family information" />
           <div className="space-y-4">
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
               <div>
                 <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">Mother Name</label>
                 <input type="text" value={form.motherName} onChange={(e) => setForm((f) => ({ ...f, motherName: e.target.value }))} placeholder="Mother's full name" className={inputClass} />
+              </div>
+              <div>
+                <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">Parent Name</label>
+                <input type="text" value={form.parentName} onChange={(e) => setForm((f) => ({ ...f, parentName: e.target.value }))} placeholder="Parent / guardian full name" className={inputClass} />
               </div>
               <div>
                 <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">Parent Phone</label>

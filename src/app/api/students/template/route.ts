@@ -45,7 +45,10 @@ export async function GET(req: NextRequest) {
     const deptCode = cls.department.code;
 
     const headers = [
+      "student_id",
       "students_full_name",
+      "parent_name",
+      "parent_phone",
       "gender",
       "date_of_birth",
       "email",
@@ -68,7 +71,10 @@ export async function GET(req: NextRequest) {
     ];
 
     const sampleRow = [
+      "", // student_id: leave blank to auto-generate (e.g. STD-2026-0001)
       "Ahmed Hassan Ali",
+      "Hassan Ali Mohamed",
+      "+252 63 4123456",
       "Male",
       "2005-01-15",
       "ahmed@example.com",

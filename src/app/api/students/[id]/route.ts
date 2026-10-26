@@ -81,6 +81,7 @@ export async function PATCH(req: NextRequest, ctx: RouteContext) {
     if (body.firstName !== undefined) data.firstName = String(body.firstName).trim();
     if (body.lastName !== undefined) data.lastName = String(body.lastName).trim();
     if (body.motherName !== undefined) data.motherName = body.motherName ? String(body.motherName).trim() : null;
+    if (body.parentName !== undefined) data.parentName = body.parentName ? String(body.parentName).trim() : null;
     if (body.parentPhone !== undefined) data.parentPhone = body.parentPhone ? String(body.parentPhone).trim() : null;
     if (body.email !== undefined) data.email = body.email ? String(body.email).toLowerCase().trim() : null;
     if (body.phone !== undefined) data.phone = body.phone || null;
